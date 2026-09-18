@@ -3,6 +3,12 @@
 /**
  * Holds the Anam session: a photoreal person who speaks the lines we hand her.
  *
+ * Video and audio both land on ONE unmuted <video> element. That is not a style
+ * choice: Recall captures the page's audio output, so a muted element is a silent
+ * meeting, and the separate-audio-element method is deprecated in the SDK anyway.
+ * Recall's own avatar sample does exactly this — one full-screen <video autoPlay
+ * playsInline>, no mute.
+ *
  * `speak()` resolves when she has actually finished the sentence, not when the command
  * was accepted — Anam reports `endOfSpeech` on the persona's message stream and we wait
  * for it. That matters because the stage only ticks while she is silent; without a
@@ -35,7 +41,6 @@ const SPEAK_TIMEOUT_MS = 90_000;
 
 export function useAnamStream() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const clientRef = useRef<AnamClient | null>(null);
   const connectingRef = useRef<Promise<void> | null>(null);
   const failuresRef = useRef(0);
@@ -81,7 +86,7 @@ export function useAnamStream() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
 
-      if (!videoRef.current || !audioRef.current) throw new Error("Media elements are not mounted yet");
+      if (!videoRef.current) throw new Error("The video element is not mounted yet");
 
       const client = createClient(data.sessionToken, {
         // There is no microphone in Recall's browser and we would not want one: the
@@ -105,13 +110,25 @@ export function useAnamStream() {
         setStatus("idle");
       });
 
-      // Video and audio go to separate elements: Recall captures the page's audio
-      // output, so the <audio> tag is the path from her voice into the meeting.
       await withTimeout(
-        client.streamToVideoAndAudioElements(videoRef.current.id, audioRef.current.id),
+        client.streamToVideoElement(videoRef.current.id),
         CONNECT_TIMEOUT_MS,
         "Anam did not start streaming in time",
       );
+
+      // Autoplay of audible media can be refused without a user gesture, and inside
+      // Recall's browser there is no one to click anything. Ask explicitly, and if it
+      // is refused say so out loud rather than presenting a silent avatar as working.
+      const el = videoRef.current;
+      if (el) {
+        el.muted = false;
+        el.volume = 1;
+        try {
+          await el.play();
+        } catch (e) {
+          report(`the browser blocked audio playback: ${e instanceof Error ? e.message : e}`);
+        }
+      }
 
       clientRef.current = client;
       failuresRef.current = 0;
@@ -196,7 +213,7 @@ export function useAnamStream() {
 
   useEffect(() => teardown, [teardown]);
 
-  return { videoRef, audioRef, status, configured, detail, speak, interrupt, disconnect: teardown };
+  return { videoRef, status, configured, detail, speak, interrupt, disconnect: teardown };
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
