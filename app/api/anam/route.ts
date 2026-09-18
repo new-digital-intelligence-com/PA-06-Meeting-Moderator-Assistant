@@ -12,6 +12,8 @@ export async function GET() {
     hasPersona: Boolean(
       process.env.ANAM_PERSONA_ID || (process.env.ANAM_AVATAR_ID && process.env.ANAM_VOICE_ID),
     ),
+    // The stage watches captions for this so it can answer the instant it is said.
+    botName: (process.env.BOT_NAME || "Ava").split("—")[0].trim(),
   });
 }
 
