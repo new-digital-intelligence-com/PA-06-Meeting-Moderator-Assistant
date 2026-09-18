@@ -21,6 +21,9 @@ type Config = {
   publicUrl: string;
   publicUrlReachable: boolean;
   botName: string;
+  sessionSecret: boolean;
+  googleClient: boolean;
+  googleRedirectUri: string;
   store: "redis" | "mongo" | "file";
 };
 
@@ -104,10 +107,12 @@ export default function ControlRoom({
   config,
   initialMeeting,
   initialTimer,
+  oauthError,
 }: {
   config: Config;
   initialMeeting: Meeting;
   initialTimer: Timer;
+  oauthError: string | null;
 }) {
   const [meeting, setMeeting] = useState<Meeting | null>(initialMeeting);
   const [timer, setTimer] = useState<Timer | null>(initialTimer);
@@ -115,7 +120,9 @@ export default function ControlRoom({
   const [drive, setDrive] = useState<DriveFile[]>([]);
   const [driveQuery, setDriveQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    oauthError ? `Google sign-in failed: ${oauthError}` : null,
+  );
   const [note, setNote] = useState<string | null>(null);
 
   // Local copies, seeded once from the server. The form is deliberately NOT driven by
@@ -284,7 +291,19 @@ export default function ControlRoom({
         </div>
         {(
           <div className="flex flex-wrap items-center gap-2">
-            <Pill ok={config.googleConnected} label={config.email ?? "Google"} />
+            <Pill
+              ok={config.googleConnected}
+              label={config.email ?? "Google"}
+              hint={
+                config.googleConnected
+                  ? "Calendar, Drive and Gmail are available."
+                  : !config.googleClient
+                    ? "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set."
+                    : !config.sessionSecret
+                      ? "SESSION_SECRET is not set — sign-in cannot store its cookie."
+                      : `Not signed in. Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
+              }
+            />
             <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY" />
             <Pill ok={config.simli} label="Face" hint="SIMLI_API_KEY + SIMLI_FACE_ID" />
             <Pill ok={config.elevenlabs} label="Voice" hint="ELEVENLABS_API_KEY" />
