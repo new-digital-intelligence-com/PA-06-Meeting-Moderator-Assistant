@@ -212,3 +212,23 @@ export function storeKind(): StoreKind {
   if (process.env.MONGODB_URI) return "mongo";
   return "file";
 }
+
+/**
+ * Which storage variables this process can actually see — names and whether they hold
+ * anything, never the values.
+ *
+ * "It says File store" has several possible causes that look identical from outside:
+ * the variables were never added, they arrived with a prefix from an integration's
+ * dialog, they were set on Preview but not Production, or the deployment predates
+ * them. Listing the names it found distinguishes all four in one request.
+ */
+export function storeDiagnostics() {
+  const relevant = Object.keys(process.env)
+    .filter((k) => /KV_|UPSTASH|REDIS|MONGO/i.test(k))
+    .sort();
+  return {
+    kind: storeKind(),
+    reads: ["KV_REST_API_URL / UPSTASH_REDIS_REST_URL (+ matching token)", "MONGODB_URI"],
+    found: relevant.map((k) => `${k}${process.env[k] ? "" : " (EMPTY)"}`),
+  };
+}

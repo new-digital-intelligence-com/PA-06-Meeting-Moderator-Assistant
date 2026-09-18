@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 import { readSession } from "@/lib/session";
 import { isConfigured as simliConfigured } from "@/lib/simli";
-import { storeKind } from "@/lib/store";
+import { storeDiagnostics, storeKind } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -22,5 +22,8 @@ export async function GET() {
     publicUrlReachable: Boolean(publicUrl) && !/localhost|127\.0\.0\.1/.test(publicUrl),
     botName: process.env.BOT_NAME || "Ava — Moderator",
     store: storeKind(),
+    // Names only, never values — enough to tell a missing variable from a prefixed one.
+    storage: storeDiagnostics(),
+    recallRegion: process.env.RECALL_REGION || "us-west-2 (default — unset)",
   });
 }
