@@ -4,7 +4,7 @@ import { getMeeting } from "@/lib/meeting";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 import { readSession } from "@/lib/session";
 import { storeKind } from "@/lib/store";
-import { isConfigured as simliConfigured } from "@/lib/simli";
+import { isConfigured as anamConfigured } from "@/lib/anam";
 
 // The meeting lives in this process, so the first paint reads it directly instead of
 // bouncing through /api/meeting. The client polls from there.
@@ -36,8 +36,7 @@ export default async function Home({
         email: session.google?.email ?? null,
         anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
         recall: recallConfigured(),
-        simli: simliConfigured(),
-        elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
+        anam: anamConfigured(),
         publicUrl,
         publicUrlReachable: Boolean(publicUrl) && !/localhost|127\.0\.0\.1/.test(publicUrl),
         botName: process.env.BOT_NAME || "Ava — Moderator",

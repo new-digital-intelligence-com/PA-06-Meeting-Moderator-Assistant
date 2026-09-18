@@ -3,7 +3,7 @@
  *
  * Recall runs a browser in its own infrastructure, joins the meeting with it, and
  * streams a webpage *we* control into the call as the bot's camera. That webpage is
- * `/bot` in this app: the Simli face plus the agenda panel. Whatever it renders and
+ * `/bot` in this app: her face plus the agenda panel. Whatever it renders and
  * plays is what the room sees and hears.
  *
  * Two consequences worth knowing before debugging anything:
