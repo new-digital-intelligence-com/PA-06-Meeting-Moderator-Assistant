@@ -97,6 +97,14 @@ export default function Stage() {
   const tickBusy = useRef(false);
   /** A line she has spoken but not yet reported; sent with the next tick. */
   const pendingDelivery = useRef<{ key: string; text: string } | null>(null);
+  /**
+   * How many captions the socket has delivered, and when the last one came.
+   *
+   * Without this, "she is not responding" and "nobody has said anything she can hear"
+   * look identical from the control room — and they need completely different fixes.
+   */
+  const heardCount = useRef(0);
+  const heardAt = useRef<number | null>(null);
 
   useEffect(() => {
     fetch("/api/anam")
@@ -143,6 +151,11 @@ export default function Stage() {
           // reports its own state and the control room shows it.
           face: status,
           faceDetail: detail ?? undefined,
+          captions: {
+            socket: wsOpen,
+            received: heardCount.current,
+            secondsSinceLast: heardAt.current ? Math.round((Date.now() - heardAt.current) / 1000) : null,
+          },
         }),
       });
       const data = await res.json();
@@ -176,7 +189,7 @@ export default function Stage() {
     } finally {
       tickBusy.current = false;
     }
-  }, [speak, status, detail]);
+  }, [speak, status, detail, wsOpen]);
 
   useEffect(() => {
     const id = window.setInterval(tick, TICK_MS);
@@ -203,6 +216,8 @@ export default function Stage() {
       socket.onmessage = (event) => {
         const line = readLine(String(event.data));
         if (!line) return;
+        heardCount.current++;
+        heardAt.current = Date.now();
         buffer.current.push(line);
         // Somebody just said her name. Waiting out the heartbeat before even noticing
         // would put a second on top of a reply that is already slower than a person's,

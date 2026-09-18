@@ -108,7 +108,12 @@ export type Meeting = {
   /** Why she did or did not speak last time, for the control room. */
   lastDecision?: { at: number; reason: string };
   /** What the stage reports about her face and voice — the only window into it. */
-  stage?: { face: string; detail?: string; at: number };
+  stage?: {
+    face: string;
+    detail?: string;
+    at: number;
+    captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
+  };
   /** Last line index handed to the note-taker, so it only reads what is new. */
   notedUpTo: number;
   summary?: string;

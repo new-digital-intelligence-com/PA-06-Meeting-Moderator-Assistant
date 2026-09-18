@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   COOLDOWN_MS,
+  getMeeting,
   OPENING_COOLDOWN_MS,
   elapsed,
   newId,
@@ -44,7 +45,28 @@ type TickBody = {
   /** What the stage sees of her face and voice — the only window we have into it. */
   face?: string;
   faceDetail?: string;
+  captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
 };
+
+/** Loose enough to survive a caption mishearing a word or two of what she said. */
+function echoesHer(text: string, m: Meeting): boolean {
+  const words = (s: string) =>
+    new Set(s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 3));
+  const heard = words(text);
+  if (heard.size < 3) return false;
+
+  // Only her recent lines matter: an echo arrives within seconds of her saying it.
+  const cutoff = Date.now() - 60_000;
+  const mine = m.transcript.filter((l) => l.speaker === botName() && l.at >= cutoff);
+
+  return mine.some((line) => {
+    const said = words(line.text);
+    if (!said.size) return false;
+    let shared = 0;
+    for (const w of heard) if (said.has(w)) shared++;
+    return shared / heard.size > 0.6;
+  });
+}
 
 function commit(m: Meeting, key: string, text?: string) {
   if (key.startsWith("open") && !m.spoken.includes(key)) {
@@ -84,6 +106,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // Needed before the write, to recognise her own words coming back as captions.
+  const meetingBefore = await getMeeting();
+
   const me = botName().toLowerCase();
 
   const incoming = (body.lines ?? [])
@@ -94,10 +119,14 @@ export async function POST(request: Request) {
       text: l.text!.trim(),
       at: l.at ?? Date.now(),
     }))
-    // Google captions her too, and those captions are a lossy echo of words we already
-    // recorded ourselves the moment she said them. Dropping them here keeps one clean
-    // copy and stops her treating her own voice as somebody addressing her.
-    .filter((l) => !l.speaker.toLowerCase().includes(me));
+    // Google captions her too, and those captions are an echo of words we already
+    // recorded ourselves the moment she said them.
+    //
+    // Matching on her name is not enough: Meet attributed her opening to "Unknown", so
+    // the echo slipped through and she filed her own introduction as somebody else's
+    // remark. Matching on what she actually just said catches it whatever label Google
+    // decides to hang on her.
+    .filter((l) => !l.speaker.toLowerCase().includes(me) && !echoesHer(l.text, meetingBefore));
 
   let meeting = await updateMeeting((m) => {
     const seen = new Set(m.transcript.map((t) => t.id));
@@ -107,7 +136,9 @@ export async function POST(request: Request) {
       m.transcript.push(line);
     }
     if (body.delivered) commit(m, body.delivered, body.deliveredText);
-    if (body.face) m.stage = { face: body.face, detail: body.faceDetail, at: Date.now() };
+    if (body.face) {
+      m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions };
+    }
     // The stage rendering at all means Recall's browser loaded the page, which only
     // happens once the bot is in the call.
     if (m.status === "joining") m.status = "live";
