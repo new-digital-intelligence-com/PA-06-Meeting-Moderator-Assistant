@@ -41,6 +41,9 @@ type TickBody = {
   /** The key of the line she has just finished saying, and the words themselves. */
   delivered?: string;
   deliveredText?: string;
+  /** What the stage sees of her face and voice — the only window we have into it. */
+  face?: string;
+  faceDetail?: string;
 };
 
 function commit(m: Meeting, key: string, text?: string) {
@@ -104,6 +107,7 @@ export async function POST(request: Request) {
       m.transcript.push(line);
     }
     if (body.delivered) commit(m, body.delivered, body.deliveredText);
+    if (body.face) m.stage = { face: body.face, detail: body.faceDetail, at: Date.now() };
     // The stage rendering at all means Recall's browser loaded the page, which only
     // happens once the bot is in the call.
     if (m.status === "joining") m.status = "live";
@@ -116,8 +120,18 @@ export async function POST(request: Request) {
     actions: meeting.actions,
   });
 
-  if (meeting.status !== "live") return NextResponse.json({ say: null, ...view() });
-  if (body.idle === false) return NextResponse.json({ say: null, ...view() });
+  /** Records why she said nothing, so "she stopped talking" is answerable. */
+  const quiet = async (reason: string) => {
+    if (meeting.lastDecision?.reason !== reason) {
+      meeting = await updateMeeting((m) => {
+        m.lastDecision = { at: Date.now(), reason };
+      });
+    }
+    return NextResponse.json({ say: null, reason, ...view() });
+  };
+
+  if (meeting.status !== "live") return quiet(`meeting is ${meeting.status}`);
+  if (body.idle === false) return quiet("she is still speaking");
 
   /* 1 ─ the opening, once */
   const cue = dueCue(meeting);
@@ -152,18 +166,19 @@ export async function POST(request: Request) {
   }
 
   /* 3 ─ has she got something worth saying? */
-  //
-  // Only at the end of somebody's utterance. A finalised caption IS a turn boundary,
-  // so this is the moment a person would take to speak — not mid-sentence.
-  if (!incoming.length) return NextResponse.json({ say: null, ...view() });
 
   // "Quiet" means never, and the opening's shorter leash must not smuggle her past it.
   const base = COOLDOWN_MS[meeting.activity];
-  if (!Number.isFinite(base)) return NextResponse.json({ say: null, ...view() });
+  if (!Number.isFinite(base)) return quiet("set to quiet — only answers when asked");
   const cooldown = meeting.lastSpokeWasOpening ? Math.min(base, OPENING_COOLDOWN_MS) : base;
 
   const since = meeting.lastSpokeAt ? Date.now() - meeting.lastSpokeAt : Number.POSITIVE_INFINITY;
-  if (since < cooldown) return NextResponse.json({ say: null, ...view() });
+  if (since < cooldown) return quiet(`waiting — ${Math.ceil((cooldown - since) / 1000)}s of cooldown left`);
+
+  // Anything said since she last weighed it up, whether it arrived on this tick or
+  // during a cooldown that has now lifted.
+  const considered = meeting.consideredUpTo ?? 0;
+  if (meeting.transcript.length <= considered) return quiet("nothing new said since she last considered");
 
   try {
     const { worth_saying, say } = await considerSpeaking(
@@ -171,17 +186,22 @@ export async function POST(request: Request) {
       meeting.transcript.slice(-30),
       meeting.lastSpokeAt ? since / 1000 : null,
     );
+
+    const upTo = meeting.transcript.length;
     if (worth_saying) {
-      return NextResponse.json({
-        say,
-        kind: "volunteer",
-        key: `volunteer:${incoming[incoming.length - 1].id}`,
-        ...view(),
+      meeting = await updateMeeting((m) => {
+        m.consideredUpTo = upTo;
+        m.lastDecision = { at: Date.now(), reason: "spoke up" };
       });
+      return NextResponse.json({ say, kind: "volunteer", key: `volunteer:${upTo}`, ...view() });
     }
+
+    meeting = await updateMeeting((m) => {
+      m.consideredUpTo = upTo;
+    });
+    return quiet("judged there was nothing worth adding");
   } catch (e) {
     console.warn("[moderator] considerSpeaking failed:", e instanceof Error ? e.message : e);
+    return quiet(`could not decide: ${e instanceof Error ? e.message : "model error"}`);
   }
-
-  return NextResponse.json({ say: null, ...view() });
 }

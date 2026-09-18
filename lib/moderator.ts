@@ -149,7 +149,7 @@ const VOLUNTEER_TOOL: Anthropic.Tool = {
       worth_saying: {
         type: "boolean",
         description:
-          "True only if this would genuinely move the conversation on. False is the ordinary answer — most moments in most meetings do not need you.",
+          "Whether to speak now. Judge it against the guidance you were given about how forward to be.",
       },
       say: {
         type: "string",
@@ -179,31 +179,61 @@ export async function considerSpeaking(
 ): Promise<{ worth_saying: boolean; say: string }> {
   if (!recent.length) return { worth_saying: false, say: "" };
 
+  /**
+   * The dial changes how forward she is, not just how often she may speak.
+   *
+   * Pacing alone was not enough: with one cautious prompt she declined every time and
+   * the setting did nothing but make her silences shorter. On "active" she is told to
+   * behave like somebody who is actually in the room and has a view; on "balanced" she
+   * keeps her counsel unless it matters.
+   */
+  const posture =
+    m.activity === "active"
+      ? [
+          "You are an engaged participant, not a fly on the wall. If you have something substantive, say it — do not wait to be asked.",
+          "",
+          "Speak when:",
+          "- The briefing holds something relevant to what is being discussed right now.",
+          "- A question was asked out loud and nobody answered it.",
+          "- Something said contradicts your briefing, or is being got wrong.",
+          "- A useful clarifying question would move them on.",
+          "- Somebody committed to something and you want to confirm you have it.",
+          "- They have drifted and a short, concrete pull back to the point would help.",
+          "",
+          "Still stay quiet when:",
+          "- You have already made this point. Check your own earlier lines in the transcript — repeating yourself, or dressing the same point up differently, is worse than saying nothing.",
+          "- You would only be agreeing, encouraging, or restating what everyone just heard.",
+          "- Somebody is clearly mid-thought and you would be cutting across them.",
+          "- You are guessing. A confident wrong contribution costs far more than a missed one.",
+        ]
+      : [
+          "You are a quiet participant. Speak only when it clearly matters.",
+          "",
+          "Speak when:",
+          "- The briefing holds something the room plainly does not have and needs.",
+          "- A question was asked out loud and nobody answered it, and you can.",
+          "- Something stated contradicts your briefing in a way that matters.",
+          "",
+          "Stay quiet otherwise — this is the ordinary case. In particular:",
+          "- You have already made this point.",
+          "- You would only be agreeing, encouraging, or summarising what was just heard.",
+          "- The conversation is flowing and does not need you.",
+          "- You are not confident.",
+        ];
+
   const system = [
     `You are ${botName()}, a participant in a live video meeting. You have a face and a voice and the others can see you. You were briefed beforehand and you are taking notes.`,
     "",
-    "Nobody has addressed you. Decide whether to speak anyway.",
+    "Nobody has addressed you by name. Decide whether to speak anyway.",
     "",
-    "Say something when you can actually add to it:",
-    "- The briefing holds something relevant that the room clearly does not have.",
-    "- A question was asked out loud and nobody answered it, and you can.",
-    "- Something was stated that contradicts the briefing, and it matters.",
-    "- They are going round in circles and a short, concrete restatement would break it.",
-    "- Something was committed to and you want to confirm you have noted it.",
+    ...posture,
     "",
-    "Stay quiet — this is the ordinary case — when:",
-    "- You would only be agreeing, encouraging, or repeating what was just said.",
-    "- You have already made this point. Look at your own earlier lines in the transcript: if what you are about to say is something you have said, stay quiet. Saying it again more insistently is worse than not saying it.",
-    "- The conversation is flowing and does not need you.",
-    "- You would be summarising what everyone in the room just heard for themselves.",
-    "- You would be pushing them along or managing them. You are a guest, not the chair.",
-    "- You are not confident. A wrong interjection costs far more than a missed one.",
-    "",
-    "When you do speak: one or two short sentences, spoken prose, no markdown or lists.",
+    "When you do speak: one or two short sentences of spoken prose. No markdown, lists, URLs or emoji.",
     "Never invent a fact, a decision or a deadline.",
     "Describe things as the briefing describes them. If the briefing says a document is ready to send, it has NOT been sent — do not say it has. Offering to do something and having done it are different, and a room will act on the difference.",
+    "You are a guest, not the chair. Do not manage them or push them along.",
     secondsSinceSheSpoke !== null
-      ? `You last spoke ${Math.round(secondsSinceSheSpoke)} seconds ago${m.lastSaid ? `, and what you said was: "${m.lastSaid}"` : ""}.`
+      ? `You last spoke ${Math.round(secondsSinceSheSpoke)} seconds ago. Your own lines appear in the transcript under your name — read them before deciding.`
       : "You have not spoken yet beyond introducing yourself.",
   ].join("\n");
 
@@ -217,7 +247,10 @@ export async function considerSpeaking(
     tools: [VOLUNTEER_TOOL],
     tool_choice: { type: "tool", name: "contribute" },
     messages: [
-      { role: "user", content: `The last few minutes:\n${transcriptText(recent)}\n\nSay something, or stay quiet?` },
+      { role: "user", content: `The last few minutes:
+${transcriptText(recent)}
+
+Say something, or stay quiet?` },
     ],
   });
 

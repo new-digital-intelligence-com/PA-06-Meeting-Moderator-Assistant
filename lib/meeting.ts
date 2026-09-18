@@ -54,8 +54,12 @@ export type Activity = "quiet" | "balanced" | "active";
 
 export const COOLDOWN_MS: Record<Activity, number> = {
   quiet: Number.POSITIVE_INFINITY,
-  balanced: 45_000,
-  active: 15_000,
+  balanced: 30_000,
+  // People take a turn every few seconds, so fifteen swallowed two or three of them
+  // after everything she said — she read as having lost interest. Eight lets her back
+  // in after about one exchange, which is roughly how often a person with something to
+  // contribute actually speaks.
+  active: 8_000,
 };
 
 /**
@@ -93,6 +97,18 @@ export type Meeting = {
   lastSaid?: string;
   /** Whether that was just the opening, which is housekeeping rather than a point. */
   lastSpokeWasOpening?: boolean;
+  /**
+   * How far through the transcript she has weighed up whether to speak.
+   *
+   * Without this she only ever got one chance per caption, at the instant it arrived:
+   * if the cooldown happened to be running then, the moment was thrown away and never
+   * revisited. Now anything unconsidered is still waiting when the cooldown lifts.
+   */
+  consideredUpTo?: number;
+  /** Why she did or did not speak last time, for the control room. */
+  lastDecision?: { at: number; reason: string };
+  /** What the stage reports about her face and voice — the only window into it. */
+  stage?: { face: string; detail?: string; at: number };
   /** Last line index handed to the note-taker, so it only reads what is new. */
   notedUpTo: number;
   summary?: string;
@@ -158,6 +174,9 @@ function normalise(raw: unknown): Meeting {
     lastSpokeAt: typeof o.lastSpokeAt === "number" ? o.lastSpokeAt : undefined,
     lastSaid: typeof o.lastSaid === "string" ? o.lastSaid : undefined,
     lastSpokeWasOpening: o.lastSpokeWasOpening === true,
+    consideredUpTo: typeof o.consideredUpTo === "number" ? o.consideredUpTo : 0,
+    lastDecision: o.lastDecision && typeof o.lastDecision === "object" ? (o.lastDecision as Meeting["lastDecision"]) : undefined,
+    stage: o.stage && typeof o.stage === "object" ? (o.stage as Meeting["stage"]) : undefined,
     notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,
     summary: typeof o.summary === "string" ? o.summary : undefined,
     followUp:
