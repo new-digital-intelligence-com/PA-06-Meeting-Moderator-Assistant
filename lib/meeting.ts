@@ -1,26 +1,18 @@
 /**
  * The meeting — one shared object, read and written by two very different clients:
  *
- *   the control room   (/)      runs in your browser: builds the agenda, launches the
- *                               bot, reviews notes, sends the follow-up.
+ *   the control room   (/)      runs in your browser: you write the context, send her
+ *                               in, watch what she hears, and see what went out.
  *   the stage          (/bot)   runs inside Recall's browser and is streamed into the
- *                               meeting as the bot's camera. It posts transcript lines
- *                               in and asks what to say next.
+ *                               meeting as her camera. It posts transcript lines in and
+ *                               asks what to say next.
  *
- * Neither can hold the state, so the server does. One meeting at a time is plenty for
- * a demo; swap this for a real table before a second host exists.
+ * Neither can hold the state, so the server does — see `lib/store.ts` for where it
+ * actually lives, which differs between local dev and a deployment.
  */
 
 import crypto from "node:crypto";
 import { store } from "./store";
-
-export type AgendaItem = {
-  id: string;
-  title: string;
-  /** Planned length. The timekeeper compares this against the wall clock. */
-  minutes: number;
-  owner?: string;
-};
 
 export type TranscriptLine = {
   id: string;
@@ -28,8 +20,6 @@ export type TranscriptLine = {
   text: string;
   /** epoch ms */
   at: number;
-  /** Which agenda item was open when this was said — used to file the notes. */
-  agendaItemId?: string;
 };
 
 export type ActionItem = {
@@ -37,8 +27,6 @@ export type ActionItem = {
   text: string;
   owner?: string;
   due?: string;
-  /** Read back to the room and not objected to. */
-  confirmed: boolean;
 };
 
 export type SharedFile = {
@@ -55,25 +43,27 @@ export type Meeting = {
   id: string;
   title: string;
   meetingUrl: string;
-  /** Who to write the follow-up to. Seeded by hand, extended by who actually spoke. */
-  participants: string[];
-  agenda: AgendaItem[];
-  /** -1 before the first item is opened. */
-  currentIndex: number;
+  /**
+   * What this meeting is about, in your own words: the subject, who is attending, what
+   * matters, anything she should know before she walks in. This is the only briefing
+   * she gets, and it is what she reasons from when somebody asks her a question.
+   */
+  context: string;
+  /** Who the notes go to when it ends. */
+  recipients: string[];
   status: MeetingStatus;
   botId?: string;
   startedAt?: number;
-  itemStartedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
   actions: ActionItem[];
   files: SharedFile[];
-  /** Cue keys already spoken, so the timekeeper never says the same thing twice. */
+  /** Keys of the few scripted lines she has said, so none is repeated. */
   spoken: string[];
-  minutes?: string;
-  followUp?: { to: string; subject: string; body: string };
   /** Last line index handed to the note-taker, so it only reads what is new. */
   notedUpTo: number;
+  summary?: string;
+  followUp?: { to: string; subject: string; body: string; sentAt?: number };
 };
 
 export const newId = () => crypto.randomBytes(8).toString("hex");
@@ -83,9 +73,8 @@ export function blank(): Meeting {
     id: newId(),
     title: "Untitled meeting",
     meetingUrl: "",
-    participants: [],
-    agenda: [],
-    currentIndex: -1,
+    context: "",
+    recipients: [],
     status: "draft",
     transcript: [],
     actions: [],
@@ -108,13 +97,12 @@ function parse(raw: string | null): Meeting | null {
  * Always a round trip — no process-local cache.
  *
  * Caching would be free on one Node process and wrong everywhere else: the stage and
- * the control room can be served by different instances, and a cached copy means the
- * timekeeper ticking against a meeting that ended five minutes ago.
+ * the control room can be served by different instances, and a cached copy means she
+ * carries on moderating a meeting that ended five minutes ago.
  */
 export async function getMeeting(): Promise<Meeting> {
   const existing = parse(await store().read());
   if (existing) return existing;
-  // First read of a fresh deployment. Write it down so the meeting id is stable.
   return updateMeeting(() => undefined);
 }
 
@@ -144,25 +132,17 @@ export async function resetMeeting(): Promise<Meeting> {
 
 /* ------------------------------------------------------------------ derived */
 
-export function currentItem(m: Meeting): AgendaItem | null {
-  return m.agenda[m.currentIndex] ?? null;
+export function elapsed(m: Meeting, now = Date.now()): number {
+  if (!m.startedAt) return 0;
+  return Math.floor(((m.endedAt ?? now) - m.startedAt) / 1000);
 }
 
-export function totalMinutes(m: Meeting): number {
-  return m.agenda.reduce((sum, item) => sum + item.minutes, 0);
-}
-
-/** Seconds spent on the open agenda item, or 0 when none is open. */
-export function elapsedOnItem(m: Meeting, now = Date.now()): number {
-  if (!m.itemStartedAt) return 0;
-  return Math.max(0, Math.floor((now - m.itemStartedAt) / 1000));
-}
-
-export function speakerEmails(m: Meeting): string[] {
-  return Array.from(new Set(m.participants.map((p) => p.trim()).filter(Boolean)));
-}
-
-/** The transcript as plain text, for the note-taker and the minutes. */
+/** The transcript as plain text, for the note-taker and the write-up. */
 export function transcriptText(lines: TranscriptLine[]): string {
   return lines.map((l) => `${l.speaker}: ${l.text}`).join("\n");
+}
+
+/** Everyone who actually spoke — useful context the briefing may not mention. */
+export function speakers(m: Meeting): string[] {
+  return Array.from(new Set(m.transcript.map((l) => l.speaker))).filter((s) => s !== "Someone");
 }

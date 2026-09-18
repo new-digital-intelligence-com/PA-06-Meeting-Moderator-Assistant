@@ -1,8 +1,9 @@
 # Ava — Meeting Moderator
 
-She joins your **Google Meet as a participant**, with a face and a voice. She reads the
-agenda out, keeps time, answers when somebody says her name, takes the notes, and
-afterwards writes the follow-up with the actions and the file links.
+She joins your **Google Meet as a participant**, with a face and a voice. You brief her
+beforehand — what the meeting is about, who is coming, anything she should know. She
+sits in, answers when somebody says her name, notes what people commit to, and emails
+the write-up round when it ends.
 
 Not a meeting product — a participant in Google's. There is no room to join here; you
 paste the Meet link you already have.
@@ -27,7 +28,7 @@ Two pages, and they are very different animals.
 | | runs in | does |
 | --- | --- | --- |
 | **`/`** the control room | your browser | plan the agenda, send Ava in, watch what she hears, review and send the follow-up |
-| **`/bot`** the stage | *Recall's* browser, streamed into the Meet | the face, the agenda panel, the clock — and the loop that decides when to speak |
+| **`/bot`** the stage | *Recall's* browser, streamed into the Meet | her face, full frame — and the loop that decides when to speak |
 
 Neither can hold the meeting state, so the server does (`lib/meeting.ts`).
 
@@ -39,16 +40,16 @@ she cannot talk over herself.
 app/
   page.tsx                     control room (server component — seeds the client)
   bot/page.tsx                 the stage Recall streams into the call
-  api/meeting/route.ts         the plan: agenda, link, participants
+  api/meeting/route.ts         the briefing: context, link, recipients
   api/meeting/start/route.ts   sends the Recall bot to the Meet
-  api/meeting/control/route.ts next/back/end/rehearse — your override
-  api/meeting/followup/route.ts writes the minutes and the email; drafts or sends it
+  api/meeting/control/route.ts end the meeting, or rehearse without one
+  api/meeting/followup/route.ts writes the notes and sends them
   api/moderator/tick/route.ts  ← the heart: what does she say right now?
   api/moderator/notes/route.ts the note-taker, off the speaking path
   api/drive/route.ts           find files, grant the room access
   api/anam/route.ts            her face and voice: a short-lived session token
 lib/
-  agenda.ts                    the timekeeper — no model in it, all scripted
+  script.ts                    the two lines she says unprompted — no model in them
   moderator.ts                 the three things that need one: reply, notes, write-up
   recall.ts                    getting her into the meeting
   meeting.ts                   the shared state
@@ -59,16 +60,22 @@ components/
   useAnamStream.ts             Anam session; speak() waits for real end-of-speech
 ```
 
-### Why the clock has no model in it
+### When she speaks, and when she does not
 
-Everything Ava says on a schedule — the opening, each item, the time warnings, the
-read-back — is a fixed string built from the clock in `lib/agenda.ts`. Scripted lines
-cannot hallucinate, cannot be slow and cannot fail on a rate limit, and that is most of
-what anyone hears her say.
+Twice, and only twice. Once at the start to say who she is and that she is taking notes
+— a fixed string from `lib/script.ts`, because the first thing a room hears her say
+should not be able to hallucinate or time out. And whenever somebody says her name.
 
-The model is reached for exactly two things: answering when somebody addresses her, and
-writing up afterwards. If it is unreachable she goes quiet and the meeting carries on —
-the transcript is still recorded and the timekeeper still runs.
+That is the whole of it. She does not chime in, chase the agenda or announce the time.
+A bot that volunteers remarks into a meeting is an irritation, and the quickest way to
+get her thrown out of the next one.
+
+Her Anam persona ships with its own LLM; it is switched off (`llmId:
+CUSTOMER_CLIENT_V1`). In a live meeting nothing but this app should be able to put words
+in her mouth.
+
+If the model is unreachable she simply stays quiet. The transcript still records and the
+write-up still happens afterwards.
 
 ## Setup
 
@@ -160,24 +167,40 @@ The control room shows the backend it is using for exactly this reason.
 
 ## Using it
 
-1. **Plan.** Pick the meeting from your calendar (which fills the link, title and
-   invitees) or paste a Meet link. Add the agenda — a title, a length and optionally an
-   owner per item. The participants are who gets the files and the follow-up.
-2. **Rehearse** (optional). Runs the whole agenda with no bot and no call, on the real
-   clock, in a browser tab. The only way to hear the script before a room full of
-   people does, and it costs an Anam session instead of a Recall hour.
-3. **Send Ava to the meeting.** She knocks. **Somebody has to admit her from the Meet
-   window** — Google now screens suspected bots into a stricter queue that defaults to
-   denying, so do it promptly or she gives up.
-4. **During.** She opens the meeting, announces each item, warns on time, and nudges on
-   overruns. Say *"Ava, …"* to ask her something or have her note an action. The control
-   room shows what she is hearing, and Next / Back / End override her at any point.
-5. **After.** *Write the minutes and email* drafts the follow-up from the transcript and
-   the actions. Edit it, then **Save as Gmail draft** — or Send, which cannot be undone.
+1. **Brief her.** A title, the Meet link, and — the important bit — **what the meeting
+   is about**: the subject, who is attending, what matters, anything she should know
+   walking in. That text is the only thing she knows, and it is what she answers from.
+   Then the addresses the notes go to.
+
+   ```
+   Quarterly review with Acme. Sam (their CTO) and Priya (procurement) are joining.
+
+   We are proposing the enterprise tier at 40k a year. They pushed back on price last
+   time and want the security review before committing. Budget sign-off is Priya's.
+
+   If anyone asks about timelines: pilot in March, full rollout by June.
+   ```
+
+2. **Rehearse** (optional). Runs her with no bot and no call, in a browser tab. Checks
+   her face and voice work before a room full of people does.
+
+3. **Send her to the meeting.** She knocks. **Somebody has to admit her from the Meet
+   window** — Google screens suspected bots into a queue that defaults to denying, so
+   do it promptly or she gives up.
+
+4. **During.** She introduces herself, then goes quiet and listens. Say *"Ava, …"* to
+   ask her something or have her note an action. She answers from your briefing and
+   from what has been said; asked something neither covers, she says she does not know
+   rather than inventing it. You can add to her briefing mid-meeting and the next
+   answer will know it.
+
+5. **End & send notes.** One button: she leaves the call, the transcript is written up,
+   and the email goes to your recipients. The text is kept and shown, so you can edit
+   and re-send if you want to.
 
 Files: search your Drive from the control room and *Grant access* to give every
-participant the file, each with a notification mail. That one is never triggered by
-anything Ava hears — only by you, with an explicit list.
+recipient the file. That one is never triggered by anything she hears — only by you.
+
 
 ## What it costs
 

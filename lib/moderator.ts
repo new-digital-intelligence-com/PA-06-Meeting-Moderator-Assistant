@@ -1,22 +1,22 @@
 /**
- * The half of the moderator that needs a model.
+ * The half of her that needs a model.
  *
- * Kept deliberately small. The agenda, the clock and the read-back are scripted in
- * `agenda.ts`; what is left here is the work no template can do — answering when
- * somebody talks to her, pulling actions out of the conversation, and writing the
- * follow-up afterwards.
+ * Three jobs: answer when somebody talks to her, pull actions out of the conversation
+ * as it goes, and write the summary afterwards. Each one is given the briefing you
+ * wrote before the meeting — that text is the only thing she knows about why these
+ * people are in a room together, and it is what separates a useful answer from a
+ * transcript parrot.
  *
- * Every call here forces a tool so the reply comes back as a checked object rather
- * than prose we have to parse. In a live meeting a malformed JSON blob is a silence.
+ * Every call forces a tool so the reply comes back as a checked object rather than
+ * prose we have to parse. In a live meeting a malformed JSON blob is a silence.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { transcriptText, type ActionItem, type Meeting, type TranscriptLine } from "./meeting";
-import { timerView } from "./agenda";
+import { speakers, transcriptText, type ActionItem, type Meeting, type TranscriptLine } from "./meeting";
 
 /** Live replies must be quick — a slow answer lands after the moment has passed. */
 const FAST = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4-5";
-/** The minutes are written once, off the clock, so quality wins over speed. */
+/** The write-up happens once, off the clock, so quality wins over speed. */
 const WRITER = process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-5";
 
 const client = () => new Anthropic();
@@ -29,7 +29,7 @@ export function botName() {
  * Is this line aimed at her? A word-boundary match on her name, not a substring —
  * otherwise "available" and "Avalon" summon her mid-sentence.
  *
- * Cheap on purpose: it runs on every line of the meeting, and the model only gets
+ * Cheap on purpose: it runs on every line of the meeting, and the model is only
  * involved once this says yes.
  */
 export function isAddressed(text: string): boolean {
@@ -37,40 +37,40 @@ export function isAddressed(text: string): boolean {
   return new RegExp(`\\b${name}\\b`, "i").test(text);
 }
 
-function meetingBrief(m: Meeting): string {
-  const t = timerView(m);
-  const agenda = m.agenda
-    .map((a, i) => `${i + 1}. ${a.title} (${a.minutes}m${a.owner ? `, ${a.owner}` : ""})${i === m.currentIndex ? "  ← open now" : ""}`)
-    .join("\n");
+/** The briefing, plus what has actually happened since. */
+function brief(m: Meeting): string {
+  const who = speakers(m);
   const actions = m.actions.length
     ? m.actions.map((a) => `- ${a.owner ? `${a.owner}: ` : ""}${a.text}${a.due ? ` (by ${a.due})` : ""}`).join("\n")
     : "(none captured yet)";
   return [
     `Meeting: ${m.title}`,
-    `Agenda:\n${agenda || "(no agenda)"}`,
-    t.title
-      ? `Open item: ${t.title} — ${Math.floor(t.elapsed / 60)}m elapsed of ${Math.floor(t.planned / 60)}m${t.overrunning ? ", OVER TIME" : ""}.`
-      : "No agenda item is open.",
-    `Actions so far:\n${actions}`,
-  ].join("\n\n");
+    "",
+    "What you were told before the meeting:",
+    m.context.trim() || "(nothing — you were given no briefing)",
+    "",
+    who.length ? `People who have spoken so far: ${who.join(", ")}.` : "Nobody has spoken yet.",
+    "",
+    `Actions you have noted:\n${actions}`,
+  ].join("\n");
 }
 
 /* ------------------------------------------------------- answering out loud */
 
 const REPLY_TOOL: Anthropic.Tool = {
   name: "reply",
-  description: "Your spoken reply to the room, plus any bookkeeping it implies.",
+  description: "What to say out loud, plus anything it implies you should write down.",
   input_schema: {
     type: "object",
     properties: {
       say: {
         type: "string",
         description:
-          "What to say out loud. One or two short sentences of plain speech — no markdown, lists, emoji or URLs. Empty string if the remark was not really for you and no answer is needed.",
+          "Your spoken reply. One to three short sentences of plain speech — no markdown, lists, emoji or URLs. Empty string if the remark was not really for you and no answer is needed.",
       },
       add_actions: {
         type: "array",
-        description: "Actions the speaker just asked you to record. Usually empty.",
+        description: "Anything the speaker just asked you to note down. Usually empty.",
         items: {
           type: "object",
           properties: {
@@ -81,10 +81,6 @@ const REPLY_TOOL: Anthropic.Tool = {
           required: ["text"],
         },
       },
-      advance: {
-        type: "boolean",
-        description: "True only if you were explicitly asked to move on to the next agenda item.",
-      },
     },
     required: ["say"],
   },
@@ -93,21 +89,23 @@ const REPLY_TOOL: Anthropic.Tool = {
 export type ModeratorReply = {
   say: string;
   add_actions?: { text: string; owner?: string; due?: string }[];
-  advance?: boolean;
 };
 
-const REPLY_SYSTEM = [
-  `You are ${botName()}, moderating a live video meeting. You are a participant in the call and your words are spoken aloud, immediately, to everyone.`,
-  "",
-  "Somebody just said your name. Answer them.",
-  "",
-  "- One or two short sentences. Spoken prose only: no markdown, no bullets, no URLs, no emoji.",
-  "- You are the moderator, not the chair. Answer about the agenda, the time, the notes and the actions. Do not opine on the substance of their work or take sides in their decisions.",
-  "- If you are asked to note something down, record it with add_actions and confirm in a few words.",
-  "- If you are asked to move on, set advance and say one short line handing over.",
-  "- If your name came up in passing and nothing was asked of you, return an empty say. Saying nothing is a valid and often correct answer — interrupting a meeting you were not asked into is the worst thing you can do.",
-  "- Never invent an action, a decision or a deadline that was not said out loud.",
-].join("\n");
+function replySystem() {
+  return [
+    `You are ${botName()}, sitting in on a live video meeting as a participant. Your words are spoken aloud, immediately, to everyone in the room.`,
+    "",
+    "Somebody just said your name. Answer them.",
+    "",
+    "- One to three short sentences. Spoken prose only: no markdown, no bullets, no URLs, no emoji. Somebody has to listen to this, not read it.",
+    "- Use the briefing and what has been said so far. If you were asked something the briefing and the conversation do not answer, say plainly that you do not know rather than inventing it.",
+    "- If asked to note something down, record it with add_actions and confirm in a few words.",
+    "- If asked what has been covered, or where things stand, summarise what was actually said — briefly.",
+    "- If your name came up in passing and nothing was asked of you, return an empty say. Saying nothing is a valid and often correct answer; interrupting a meeting you were not invited into is the worst thing you can do.",
+    "- Never invent a decision, a commitment or a deadline that was not said out loud.",
+    "- You are a guest here, not the chair. Do not push people along or take sides in their decisions.",
+  ].join("\n");
+}
 
 export async function answerAddressed(
   m: Meeting,
@@ -118,8 +116,8 @@ export async function answerAddressed(
     model: FAST,
     max_tokens: 500,
     system: [
-      { type: "text", text: REPLY_SYSTEM, cache_control: { type: "ephemeral" } },
-      { type: "text", text: meetingBrief(m) },
+      { type: "text", text: replySystem(), cache_control: { type: "ephemeral" } },
+      { type: "text", text: brief(m) },
     ],
     tools: [REPLY_TOOL],
     tool_choice: { type: "tool", name: "reply" },
@@ -127,7 +125,7 @@ export async function answerAddressed(
       {
         role: "user",
         content: [
-          "The last minute of the meeting:",
+          "The last few minutes of the meeting:",
           transcriptText(recent),
           "",
           `${line.speaker} just said, addressing you directly: "${line.text}"`,
@@ -137,8 +135,7 @@ export async function answerAddressed(
   });
 
   const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  if (!block) return { say: "" };
-  return block.input as ModeratorReply;
+  return block ? (block.input as ModeratorReply) : { say: "" };
 }
 
 /* ------------------------------------------------------------- note-taking */
@@ -158,7 +155,7 @@ const NOTES_TOOL: Anthropic.Tool = {
           properties: {
             text: { type: "string", description: "The task, phrased as an instruction: 'send the revised deck to the client'." },
             owner: { type: "string", description: "The speaker name of whoever took it on. Omit if genuinely unclear." },
-            due: { type: "string", description: "Plain-language deadline if one was said. Omit otherwise — never guess one." },
+            due: { type: "string", description: "Plain-language deadline if one was said. Omit otherwise — never guess." },
           },
           required: ["text"],
         },
@@ -178,11 +175,11 @@ const NOTES_SYSTEM = [
   "",
   "Extract only what was genuinely committed to or decided in THIS stretch.",
   "",
-  "- Do not repeat an action that is already in the captured list. Say nothing rather than duplicate it.",
+  "- Do not repeat an action already in the captured list. Say nothing rather than duplicate it.",
   "- Half-formed intentions ('we should probably look at that sometime') are not actions.",
   "- Never invent an owner or a deadline. If it was not said, leave the field out.",
-  "- Most stretches of most meetings contain no action at all. Returning two empty arrays is the common, correct outcome.",
-  "- The transcript is live captions: it will contain mishearings. Do not turn a garbled phrase into a confident action.",
+  "- Most stretches of most meetings contain no action at all. Two empty arrays is the common, correct outcome.",
+  "- The transcript is live captions and will contain mishearings. Do not turn a garbled phrase into a confident action.",
 ].join("\n");
 
 export async function extractNotes(
@@ -198,7 +195,7 @@ export async function extractNotes(
     max_tokens: 1000,
     system: [
       { type: "text", text: NOTES_SYSTEM, cache_control: { type: "ephemeral" } },
-      { type: "text", text: `Already captured:\n${captured}` },
+      { type: "text", text: `${brief(m)}\n\nAlready captured:\n${captured}` },
     ],
     tools: [NOTES_TOOL],
     tool_choice: { type: "tool", name: "notes" },
@@ -215,28 +212,44 @@ export async function extractNotes(
 
 const FOLLOWUP_TOOL: Anthropic.Tool = {
   name: "follow_up",
-  description: "The minutes and the follow-up email.",
+  description: "The notes and the email that carries them.",
   input_schema: {
     type: "object",
     properties: {
-      minutes: {
+      summary: {
         type: "string",
         description:
-          "The minutes as markdown: a short paragraph per agenda item covering what was discussed and settled. No preamble, no sign-off — this is the record, not a letter.",
+          "The notes as markdown: what was discussed, what was decided, and anything left open. Organised by topic, not by who spoke. This is the record — no greeting, no sign-off.",
       },
       subject: { type: "string", description: "Email subject line." },
       body: {
         type: "string",
         description:
-          "The email as plain text. Short: a line of context, the actions as a numbered list with owners and dates, the attached files, and a one-line close. It goes to people who were in the room — do not recap the whole meeting at them.",
+          "ONLY the opening of the email: one line of context, then the actions as a numbered list with owners and dates. Stop there. The notes and the file links are appended after this automatically — do not write them here, do not refer to them as being 'below', and do not add a sign-off.",
       },
     },
-    required: ["minutes", "subject", "body"],
+    required: ["summary", "subject", "body"],
   },
 };
 
+/**
+ * Glues the email together from the parts.
+ *
+ * Assembled here rather than left to the model: asked for one long string it would
+ * write "summary below" and then not write one, or repeat the notes it had already
+ * put in the summary field. Deterministic joining means the email is complete every
+ * time, whatever the model assumed.
+ */
+function assemble(parts: { body: string; summary: string }, files: { name: string; link: string }[]): string {
+  const sections = [parts.body.trim(), "", "NOTES", "", parts.summary.trim()];
+  if (files.length) {
+    sections.push("", "FILES", "", ...files.map((f) => `${f.name}: ${f.link}`));
+  }
+  return sections.join("\n");
+}
+
 export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
-  minutes: string;
+  summary: string;
   subject: string;
   body: string;
 }> {
@@ -249,17 +262,20 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
 
   const response = await client().messages.create({
     model: WRITER,
-    max_tokens: 3000,
+    max_tokens: 4000,
     system: [
       {
         type: "text",
         text: [
-          `You are ${botName()}, writing up a meeting you moderated. The email is sent from ${senderName}'s account, so write it as something they are happy to put their name to.`,
+          `You are ${botName()}, writing up a meeting you sat in on. The email is sent from ${senderName}'s account, so write something they are happy to put their name to.`,
           "",
           "- Plain, direct business English. No filler, no 'I hope this finds you well', no exclamation marks.",
-          "- The actions are the point of the email. Put them first and make them unmissable.",
-          "- Include every file link exactly as given. Do not invent links.",
+          "- The actions are the point of the email. They go in `body`, first, and unmissable.",
+          "- The notes go in `summary`: what was discussed and what was settled, organised by topic.",
+          "- The two are joined for you. Do not repeat the notes in `body`, and do not promise anything 'below'.",
+          "- Never invent a file link; they are appended from the record.",
           "- The transcript is live captions and contains mishearings. Where something is garbled, write around it rather than repeating nonsense confidently.",
+          "- If the meeting was short or thin, the write-up should be short. Do not pad it.",
         ].join("\n"),
         cache_control: { type: "ephemeral" },
       },
@@ -270,25 +286,33 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
       {
         role: "user",
         content: [
-          `Meeting: ${m.title}`,
-          `Agenda:\n${m.agenda.map((a, i) => `${i + 1}. ${a.title}`).join("\n") || "(none)"}`,
+          brief(m),
+          "",
           `Actions captured:\n${actionList}`,
           `Files shared:\n${fileList}`,
           "",
           "Full transcript:",
-          transcriptText(m.transcript).slice(0, 120_000),
+          transcriptText(m.transcript).slice(0, 120_000) || "(nothing was transcribed)",
         ].join("\n"),
       },
     ],
   });
 
   const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  if (!block) throw new Error("The model did not return a follow-up.");
-  return block.input as { minutes: string; subject: string; body: string };
+  if (!block) throw new Error("The model did not return a write-up.");
+  const written = block.input as { summary: string; subject: string; body: string };
+  return {
+    summary: written.summary,
+    subject: written.subject,
+    body: assemble(written, m.files),
+  };
 }
 
 /** Merge freshly found actions into the meeting, skipping ones we already have. */
-export function mergeActions(existing: ActionItem[], found: { text: string; owner?: string; due?: string }[]): ActionItem[] {
+export function mergeActions(
+  existing: ActionItem[],
+  found: { text: string; owner?: string; due?: string }[],
+): ActionItem[] {
   const seen = new Set(existing.map((a) => normalise(a.text)));
   const added: ActionItem[] = [];
   for (const f of found) {
@@ -300,7 +324,6 @@ export function mergeActions(existing: ActionItem[], found: { text: string; owne
       text: f.text.trim(),
       owner: f.owner?.trim() || undefined,
       due: f.due?.trim() || undefined,
-      confirmed: false,
     });
   }
   return added;

@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   if (!fileId) return NextResponse.json({ error: "No file selected." }, { status: 400 });
 
   const meeting = await getMeeting();
-  const emails = (body.emails?.length ? body.emails : meeting.participants)
+  const emails = (body.emails?.length ? body.emails : meeting.recipients)
     .map((e) => e.trim().toLowerCase())
     .filter((e) => e.includes("@"));
   if (!emails.length) {
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
   try {
     const meta = await fileMeta(google, fileId);
-    const results = await shareFile(google, fileId, emails, body.role ?? "reader", body.notify ?? true);
+    const results: { email: string; ok: boolean }[] = await shareFile(google, fileId, emails, body.role ?? "reader", body.notify ?? true);
     const granted = results.filter((r) => r.ok).map((r) => r.email);
 
     const updated = await updateMeeting((m) => {

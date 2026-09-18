@@ -3,10 +3,10 @@
 /**
  * The control room — your side of the glass.
  *
- * Ava is in the meeting; this is where you set up what she is moderating, watch what
- * she is hearing, and decide what leaves the building afterwards. Everything she does
- * automatically has a manual override here, because a moderator you cannot overrule is
- * worse than no moderator at all.
+ * Three steps, in order: brief her, send her in, read what came out. She does not need
+ * running while the meeting is on — she listens, answers when somebody says her name,
+ * and notes what was committed to. The only button that matters mid-meeting is the one
+ * that ends it, and that is also what puts the notes in everyone's inbox.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -26,8 +26,7 @@ type Config = {
   store: "redis" | "mongo" | "file";
 };
 
-type AgendaItem = { id?: string; title: string; minutes: number; owner?: string };
-type Action = { id: string; text: string; owner?: string; due?: string; confirmed: boolean };
+type Action = { id: string; text: string; owner?: string; due?: string };
 type TranscriptLine = { id: string; speaker: string; text: string; at: number };
 type SharedFile = { id: string; name: string; link: string; sharedWith: string[] };
 
@@ -35,37 +34,22 @@ type Meeting = {
   id: string;
   title: string;
   meetingUrl: string;
-  participants: string[];
-  agenda: AgendaItem[];
-  currentIndex: number;
+  context: string;
+  recipients: string[];
   status: "draft" | "joining" | "live" | "ended";
   botId?: string;
   transcript: TranscriptLine[];
   actions: Action[];
   files: SharedFile[];
-  minutes?: string;
-  followUp?: { to: string; subject: string; body: string };
-};
-
-type Timer = {
-  index: number;
-  total: number;
-  title: string | null;
-  elapsed: number;
-  planned: number;
-  remaining: number;
-  overrunning: boolean;
-  meetingElapsed: number;
+  summary?: string;
+  followUp?: { to: string; subject: string; body: string; sentAt?: number };
 };
 
 type DriveFile = { id: string; name: string; mimeType: string; link: string; owner?: string };
 type CalMeeting = { id: string; title: string; start: string; meetingUrl: string; attendees: string[] };
 
-const mmss = (s: number) => {
-  const sign = s < 0 ? "-" : "";
-  const abs = Math.abs(Math.floor(s));
-  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
-};
+const mmss = (s: number) =>
+  `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 /* ------------------------------------------------------------ small pieces */
 
@@ -95,11 +79,7 @@ function Section({ title, children, aside }: { title: string; children: React.Re
   );
 }
 
-// Deliberately carries no width: callers set their own. Baking `w-full` in here meant
-// every sized field (`w-20`, `w-40`) collided with it, and which one won came down to
-// stylesheet order rather than the order the classes were written in — which is how the
-// agenda's title box ended up narrower than its minutes box.
-const input =
+const field =
   "rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-sky-400/60 focus:outline-none";
 const button =
   "rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
@@ -109,16 +89,16 @@ const button =
 export default function ControlRoom({
   config,
   initialMeeting,
-  initialTimer,
+  initialElapsed,
   oauthError,
 }: {
   config: Config;
   initialMeeting: Meeting;
-  initialTimer: Timer;
+  initialElapsed: number;
   oauthError: string | null;
 }) {
-  const [meeting, setMeeting] = useState<Meeting | null>(initialMeeting);
-  const [timer, setTimer] = useState<Timer | null>(initialTimer);
+  const [meeting, setMeeting] = useState<Meeting>(initialMeeting);
+  const [secs, setSecs] = useState(initialElapsed);
   const [calendar, setCalendar] = useState<CalMeeting[]>([]);
   const [drive, setDrive] = useState<DriveFile[]>([]);
   const [driveQuery, setDriveQuery] = useState("");
@@ -128,32 +108,30 @@ export default function ControlRoom({
   );
   const [note, setNote] = useState<string | null>(null);
 
-  // Local copies, seeded once from the server. The form is deliberately NOT driven by
-  // the two-second poll — a field that rewrites itself under the cursor is unusable.
+  // Seeded once from the server. Deliberately not driven by the poll — a field that
+  // rewrites itself under the cursor is unusable.
   const [draft, setDraft] = useState({
     title: initialMeeting.title === "Untitled meeting" ? "" : initialMeeting.title,
     meetingUrl: initialMeeting.meetingUrl,
-    participants: initialMeeting.participants.join(", "),
+    recipients: initialMeeting.recipients.join(", "),
+    context: initialMeeting.context,
   });
-  const [agenda, setAgenda] = useState<AgendaItem[]>(
-    initialMeeting.agenda.length ? initialMeeting.agenda : [{ title: "", minutes: 10, owner: "" }],
-  );
   const [followUp, setFollowUp] = useState(
     initialMeeting.followUp ?? { to: "", subject: "", body: "" },
   );
 
   const say = (message: string) => {
     setNote(message);
-    window.setTimeout(() => setNote((n) => (n === message ? null : n)), 4000);
+    window.setTimeout(() => setNote((n) => (n === message ? null : n)), 6000);
   };
 
-  /* ── load & poll ───────────────────────────────────────────────────────── */
+  /* ── poll ──────────────────────────────────────────────────────────────── */
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/meeting");
       const data = await res.json();
       setMeeting(data.meeting);
-      setTimer(data.timer);
+      setSecs(data.elapsed);
     } catch {
       /* the poll retries */
     }
@@ -175,13 +153,16 @@ export default function ControlRoom({
 
   /* The note-taker runs on its own clock, well away from her speaking loop. */
   useEffect(() => {
-    if (meeting?.status !== "live") return;
+    if (meeting.status !== "live") return;
     const id = window.setInterval(() => {
-      fetch("/api/moderator/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
-        .catch(() => undefined);
+      fetch("/api/moderator/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => undefined);
     }, 20_000);
     return () => window.clearInterval(id);
-  }, [meeting?.status]);
+  }, [meeting.status]);
 
   /* ── actions ───────────────────────────────────────────────────────────── */
 
@@ -210,8 +191,8 @@ export default function ControlRoom({
         body: JSON.stringify({
           title: draft.title,
           meetingUrl: draft.meetingUrl,
-          participants: draft.participants.split(/[,\s;]+/).filter(Boolean),
-          agenda: agenda.filter((a) => a.title.trim()),
+          context: draft.context,
+          recipients: draft.recipients.split(/[,\s;]+/).filter(Boolean),
         }),
       }),
     );
@@ -219,21 +200,51 @@ export default function ControlRoom({
   const sendAva = async () => {
     await savePlan();
     const data = await call("start", () => fetch("/api/meeting/start", { method: "POST" }));
-    if (data) say("Ava is knocking — let her in from the Meet window.");
+    if (data) say("She is knocking — let her in from the Meet window.");
   };
 
-  const command = (cmd: string) =>
-    call(cmd, () =>
+  /**
+   * Ending the meeting is also what sends the notes out, which is the point of her
+   * being there at all. Two requests rather than one: ending is instant, the write-up
+   * needs a model call and a Gmail round trip, and folding them together would mean
+   * staring at a spinner wondering whether she had even left the call.
+   */
+  const endAndSend = async () => {
+    const stopped = await call("stop", () =>
       fetch("/api/meeting/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: cmd }),
+        body: JSON.stringify({ command: "stop" }),
       }),
     );
+    if (!stopped) return;
+    if (stopped.rehearsal) {
+      say("Rehearsal over.");
+      return;
+    }
 
-  const writeFollowUp = async () => {
-    const data = await call("followup", () => fetch("/api/meeting/followup", { method: "POST" }));
-    if (data?.followUp) setFollowUp(data.followUp);
+    const written = await call("write", () =>
+      fetch("/api/meeting/followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: meeting.recipients.length ? "send" : "compose" }),
+      }),
+    );
+    if (written?.followUp) setFollowUp(written.followUp);
+    if (written?.delivered?.sent) say(`Notes sent to ${written.followUp.to}.`);
+    else if (written) say("Notes written — but there were no recipients. Add addresses below and send.");
+  };
+
+  const rehearse = async () => {
+    await savePlan();
+    await call("rehearse", () =>
+      fetch("/api/meeting/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "rehearse" }),
+      }),
+    );
+    window.open("/bot", "_blank");
   };
 
   const deliver = async (mode: "draft" | "send") => {
@@ -254,16 +265,16 @@ export default function ControlRoom({
   };
 
   const share = async (file: DriveFile) => {
-    if (!meeting?.participants.length) {
-      setError("Add participant emails first — that is who gets access.");
+    if (!meeting.recipients.length) {
+      setError("Add recipient emails first — that is who gets access.");
       return;
     }
-    if (!window.confirm(`Give ${meeting.participants.length} participant(s) access to "${file.name}"? They each get a notification email.`)) return;
+    if (!window.confirm(`Give ${meeting.recipients.length} recipient(s) access to "${file.name}"? They each get a notification email.`)) return;
     const data = await call(`share:${file.id}`, () =>
       fetch("/api/drive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId: file.id, emails: meeting.participants }),
+        body: JSON.stringify({ fileId: file.id, emails: meeting.recipients }),
       }),
     );
     if (data) {
@@ -272,90 +283,71 @@ export default function ControlRoom({
     }
   };
 
-  const fillFromCalendar = (m: CalMeeting) => {
-    setDraft({ title: m.title, meetingUrl: m.meetingUrl, participants: m.attendees.join(", ") });
-  };
-
   /* ── render ────────────────────────────────────────────────────────────── */
 
-  const status = meeting?.status ?? "draft";
+  const status = meeting.status;
   const planning = status === "draft";
-  // No bot means nobody is in a call: she is performing the agenda to an empty room.
-  const rehearsing = status === "live" && !meeting?.botId;
-  const ready =
-    config.googleConnected && config.recall && config.anam && config.publicUrlReachable;
+  const rehearsing = status === "live" && !meeting.botId;
+  const ready = config.googleConnected && config.recall && config.anam && config.publicUrlReachable;
+  const name = config.botName.split("—")[0].trim();
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 p-6 pb-24">
+    <div className="mx-auto w-full max-w-4xl space-y-5 p-6 pb-24">
       <header className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <div>
           <h1 className="text-2xl font-semibold">Meeting Moderator</h1>
           <p className="text-sm text-white/40">
-            {config.botName ?? "Ava"} joins your Google Meet, keeps time, and writes the follow-up.
+            {name} sits in on your Google Meet, answers when asked, and emails the notes afterwards.
           </p>
         </div>
-        {(
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill
-              ok={config.googleConnected}
-              label={config.email ?? "Google"}
-              hint={
-                config.googleConnected
-                  ? "Calendar, Drive and Gmail are available."
-                  : !config.googleClient
-                    ? "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set."
-                    : !config.sessionSecret
-                      ? "SESSION_SECRET is not set — sign-in cannot store its cookie."
-                      : `Not signed in. Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
-              }
-            />
-            <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY" />
-            <Pill
-              ok={config.anam}
-              label="Face & voice"
-              hint="ANAM_API_KEY + ANAM_PERSONA_ID — Anam streams both on one connection"
-            />
-            <Pill ok={config.publicUrlReachable} label="Public URL" hint={config.publicUrl || "PUBLIC_URL is not set"} />
-            <Pill
-              // On one local process a file is fine. On a serverless deployment it means
-              // the stage and this page are looking at two different meetings.
-              ok={config.store !== "file" || !config.publicUrl.includes("vercel.app")}
-              label={{ redis: "Redis", mongo: "Mongo", file: "File store" }[config.store]}
-              hint={
-                config.store === "file"
-                  ? "data/meeting.json — fine locally, broken on serverless. Set KV_REST_API_URL or MONGODB_URI."
-                  : "Shared store — the stage and this page see the same meeting."
-              }
-            />
-            {!config.googleConnected && (
-              <a href="/api/auth/google" className={`${button} bg-sky-500 text-white hover:bg-sky-400`}>
-                Connect Google
-              </a>
-            )}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill
+            ok={config.googleConnected}
+            label={config.email ?? "Google"}
+            hint={
+              config.googleConnected
+                ? "Gmail, Calendar and Drive are available."
+                : !config.googleClient
+                  ? "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set."
+                  : !config.sessionSecret
+                    ? "SESSION_SECRET is not set — sign-in cannot store its cookie."
+                    : `Not signed in. Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
+            }
+          />
+          <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY + RECALL_REGION" />
+          <Pill ok={config.anam} label="Face & voice" hint="ANAM_API_KEY + ANAM_PERSONA_ID" />
+          <Pill ok={config.publicUrlReachable} label="Public URL" hint={config.publicUrl || "PUBLIC_URL is not set"} />
+          <Pill
+            ok={config.store !== "file" || !config.publicUrl.includes("vercel.app")}
+            label={{ redis: "Redis", mongo: "Mongo", file: "File store" }[config.store]}
+            hint={
+              config.store === "file"
+                ? "data/meeting.json — fine locally, broken on serverless."
+                : "Shared store — she and this page see the same meeting."
+            }
+          />
+          {!config.googleConnected && (
+            <a href="/api/auth/google" className={`${button} bg-sky-500 text-white hover:bg-sky-400`}>
+              Connect Google
+            </a>
+          )}
+        </div>
       </header>
 
       {!config.publicUrlReachable && (
         <p className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-amber-200">
           <strong className="font-semibold">PUBLIC_URL is not reachable.</strong> Recall&apos;s browser loads{" "}
           <code className="text-amber-100">/bot</code> over the internet, so localhost gives you a bot with a blank
-          tile. Run <code className="text-amber-100">cloudflared tunnel --url http://localhost:3000</code> and put the
-          https address it prints into <code className="text-amber-100">.env.local</code>.
+          tile.
         </p>
       )}
+      {error && <p className="rounded-xl border border-rose-400/30 bg-rose-400/5 p-4 text-sm text-rose-200">{error}</p>}
+      {note && <p className="rounded-xl border border-sky-400/30 bg-sky-400/5 p-4 text-sm text-sky-200">{note}</p>}
 
-      {error && (
-        <p className="rounded-xl border border-rose-400/30 bg-rose-400/5 p-4 text-sm text-rose-200">{error}</p>
-      )}
-      {note && (
-        <p className="rounded-xl border border-sky-400/30 bg-sky-400/5 p-4 text-sm text-sky-200">{note}</p>
-      )}
-
-      {/* ── the plan ─────────────────────────────────────────────────────── */}
+      {/* ── brief her ────────────────────────────────────────────────────── */}
       {planning ? (
         <Section
-          title="The meeting"
+          title="Brief her"
           aside={
             calendar.length > 0 ? (
               <select
@@ -363,7 +355,14 @@ export default function ControlRoom({
                 defaultValue=""
                 onChange={(e) => {
                   const found = calendar.find((c) => c.id === e.target.value);
-                  if (found) fillFromCalendar(found);
+                  if (found) {
+                    setDraft((d) => ({
+                      ...d,
+                      title: found.title,
+                      meetingUrl: found.meetingUrl,
+                      recipients: found.attendees.join(", "),
+                    }));
+                  }
                 }}
               >
                 <option value="">Fill from calendar…</option>
@@ -380,100 +379,72 @@ export default function ControlRoom({
             <label className="space-y-1">
               <span className="text-xs text-white/40">Title</span>
               <input
-                className={`${input} w-full`}
+                className={`${field} w-full`}
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                placeholder="Weekly product sync"
+                placeholder="Generative AI — client workshop"
               />
             </label>
             <label className="space-y-1">
               <span className="text-xs text-white/40">Google Meet link</span>
               <input
-                className={`${input} w-full`}
+                className={`${field} w-full`}
                 value={draft.meetingUrl}
                 onChange={(e) => setDraft({ ...draft, meetingUrl: e.target.value })}
                 placeholder="https://meet.google.com/abc-defg-hij"
               />
             </label>
-            <label className="space-y-1 sm:col-span-2">
-              <span className="text-xs text-white/40">
-                The people in the meeting — who gets the files and the follow-up.{" "}
-                <span className="text-white/25">Not Ava; she joins on her own.</span>
+          </div>
+
+          <label className="mt-4 block space-y-1">
+            <span className="text-xs text-white/40">
+              What is this meeting about?{" "}
+              <span className="text-white/25">
+                The subject, who is attending, anything she should know walking in. This is the only
+                briefing she gets — it is what she answers from when somebody asks her something.
               </span>
-              <input
-                className={`${input} w-full`}
-                value={draft.participants}
-                onChange={(e) => setDraft({ ...draft, participants: e.target.value })}
-                placeholder="sam@acme.com, priya@acme.com"
-              />
-            </label>
-          </div>
+            </span>
+            <textarea
+              className={`${field} h-44 w-full resize-y leading-relaxed`}
+              value={draft.context}
+              onChange={(e) => setDraft({ ...draft, context: e.target.value })}
+              placeholder={
+                "Quarterly review with Acme. Sam (their CTO) and Priya (procurement) are joining.\n\n" +
+                "We are proposing the enterprise tier. They pushed back on price last time and want to see\n" +
+                "the security review before committing. Budget sign-off sits with Priya.\n\n" +
+                "If anyone asks about timelines: pilot in March, full rollout by June."
+              }
+            />
+          </label>
 
-          <div className="mt-6 space-y-2">
-            <p className="text-xs text-white/40">Agenda — she reads this out and times each item</p>
-            {agenda.map((item, i) => (
-              <div key={i} className="flex gap-2">
-                <input
-                  className={`${input} min-w-0 flex-1`}
-                  value={item.title}
-                  placeholder={`Item ${i + 1}`}
-                  onChange={(e) =>
-                    setAgenda(agenda.map((a, j) => (i === j ? { ...a, title: e.target.value } : a)))
-                  }
-                />
-                <input
-                  className={`${input} w-20`}
-                  type="number"
-                  min={1}
-                  value={item.minutes}
-                  onChange={(e) =>
-                    setAgenda(agenda.map((a, j) => (i === j ? { ...a, minutes: Number(e.target.value) } : a)))
-                  }
-                />
-                <input
-                  className={`${input} w-40`}
-                  value={item.owner ?? ""}
-                  placeholder="Owner"
-                  onChange={(e) =>
-                    setAgenda(agenda.map((a, j) => (i === j ? { ...a, owner: e.target.value } : a)))
-                  }
-                />
-                <button
-                  className="px-2 text-white/30 hover:text-rose-300"
-                  onClick={() => setAgenda(agenda.filter((_, j) => j !== i))}
-                  aria-label="Remove item"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button
-              className="text-sm text-sky-400 hover:text-sky-300"
-              onClick={() => setAgenda([...agenda, { title: "", minutes: 10, owner: "" }])}
-            >
-              + Add item
-            </button>
-          </div>
+          <label className="mt-4 block space-y-1">
+            <span className="text-xs text-white/40">
+              Email the notes to{" "}
+              <span className="text-white/25">— the people in the meeting, not her; she joins on her own.</span>
+            </span>
+            <input
+              className={`${field} w-full`}
+              value={draft.recipients}
+              onChange={(e) => setDraft({ ...draft, recipients: e.target.value })}
+              placeholder="sam@acme.com, priya@acme.com"
+            />
+          </label>
 
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
               className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
               disabled={!ready || !draft.meetingUrl || busy !== null}
               onClick={sendAva}
             >
-              {busy === "start" ? "Sending…" : `Send ${config.botName?.split("—")[0].trim() ?? "Ava"} to the meeting`}
+              {busy === "start" ? "Sending…" : `Send ${name} to the meeting`}
             </button>
             <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
-              Save plan
+              Save
             </button>
             <button
               className={`${button} bg-white/5 text-white/70 hover:bg-white/10`}
-              title="Run the agenda with no bot and no call. Open /bot in a tab and she performs it to you, on the real clock."
-              onClick={async () => {
-                await savePlan();
-                await command("rehearse");
-                window.open("/bot", "_blank");
-              }}
+              title="Run her with no bot and no call — check her face and voice work before a room does."
+              onClick={rehearse}
               disabled={busy !== null}
             >
               Rehearse
@@ -482,87 +453,49 @@ export default function ControlRoom({
           </div>
         </Section>
       ) : (
-        /* ── live ───────────────────────────────────────────────────────── */
+        /* ── in the room ──────────────────────────────────────────────────── */
         <Section
           title={
             status === "joining"
               ? "Knocking — admit her in Google Meet"
               : rehearsing
                 ? "Rehearsing — no bot, no call"
-                : "Live"
+                : status === "ended"
+                  ? "Ended"
+                  : "In the meeting"
           }
           aside={
-            <div className="flex gap-2">
-              <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={() => command("back")}>
-                ← Back
+            status !== "ended" ? (
+              <button
+                className={`${button} bg-rose-500/80 text-white hover:bg-rose-500`}
+                onClick={endAndSend}
+                disabled={busy !== null}
+              >
+                {busy === "stop"
+                  ? "Ending…"
+                  : busy === "write"
+                    ? "Writing the notes…"
+                    : rehearsing
+                      ? "Stop rehearsal"
+                      : "End & send notes"}
               </button>
-              <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={() => command("advance")}>
-                Next item →
-              </button>
-              <button className={`${button} bg-rose-500/80 text-white hover:bg-rose-500`} onClick={() => command("stop")}>
-                {rehearsing ? "Stop rehearsal" : "End"}
-              </button>
-            </div>
+            ) : null
           }
         >
           <div className="flex flex-wrap items-baseline gap-6">
-            <div>
-              <p className="text-xs text-white/40">
-                {timer && timer.total > 0 ? `Item ${Math.min(timer.index + 1, timer.total)} of ${timer.total}` : "No agenda"}
-              </p>
-              <p className="text-xl font-medium">{timer?.title ?? "—"}</p>
-            </div>
-            <p className={`font-mono text-4xl tabular-nums ${timer?.overrunning ? "text-amber-400" : ""}`}>
-              {timer ? mmss(timer.remaining) : "--:--"}
+            <p className="font-mono text-3xl tabular-nums">{mmss(secs)}</p>
+            <p className="text-sm text-white/40">
+              {meeting.transcript.length} line{meeting.transcript.length === 1 ? "" : "s"} heard ·{" "}
+              {meeting.actions.length} action{meeting.actions.length === 1 ? "" : "s"}
             </p>
-            <p className="text-sm text-white/40">meeting {timer ? mmss(timer.meetingElapsed) : "--:--"}</p>
           </div>
 
-          {timer && timer.planned > 0 && (
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className={`h-full rounded-full transition-[width] duration-1000 ${
-                  timer.overrunning ? "bg-amber-400" : "bg-sky-400"
-                }`}
-                style={{ width: `${Math.min(100, (timer.elapsed / timer.planned) * 100)}%` }}
-              />
-            </div>
-          )}
-
-          {/* The agenda lives here now rather than on her tile: in the meeting she is a
-              face in a grid, and everything that wants reading wants reading properly. */}
-          {meeting && meeting.agenda.length > 0 && (
-            <ol className="mt-5 space-y-1">
-              {meeting.agenda.map((item, i) => {
-                const done = i < meeting.currentIndex;
-                const open = i === meeting.currentIndex;
-                return (
-                  <li
-                    key={item.id ?? i}
-                    className={`flex items-baseline gap-3 rounded-lg px-3 py-1.5 text-sm ${
-                      open ? "bg-sky-400/10 text-white" : done ? "text-white/25" : "text-white/55"
-                    }`}
-                  >
-                    <span className="w-4 shrink-0 tabular-nums text-white/30">{done ? "✓" : i + 1}</span>
-                    <span className={`flex-1 ${done ? "line-through decoration-white/20" : ""}`}>
-                      {item.title}
-                    </span>
-                    {item.owner && <span className="text-xs text-white/30">{item.owner}</span>}
-                    <span className="w-10 shrink-0 text-right text-xs tabular-nums text-white/30">
-                      {item.minutes}m
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div>
               <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">Heard</p>
-              <div className="h-56 space-y-1.5 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
-                {meeting?.transcript.length ? (
-                  meeting.transcript.slice(-60).map((l) => (
+              <div className="h-64 space-y-1.5 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
+                {meeting.transcript.length ? (
+                  meeting.transcript.slice(-80).map((l) => (
                     <p key={l.id}>
                       <span className="text-sky-300">{l.speaker}</span>{" "}
                       <span className="text-white/70">{l.text}</span>
@@ -570,17 +503,16 @@ export default function ControlRoom({
                   ))
                 ) : (
                   <p className="text-white/25">
-                    Nothing yet. Captions start once she is admitted and somebody speaks.
+                    Nothing yet. Captions start once she is admitted and somebody speaks — turn on live
+                    captions in the Meet window if this stays empty.
                   </p>
                 )}
               </div>
             </div>
             <div>
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">
-                Actions {meeting?.actions.length ? `· ${meeting.actions.length}` : ""}
-              </p>
-              <div className="h-56 space-y-2 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
-                {meeting?.actions.length ? (
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">Actions</p>
+              <div className="h-64 space-y-2 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
+                {meeting.actions.length ? (
                   meeting.actions.map((a) => (
                     <p key={a.id}>
                       {a.owner && <span className="font-medium">{a.owner} — </span>}
@@ -594,6 +526,25 @@ export default function ControlRoom({
               </div>
             </div>
           </div>
+
+          {status !== "ended" && (
+            <label className="mt-4 block space-y-1">
+              <span className="text-xs text-white/40">
+                Tell her something mid-meeting{" "}
+                <span className="text-white/25">— added to her briefing; the next answer will know it.</span>
+              </span>
+              <div className="flex gap-2">
+                <textarea
+                  className={`${field} h-16 min-w-0 flex-1 resize-y`}
+                  value={draft.context}
+                  onChange={(e) => setDraft({ ...draft, context: e.target.value })}
+                />
+                <button className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
+                  Update
+                </button>
+              </div>
+            </label>
+          )}
         </Section>
       )}
 
@@ -601,14 +552,14 @@ export default function ControlRoom({
       <Section title="Files for the room">
         <div className="flex gap-2">
           <input
-            className={`${input} w-full`}
+            className={`${field} min-w-0 flex-1`}
             value={driveQuery}
             placeholder="Search your Drive…"
             onChange={(e) => setDriveQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && searchDrive()}
           />
           <button
-            className={`${button} bg-white/5 text-white/70 hover:bg-white/10`}
+            className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`}
             onClick={searchDrive}
             disabled={!config.googleConnected}
           >
@@ -618,14 +569,16 @@ export default function ControlRoom({
         {drive.length > 0 && (
           <ul className="mt-3 divide-y divide-white/5">
             {drive.map((f) => {
-              const already = meeting?.files.find((s) => s.id === f.id);
+              const already = meeting.files.find((s) => s.id === f.id);
               return (
                 <li key={f.id} className="flex items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
                     <a href={f.link} target="_blank" rel="noreferrer" className="block truncate text-sm hover:text-sky-300">
                       {f.name}
                     </a>
-                    <p className="text-xs text-white/30">{already ? `shared with ${already.sharedWith.length}` : f.owner}</p>
+                    <p className="text-xs text-white/30">
+                      {already ? `shared with ${already.sharedWith.length}` : f.owner}
+                    </p>
                   </div>
                   <button
                     className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`}
@@ -641,77 +594,64 @@ export default function ControlRoom({
         )}
       </Section>
 
-      {/* ── the write-up ─────────────────────────────────────────────────── */}
-      <Section
-        title="Follow-up"
-        aside={
-          <button
-            className={`${button} bg-white/5 text-white/70 hover:bg-white/10`}
-            onClick={writeFollowUp}
-            disabled={!meeting?.transcript.length || busy === "followup"}
-          >
-            {busy === "followup" ? "Writing…" : "Write the minutes and email"}
-          </button>
-        }
-      >
-        {followUp.subject ? (
+      {/* ── what went out ────────────────────────────────────────────────── */}
+      {followUp.subject && (
+        <Section
+          title={meeting.followUp?.sentAt ? "Sent" : "Notes — not sent yet"}
+          aside={
+            <span className="text-xs text-white/30">
+              {meeting.followUp?.sentAt ? `to ${followUp.to}` : "edit below, then send"}
+            </span>
+          }
+        >
           <div className="space-y-3">
             <label className="block space-y-1">
               <span className="text-xs text-white/40">To</span>
-              <input className={`${input} w-full`} value={followUp.to} onChange={(e) => setFollowUp({ ...followUp, to: e.target.value })} />
+              <input
+                className={`${field} w-full`}
+                value={followUp.to}
+                onChange={(e) => setFollowUp({ ...followUp, to: e.target.value })}
+              />
             </label>
             <label className="block space-y-1">
               <span className="text-xs text-white/40">Subject</span>
               <input
-                className={`${input} w-full`}
+                className={`${field} w-full`}
                 value={followUp.subject}
                 onChange={(e) => setFollowUp({ ...followUp, subject: e.target.value })}
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-white/40">Body — edit before it goes anywhere</span>
+              <span className="text-xs text-white/40">Body</span>
               <textarea
-                className={`${input} h-64 w-full resize-y font-mono text-xs leading-relaxed`}
+                className={`${field} h-72 w-full resize-y font-mono text-xs leading-relaxed`}
                 value={followUp.body}
                 onChange={(e) => setFollowUp({ ...followUp, body: e.target.value })}
               />
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
-                className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
+                className={`${button} bg-white/5 text-white/70 hover:bg-white/10`}
                 onClick={() => deliver("draft")}
                 disabled={busy !== null}
               >
                 Save as Gmail draft
               </button>
               <button
-                className={`${button} bg-white/5 text-white/60 hover:bg-rose-500/20 hover:text-rose-200`}
+                className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
                 onClick={() => deliver("send")}
                 disabled={busy !== null}
               >
-                Send now
+                {meeting.followUp?.sentAt ? "Send again" : "Send"}
               </button>
-              <span className="text-xs text-white/30">Draft is the safe one. Send cannot be undone.</span>
             </div>
           </div>
-        ) : (
-          <p className="text-sm text-white/30">
-            After the meeting, this writes the minutes and an email with the actions and the file links.
-          </p>
-        )}
-      </Section>
-
-      {meeting?.minutes && (
-        <Section title="Minutes">
-          <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed text-white/75">
-            {meeting.minutes}
-          </pre>
         </Section>
       )}
 
       <footer className="flex items-center justify-between pt-2 text-xs text-white/25">
         <span>
-          Stage preview:{" "}
+          Her tile:{" "}
           <a href="/bot" target="_blank" rel="noreferrer" className="hover:text-sky-300">
             /bot
           </a>{" "}
@@ -721,7 +661,7 @@ export default function ControlRoom({
           className="hover:text-rose-300"
           onClick={() => {
             if (window.confirm("Throw this meeting away and start a new one?")) {
-                    call("reset", () => fetch("/api/meeting", { method: "DELETE" }));
+              call("reset", () => fetch("/api/meeting", { method: "DELETE" }));
             }
           }}
         >
