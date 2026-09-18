@@ -25,5 +25,9 @@ export async function GET() {
     // Names only, never values — enough to tell a missing variable from a prefixed one.
     storage: storeDiagnostics(),
     recallRegion: process.env.RECALL_REGION || "us-west-2 (default — unset)",
+    sessionSecret: Boolean(process.env.SESSION_SECRET),
+    googleClient: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    googleRedirectUri:
+      process.env.GOOGLE_REDIRECT_URI ?? `${publicUrl || "http://localhost:3000"}/api/auth/google/callback`,
   });
 }
