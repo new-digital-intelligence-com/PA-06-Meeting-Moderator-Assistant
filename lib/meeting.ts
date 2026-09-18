@@ -39,6 +39,32 @@ export type SharedFile = {
 
 export type MeetingStatus = "draft" | "joining" | "live" | "ended";
 
+/**
+ * How forward she is.
+ *
+ *   quiet     only ever answers when spoken to
+ *   balanced  will offer something once in a while
+ *   active    behaves like a participant with a view
+ *
+ * It maps to a cooldown: the shortest gap allowed between things she says off her own
+ * bat. Being addressed always cuts through it — ignoring somebody who asked you a
+ * question is worse than any amount of chattiness.
+ */
+export type Activity = "quiet" | "balanced" | "active";
+
+export const COOLDOWN_MS: Record<Activity, number> = {
+  quiet: Number.POSITIVE_INFINITY,
+  balanced: 45_000,
+  active: 15_000,
+};
+
+/**
+ * The opening is housekeeping, not a contribution, so it should not muzzle her for the
+ * first stretch of the meeting — which is exactly when the room is laying out the
+ * problem she was briefed on. It counts for a short beat only.
+ */
+export const OPENING_COOLDOWN_MS = 5_000;
+
 export type Meeting = {
   id: string;
   title: string;
@@ -60,6 +86,13 @@ export type Meeting = {
   files: SharedFile[];
   /** Keys of the few scripted lines she has said, so none is repeated. */
   spoken: string[];
+  activity: Activity;
+  /** When she last said anything, for pacing what she volunteers. */
+  lastSpokeAt?: number;
+  /** And what it was, so she does not make the same point twice. */
+  lastSaid?: string;
+  /** Whether that was just the opening, which is housekeeping rather than a point. */
+  lastSpokeWasOpening?: boolean;
   /** Last line index handed to the note-taker, so it only reads what is new. */
   notedUpTo: number;
   summary?: string;
@@ -76,6 +109,7 @@ export function blank(): Meeting {
     context: "",
     recipients: [],
     status: "draft",
+    activity: "active",
     transcript: [],
     actions: [],
     files: [],
@@ -118,6 +152,12 @@ function normalise(raw: unknown): Meeting {
     actions: arr<ActionItem>(o.actions),
     files: arr<SharedFile>(o.files),
     spoken: arr<string>(o.spoken),
+    activity: (["quiet", "balanced", "active"] as const).includes(o.activity as Activity)
+      ? (o.activity as Activity)
+      : "active",
+    lastSpokeAt: typeof o.lastSpokeAt === "number" ? o.lastSpokeAt : undefined,
+    lastSaid: typeof o.lastSaid === "string" ? o.lastSaid : undefined,
+    lastSpokeWasOpening: o.lastSpokeWasOpening === true,
     notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,
     summary: typeof o.summary === "string" ? o.summary : undefined,
     followUp:

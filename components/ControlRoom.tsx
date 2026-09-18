@@ -36,6 +36,7 @@ type Meeting = {
   meetingUrl: string;
   context: string;
   recipients: string[];
+  activity: "quiet" | "balanced" | "active";
   status: "draft" | "joining" | "live" | "ended";
   botId?: string;
   transcript: TranscriptLine[];
@@ -115,6 +116,7 @@ export default function ControlRoom({
     meetingUrl: initialMeeting.meetingUrl,
     recipients: initialMeeting.recipients.join(", "),
     context: initialMeeting.context,
+    activity: initialMeeting.activity ?? "active",
   });
   const [followUp, setFollowUp] = useState(
     initialMeeting.followUp ?? { to: "", subject: "", body: "" },
@@ -192,6 +194,7 @@ export default function ControlRoom({
           title: draft.title,
           meetingUrl: draft.meetingUrl,
           context: draft.context,
+          activity: draft.activity,
           recipients: draft.recipients.split(/[,\s;]+/).filter(Boolean),
         }),
       }),
@@ -417,6 +420,36 @@ export default function ControlRoom({
             />
           </label>
 
+          <fieldset className="mt-4">
+            <legend className="text-xs text-white/40">
+              How much does she join in?{" "}
+              <span className="text-white/25">Being asked something directly always gets an answer.</span>
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(
+                [
+                  ["quiet", "Quiet", "Only ever answers when spoken to."],
+                  ["balanced", "Balanced", "Offers something occasionally."],
+                  ["active", "Active", "Joins in like a participant with a view."],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  title={hint}
+                  onClick={() => setDraft({ ...draft, activity: value })}
+                  className={`${button} ${
+                    draft.activity === value
+                      ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40"
+                      : "bg-white/5 text-white/50 hover:bg-white/10"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <label className="mt-4 block space-y-1">
             <span className="text-xs text-white/40">
               Email the notes to{" "}
@@ -542,6 +575,32 @@ export default function ControlRoom({
                 <button className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
                   Update
                 </button>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-white/30">Joins in:</span>
+                {(["quiet", "balanced", "active"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={async () => {
+                      setDraft((d) => ({ ...d, activity: value }));
+                      await call("save", () =>
+                        fetch("/api/meeting", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ activity: value }),
+                        }),
+                      );
+                    }}
+                    className={`rounded-md px-2 py-1 text-xs ${
+                      meeting.activity === value
+                        ? "bg-sky-500/20 text-sky-200"
+                        : "bg-white/5 text-white/40 hover:bg-white/10"
+                    }`}
+                  >
+                    {value}
+                  </button>
+                ))}
               </div>
             </label>
           )}
