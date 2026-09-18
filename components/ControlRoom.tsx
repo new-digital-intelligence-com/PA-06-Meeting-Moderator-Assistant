@@ -277,6 +277,8 @@ export default function ControlRoom({
 
   const status = meeting?.status ?? "draft";
   const planning = status === "draft";
+  // No bot means nobody is in a call: she is performing the agenda to an empty room.
+  const rehearsing = status === "live" && !meeting?.botId;
   const ready =
     config.googleConnected && config.recall && config.simli && config.elevenlabs && config.publicUrlReachable;
 
@@ -475,7 +477,13 @@ export default function ControlRoom({
       ) : (
         /* ── live ───────────────────────────────────────────────────────── */
         <Section
-          title={status === "joining" ? "Knocking — admit her in Google Meet" : "Live"}
+          title={
+            status === "joining"
+              ? "Knocking — admit her in Google Meet"
+              : rehearsing
+                ? "Rehearsing — no bot, no call"
+                : "Live"
+          }
           aside={
             <div className="flex gap-2">
               <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={() => command("back")}>
@@ -485,7 +493,7 @@ export default function ControlRoom({
                 Next item →
               </button>
               <button className={`${button} bg-rose-500/80 text-white hover:bg-rose-500`} onClick={() => command("stop")}>
-                End
+                {rehearsing ? "Stop rehearsal" : "End"}
               </button>
             </div>
           }

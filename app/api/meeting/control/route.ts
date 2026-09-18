@@ -42,12 +42,29 @@ export async function POST(request: Request) {
         }
       }
     }
+    // A rehearsal has no bot, and nothing said during one is worth keeping. Ending it
+    // puts you back on the planning form with the agenda intact, ready to run it for
+    // real — rather than in a finished meeting you can only escape by wiping the plan.
+    const wasRehearsal = !before.botId;
+
     const meeting = await updateMeeting((m) => {
-      m.status = "ended";
-      m.endedAt = Date.now();
+      if (wasRehearsal) {
+        m.status = "draft";
+        m.currentIndex = -1;
+        m.startedAt = undefined;
+        m.itemStartedAt = undefined;
+        m.endedAt = undefined;
+        m.spoken = [];
+        m.transcript = [];
+        m.actions = [];
+        m.notedUpTo = 0;
+      } else {
+        m.status = "ended";
+        m.endedAt = Date.now();
+      }
       m.botId = undefined;
     });
-    return NextResponse.json({ meeting, timer: timerView(meeting) });
+    return NextResponse.json({ meeting, timer: timerView(meeting), rehearsal: wasRehearsal });
   }
 
   const meeting = await updateMeeting((m) => {
