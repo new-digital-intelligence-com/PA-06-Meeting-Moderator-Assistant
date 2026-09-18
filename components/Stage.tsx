@@ -70,17 +70,31 @@ function readLine(raw: string): Line | null {
   if (!text) return null;
 
   const participant = (t?.participant ?? {}) as { name?: string | null; id?: number };
-  const start = words[0]?.start_timestamp?.relative ?? 0;
+
+  /**
+   * A genuinely unique id per message.
+   *
+   * It used to be speaker plus the utterance's start timestamp, on the assumption that
+   * the pair identified an utterance across redeliveries. When the payload carries no
+   * start timestamp that fell back to 0.00, so every single thing a person said
+   * collapsed onto one id and the server's dedupe threw the rest away — 3,885 captions
+   * arrived in a real meeting and four lines survived, one per speaker.
+   *
+   * Uniqueness is cheap; recognising a repeat is the server's job, and it now does it
+   * by looking at the words rather than trusting a key we constructed.
+   */
+  seq += 1;
 
   return {
-    // Speaker plus utterance start is stable across redeliveries, so the server can
-    // drop a line it has already filed.
-    id: `${participant.id ?? participant.name ?? "x"}-${start.toFixed(2)}`,
+    id: `c${seq}`,
     speaker: participant.name?.trim() || "Someone",
     text,
     at: Date.now(),
   };
 }
+
+/** Monotonic per page load. See readLine. */
+let seq = 0;
 
 export default function Stage() {
   const { videoRef, status, detail, speak } = useAnamStream();

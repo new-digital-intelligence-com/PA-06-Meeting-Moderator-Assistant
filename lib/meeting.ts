@@ -105,6 +105,8 @@ export type Meeting = {
    * revisited. Now anything unconsidered is still waiting when the cooldown lifts.
    */
   consideredUpTo?: number;
+  /** Signature of the transcript when she last weighed up whether to speak. */
+  consideredSignature?: string;
   /** Why she did or did not speak last time, for the control room. */
   lastDecision?: { at: number; reason: string };
   /** What the stage reports about her face and voice — the only window into it. */
@@ -180,6 +182,7 @@ function normalise(raw: unknown): Meeting {
     lastSaid: typeof o.lastSaid === "string" ? o.lastSaid : undefined,
     lastSpokeWasOpening: o.lastSpokeWasOpening === true,
     consideredUpTo: typeof o.consideredUpTo === "number" ? o.consideredUpTo : 0,
+    consideredSignature: typeof o.consideredSignature === "string" ? o.consideredSignature : undefined,
     lastDecision: o.lastDecision && typeof o.lastDecision === "object" ? (o.lastDecision as Meeting["lastDecision"]) : undefined,
     stage: o.stage && typeof o.stage === "object" ? (o.stage as Meeting["stage"]) : undefined,
     notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,
