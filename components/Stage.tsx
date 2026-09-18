@@ -1,20 +1,21 @@
 "use client";
 
 /**
- * The stage — what the meeting actually sees.
+ * The stage — what the meeting sees, and nothing else.
  *
- * This page is loaded by Recall's browser and streamed into the call as Ava's camera
- * tile, at 1280x720. Everything it renders is on screen in the meeting and everything
- * it plays is heard in the room, so it is laid out for a small tile in a Meet grid:
- * big type, high contrast, nothing that needs to be read closely.
+ * Recall streams this page into the call as Ava's camera tile, so it is her face full
+ * frame and no more than that. No agenda, no timer, no action list: her tile sits in a
+ * grid with the real people's tiles, and a participant with a dashboard stuck to their
+ * chest reads as signage, not as somebody in the room. Everything worth *reading*
+ * belongs in the control room, where it can be read properly.
  *
- * It runs the only loop that matters:
+ * What is left here is the loop:
  *
  *   captions in  →  post to /api/moderator/tick  →  say whatever comes back
  *
- * and it only ticks while she is silent, so she can never talk over herself. A line is
- * reported back as delivered on the following tick, and only then does the server
- * record it as said — a cue she could not speak is offered again rather than lost.
+ * It only ticks while she is silent, so she can never talk over herself, and a line is
+ * reported as delivered on the following tick — the server records a cue as spoken only
+ * once she has actually said it, so a line lost to a dead stream comes back round.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,26 +30,6 @@ const VIDEO_ID = "ava-video";
 const AUDIO_ID = "ava-audio";
 
 type Line = { id: string; speaker: string; text: string; at: number };
-
-type Timer = {
-  index: number;
-  total: number;
-  title: string | null;
-  owner: string | null;
-  elapsed: number;
-  planned: number;
-  remaining: number;
-  overrunning: boolean;
-  meetingElapsed: number;
-};
-
-type Action = { id: string; text: string; owner?: string; due?: string; confirmed: boolean };
-
-const mmss = (s: number) => {
-  const sign = s < 0 ? "-" : "";
-  const abs = Math.abs(Math.floor(s));
-  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
-};
 
 /**
  * Recall's socket and Recall's webhooks wrap the same payload differently, and the
@@ -98,10 +79,6 @@ function readLine(raw: string): Line | null {
 
 export default function Stage() {
   const { videoRef, audioRef, status, detail, speak } = useAnamStream();
-
-  const [timer, setTimer] = useState<Timer | null>(null);
-  const [actions, setActions] = useState<Action[]>([]);
-  const [caption, setCaption] = useState("");
   const [wsOpen, setWsOpen] = useState(false);
 
   /** Lines heard since the last tick. */
@@ -131,9 +108,7 @@ export default function Stage() {
       socket.onerror = () => socket?.close();
       socket.onmessage = (event) => {
         const line = readLine(String(event.data));
-        if (!line) return;
-        buffer.current.push(line);
-        setCaption(`${line.speaker}: ${line.text}`);
+        if (line) buffer.current.push(line);
       };
     };
 
@@ -161,12 +136,9 @@ export default function Stage() {
         body: JSON.stringify({ lines, idle: !speaking.current, delivered }),
       });
       const data = await res.json();
-      if (data.timer) setTimer(data.timer);
-      if (data.actions) setActions(data.actions);
 
       if (data.say && !speaking.current) {
         speaking.current = true;
-        setCaption(`Ava: ${data.say}`);
         try {
           const said = await speak(data.say);
           // Only a line she actually got out counts. A failed one stays unrecorded
@@ -178,7 +150,7 @@ export default function Stage() {
       }
     } catch {
       // A dropped tick is survivable: the lines we took are lost from the buffer, but
-      // the loop continues and undelivered cues are still pending.
+      // the loop continues and an unconfirmed cue is still pending.
       if (delivered) pendingDelivery.current = delivered;
     } finally {
       tickBusy.current = false;
@@ -191,95 +163,38 @@ export default function Stage() {
   }, [tick]);
 
   const live = status === "live" || status === "speaking";
-  const over = timer?.overrunning ?? false;
 
   return (
-    <main className="flex h-screen w-screen overflow-hidden bg-[#0b0f17] text-white">
-      {/* her face */}
-      <section className="relative flex h-full w-[52%] items-center justify-center bg-black">
-        <video id={VIDEO_ID} ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-        {/* Recall captures this page's audio output, so this element is the path from
-            her voice into the meeting. It must not be muted. */}
-        <audio id={AUDIO_ID} ref={audioRef} autoPlay />
+    <main className="relative h-screen w-screen overflow-hidden bg-black">
+      <video
+        id={VIDEO_ID}
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="h-full w-full object-cover"
+      />
+      {/* Recall captures this page's audio output, so this element is the path from her
+          voice into the meeting. It must never be muted. */}
+      <audio id={AUDIO_ID} ref={audioRef} autoPlay />
 
-        {!live && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black px-8 text-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/face.png" alt="" className="h-40 w-40 rounded-full object-cover opacity-60" />
-            <p className="text-lg text-white/60">
-              {status === "unconfigured" ? "No Anam persona configured" : "Connecting…"}
-            </p>
-            {detail && <p className="max-w-md text-sm text-white/35">{detail}</p>}
-          </div>
-        )}
-
-        <div className="absolute bottom-5 left-5 flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-sm">
-          <span
-            className={`h-2.5 w-2.5 rounded-full ${
-              status === "speaking" ? "bg-emerald-400" : live ? "bg-sky-400" : "bg-white/30"
-            }`}
-          />
-          <span className="font-medium">Ava</span>
-          <span className="text-white/50">
-            {status === "speaking" ? "speaking" : wsOpen ? "listening" : "waiting for the room"}
-          </span>
-        </div>
-      </section>
-
-      {/* the agenda panel */}
-      <section className="flex h-full w-[48%] flex-col gap-5 p-8">
-        <header>
-          <p className="text-xs uppercase tracking-[0.2em] text-white/40">
-            {timer && timer.total > 0 ? `Item ${Math.min(timer.index + 1, timer.total)} of ${timer.total}` : "Agenda"}
+      {/* Only before she is up. Once the stream is live the tile is pure video — no
+          overlay, nothing to read. The status here is not decoration: a black tile
+          with no explanation is exactly what made the first failure so hard to place. */}
+      {!live && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black px-10 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/face.png" alt="" className="h-48 w-48 rounded-full object-cover opacity-70" />
+          <p className="text-lg text-white/55">
+            {status === "unconfigured"
+              ? "No Anam persona configured"
+              : wsOpen
+                ? "Connecting…"
+                : "Connecting…"}
           </p>
-          <h1 className="mt-1 line-clamp-2 text-3xl leading-tight font-semibold">
-            {timer?.title || "Waiting to start"}
-          </h1>
-          {timer?.owner && <p className="mt-1 text-lg text-white/50">led by {timer.owner}</p>}
-        </header>
-
-        <div className="flex items-baseline gap-4">
-          <span className={`font-mono text-6xl tabular-nums ${over ? "text-amber-400" : "text-white"}`}>
-            {timer ? mmss(timer.remaining) : "--:--"}
-          </span>
-          <span className="text-base text-white/40">{over ? "over time" : "left on this item"}</span>
+          {detail && <p className="max-w-lg text-sm text-white/30">{detail}</p>}
         </div>
-
-        {timer && timer.planned > 0 && (
-          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-            <div
-              className={`h-full rounded-full transition-[width] duration-1000 ${over ? "bg-amber-400" : "bg-sky-400"}`}
-              style={{ width: `${Math.min(100, (timer.elapsed / timer.planned) * 100)}%` }}
-            />
-          </div>
-        )}
-
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <p className="mb-2 text-xs uppercase tracking-[0.2em] text-white/40">
-            Actions {actions.length > 0 && `· ${actions.length}`}
-          </p>
-          {actions.length === 0 ? (
-            <p className="text-base text-white/30">Nothing captured yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {actions.slice(-6).map((a) => (
-                <li key={a.id} className="flex gap-2 text-base leading-snug">
-                  <span className="text-sky-400">•</span>
-                  <span>
-                    {a.owner && <span className="font-medium text-white">{a.owner} — </span>}
-                    <span className="text-white/80">{a.text}</span>
-                    {a.due && <span className="text-white/40"> ({a.due})</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <footer className="line-clamp-2 min-h-[3rem] border-t border-white/10 pt-3 text-base text-white/40">
-          {caption || "…"}
-        </footer>
-      </section>
+      )}
     </main>
   );
 }

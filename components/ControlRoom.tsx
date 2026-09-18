@@ -95,8 +95,12 @@ function Section({ title, children, aside }: { title: string; children: React.Re
   );
 }
 
+// Deliberately carries no width: callers set their own. Baking `w-full` in here meant
+// every sized field (`w-20`, `w-40`) collided with it, and which one won came down to
+// stylesheet order rather than the order the classes were written in — which is how the
+// agenda's title box ended up narrower than its minutes box.
 const input =
-  "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-sky-400/60 focus:outline-none";
+  "rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-sky-400/60 focus:outline-none";
 const button =
   "rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -376,7 +380,7 @@ export default function ControlRoom({
             <label className="space-y-1">
               <span className="text-xs text-white/40">Title</span>
               <input
-                className={input}
+                className={`${input} w-full`}
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                 placeholder="Weekly product sync"
@@ -385,7 +389,7 @@ export default function ControlRoom({
             <label className="space-y-1">
               <span className="text-xs text-white/40">Google Meet link</span>
               <input
-                className={input}
+                className={`${input} w-full`}
                 value={draft.meetingUrl}
                 onChange={(e) => setDraft({ ...draft, meetingUrl: e.target.value })}
                 placeholder="https://meet.google.com/abc-defg-hij"
@@ -393,10 +397,11 @@ export default function ControlRoom({
             </label>
             <label className="space-y-1 sm:col-span-2">
               <span className="text-xs text-white/40">
-                Participants — who gets the files and the follow-up
+                The people in the meeting — who gets the files and the follow-up.{" "}
+                <span className="text-white/25">Not Ava; she joins on her own.</span>
               </span>
               <input
-                className={input}
+                className={`${input} w-full`}
                 value={draft.participants}
                 onChange={(e) => setDraft({ ...draft, participants: e.target.value })}
                 placeholder="sam@acme.com, priya@acme.com"
@@ -409,7 +414,7 @@ export default function ControlRoom({
             {agenda.map((item, i) => (
               <div key={i} className="flex gap-2">
                 <input
-                  className={`${input} flex-1`}
+                  className={`${input} min-w-0 flex-1`}
                   value={item.title}
                   placeholder={`Item ${i + 1}`}
                   onChange={(e) =>
@@ -513,6 +518,45 @@ export default function ControlRoom({
             <p className="text-sm text-white/40">meeting {timer ? mmss(timer.meetingElapsed) : "--:--"}</p>
           </div>
 
+          {timer && timer.planned > 0 && (
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className={`h-full rounded-full transition-[width] duration-1000 ${
+                  timer.overrunning ? "bg-amber-400" : "bg-sky-400"
+                }`}
+                style={{ width: `${Math.min(100, (timer.elapsed / timer.planned) * 100)}%` }}
+              />
+            </div>
+          )}
+
+          {/* The agenda lives here now rather than on her tile: in the meeting she is a
+              face in a grid, and everything that wants reading wants reading properly. */}
+          {meeting && meeting.agenda.length > 0 && (
+            <ol className="mt-5 space-y-1">
+              {meeting.agenda.map((item, i) => {
+                const done = i < meeting.currentIndex;
+                const open = i === meeting.currentIndex;
+                return (
+                  <li
+                    key={item.id ?? i}
+                    className={`flex items-baseline gap-3 rounded-lg px-3 py-1.5 text-sm ${
+                      open ? "bg-sky-400/10 text-white" : done ? "text-white/25" : "text-white/55"
+                    }`}
+                  >
+                    <span className="w-4 shrink-0 tabular-nums text-white/30">{done ? "✓" : i + 1}</span>
+                    <span className={`flex-1 ${done ? "line-through decoration-white/20" : ""}`}>
+                      {item.title}
+                    </span>
+                    {item.owner && <span className="text-xs text-white/30">{item.owner}</span>}
+                    <span className="w-10 shrink-0 text-right text-xs tabular-nums text-white/30">
+                      {item.minutes}m
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div>
               <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">Heard</p>
@@ -557,7 +601,7 @@ export default function ControlRoom({
       <Section title="Files for the room">
         <div className="flex gap-2">
           <input
-            className={input}
+            className={`${input} w-full`}
             value={driveQuery}
             placeholder="Search your Drive…"
             onChange={(e) => setDriveQuery(e.target.value)}
@@ -614,12 +658,12 @@ export default function ControlRoom({
           <div className="space-y-3">
             <label className="block space-y-1">
               <span className="text-xs text-white/40">To</span>
-              <input className={input} value={followUp.to} onChange={(e) => setFollowUp({ ...followUp, to: e.target.value })} />
+              <input className={`${input} w-full`} value={followUp.to} onChange={(e) => setFollowUp({ ...followUp, to: e.target.value })} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs text-white/40">Subject</span>
               <input
-                className={input}
+                className={`${input} w-full`}
                 value={followUp.subject}
                 onChange={(e) => setFollowUp({ ...followUp, subject: e.target.value })}
               />
@@ -627,7 +671,7 @@ export default function ControlRoom({
             <label className="block space-y-1">
               <span className="text-xs text-white/40">Body — edit before it goes anywhere</span>
               <textarea
-                className={`${input} h-64 resize-y font-mono text-xs leading-relaxed`}
+                className={`${input} h-64 w-full resize-y font-mono text-xs leading-relaxed`}
                 value={followUp.body}
                 onChange={(e) => setFollowUp({ ...followUp, body: e.target.value })}
               />
