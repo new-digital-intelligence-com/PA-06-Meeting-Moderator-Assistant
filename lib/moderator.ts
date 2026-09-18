@@ -138,6 +138,95 @@ export async function answerAddressed(
   return block ? (block.input as ModeratorReply) : { say: "" };
 }
 
+/* ----------------------------------------------------- speaking up unasked */
+
+const VOLUNTEER_TOOL: Anthropic.Tool = {
+  name: "contribute",
+  description: "Whether to say something now, and what.",
+  input_schema: {
+    type: "object",
+    properties: {
+      worth_saying: {
+        type: "boolean",
+        description:
+          "True only if this would genuinely move the conversation on. False is the ordinary answer — most moments in most meetings do not need you.",
+      },
+      say: {
+        type: "string",
+        description: "What to say, if worth_saying. One or two short sentences of plain speech. Empty otherwise.",
+      },
+    },
+    required: ["worth_saying", "say"],
+  },
+};
+
+/**
+ * Should she chime in?
+ *
+ * Called at the end of somebody's utterance — a natural turn boundary — when she has
+ * not spoken for a while. The model decides, and the prompt is written to make "no" the
+ * easy answer, because the failure mode that gets a bot thrown out of the next meeting
+ * is not silence, it is noise.
+ *
+ * What survives the bar is narrow on purpose: something concrete from the briefing that
+ * the room is missing, an open question nobody picked up, a fact being got wrong. Not
+ * agreement, not encouragement, not summarising what everyone just heard.
+ */
+export async function considerSpeaking(
+  m: Meeting,
+  recent: TranscriptLine[],
+  secondsSinceSheSpoke: number | null,
+): Promise<{ worth_saying: boolean; say: string }> {
+  if (!recent.length) return { worth_saying: false, say: "" };
+
+  const system = [
+    `You are ${botName()}, a participant in a live video meeting. You have a face and a voice and the others can see you. You were briefed beforehand and you are taking notes.`,
+    "",
+    "Nobody has addressed you. Decide whether to speak anyway.",
+    "",
+    "Say something when you can actually add to it:",
+    "- The briefing holds something relevant that the room clearly does not have.",
+    "- A question was asked out loud and nobody answered it, and you can.",
+    "- Something was stated that contradicts the briefing, and it matters.",
+    "- They are going round in circles and a short, concrete restatement would break it.",
+    "- Something was committed to and you want to confirm you have noted it.",
+    "",
+    "Stay quiet — this is the ordinary case — when:",
+    "- You would only be agreeing, encouraging, or repeating what was just said.",
+    "- You have already made this point. Look at your own earlier lines in the transcript: if what you are about to say is something you have said, stay quiet. Saying it again more insistently is worse than not saying it.",
+    "- The conversation is flowing and does not need you.",
+    "- You would be summarising what everyone in the room just heard for themselves.",
+    "- You would be pushing them along or managing them. You are a guest, not the chair.",
+    "- You are not confident. A wrong interjection costs far more than a missed one.",
+    "",
+    "When you do speak: one or two short sentences, spoken prose, no markdown or lists.",
+    "Never invent a fact, a decision or a deadline.",
+    "Describe things as the briefing describes them. If the briefing says a document is ready to send, it has NOT been sent — do not say it has. Offering to do something and having done it are different, and a room will act on the difference.",
+    secondsSinceSheSpoke !== null
+      ? `You last spoke ${Math.round(secondsSinceSheSpoke)} seconds ago${m.lastSaid ? `, and what you said was: "${m.lastSaid}"` : ""}.`
+      : "You have not spoken yet beyond introducing yourself.",
+  ].join("\n");
+
+  const response = await client().messages.create({
+    model: FAST,
+    max_tokens: 400,
+    system: [
+      { type: "text", text: system, cache_control: { type: "ephemeral" } },
+      { type: "text", text: brief(m) },
+    ],
+    tools: [VOLUNTEER_TOOL],
+    tool_choice: { type: "tool", name: "contribute" },
+    messages: [
+      { role: "user", content: `The last few minutes:\n${transcriptText(recent)}\n\nSay something, or stay quiet?` },
+    ],
+  });
+
+  const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  if (!block) return { worth_saying: false, say: "" };
+  const out = block.input as { worth_saying?: boolean; say?: string };
+  return { worth_saying: Boolean(out.worth_saying) && Boolean(out.say?.trim()), say: out.say?.trim() ?? "" };
+}
+
 /* ------------------------------------------------------------- note-taking */
 
 const NOTES_TOOL: Anthropic.Tool = {

@@ -91,8 +91,8 @@ export default function Stage() {
   /** True from the moment we ask her to speak until she has finished. */
   const speaking = useRef(false);
   const tickBusy = useRef(false);
-  /** A cue she has spoken but not yet reported; sent with the next tick. */
-  const pendingDelivery = useRef<string | null>(null);
+  /** A line she has spoken but not yet reported; sent with the next tick. */
+  const pendingDelivery = useRef<{ key: string; text: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/anam")
@@ -121,7 +121,12 @@ export default function Stage() {
       const res = await fetch("/api/moderator/tick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lines, idle: !speaking.current, delivered }),
+        body: JSON.stringify({
+          lines,
+          idle: !speaking.current,
+          delivered: delivered?.key,
+          deliveredText: delivered?.text,
+        }),
       });
       const data = await res.json();
 
@@ -131,7 +136,7 @@ export default function Stage() {
           const said = await speak(data.say);
           // Only a line she actually got out counts. A failed one stays unrecorded
           // and comes back round on the next tick.
-          if (said && data.key) pendingDelivery.current = data.key;
+          if (said && data.key) pendingDelivery.current = { key: data.key, text: data.say };
         } finally {
           speaking.current = false;
         }

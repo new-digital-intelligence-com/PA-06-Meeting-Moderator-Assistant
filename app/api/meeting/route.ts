@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { elapsed, getMeeting, resetMeeting, updateMeeting } from "@/lib/meeting";
+import { elapsed, getMeeting, resetMeeting, updateMeeting, type Activity } from "@/lib/meeting";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 
 export const runtime = "nodejs";
@@ -18,6 +18,7 @@ type Patch = {
   meetingUrl?: string;
   context?: string;
   recipients?: string[];
+  activity?: Activity;
 };
 
 /** The briefing. Editable right up until she is in the room. */
@@ -35,6 +36,9 @@ export async function PUT(request: Request) {
     // Kept editable mid-meeting on purpose: if she is missing something, you can tell
     // her about it there and then and the next answer will know it.
     if (patch.context !== undefined) m.context = patch.context;
+    if (patch.activity && ["quiet", "balanced", "active"].includes(patch.activity)) {
+      m.activity = patch.activity;
+    }
     if (patch.recipients) {
       m.recipients = Array.from(
         new Set(patch.recipients.map((p) => p.trim().toLowerCase()).filter((p) => p.includes("@"))),
