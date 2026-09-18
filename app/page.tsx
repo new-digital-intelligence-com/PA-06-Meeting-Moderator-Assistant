@@ -1,6 +1,5 @@
 import ControlRoom from "@/components/ControlRoom";
-import { timerView } from "@/lib/agenda";
-import { getMeeting } from "@/lib/meeting";
+import { elapsed, getMeeting } from "@/lib/meeting";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 import { readSession } from "@/lib/session";
 import { storeKind } from "@/lib/store";
@@ -29,7 +28,7 @@ export default async function Home({
   return (
     <ControlRoom
       initialMeeting={meeting}
-      initialTimer={timerView(meeting)}
+      initialElapsed={elapsed(meeting)}
       oauthError={oauthError}
       config={{
         googleConnected: Boolean(session.google),

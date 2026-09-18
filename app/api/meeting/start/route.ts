@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { timerView } from "@/lib/agenda";
-import { getMeeting, updateMeeting } from "@/lib/meeting";
+import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
 import { RecallError, createBot, publicUrl } from "@/lib/recall";
 
 export const runtime = "nodejs";
@@ -43,11 +42,11 @@ export async function POST() {
     const updated = await updateMeeting((m) => {
       m.botId = bot.id;
       m.status = "joining";
-      // The clock starts when she is admitted and reads the agenda, not now — see
-      // /api/moderator/tick, which opens the first item on the first cue.
+      // The clock starts when she is admitted and introduces herself, not now — see
+      // /api/moderator/tick, which banks the opening once she has actually said it.
     });
 
-    return NextResponse.json({ botId: bot.id, stage, meeting: updated, timer: timerView(updated) });
+    return NextResponse.json({ botId: bot.id, stage, meeting: updated, elapsed: elapsed(updated) });
   } catch (e) {
     if (e instanceof RecallError) return NextResponse.json({ error: e.message }, { status: e.status });
     return NextResponse.json(

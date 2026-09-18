@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
 /** Hand-edit the action list — add, correct or drop one. */
 export async function PUT(request: Request) {
-  let body: { actions?: { id: string; text: string; owner?: string; due?: string; confirmed?: boolean }[] };
+  let body: { actions?: { id: string; text: string; owner?: string; due?: string }[] };
   try {
     body = await request.json();
   } catch {
@@ -64,7 +64,6 @@ export async function PUT(request: Request) {
           text: a.text.trim(),
           owner: a.owner?.trim() || undefined,
           due: a.due?.trim() || undefined,
-          confirmed: a.confirmed ?? false,
         }));
     }
   });
