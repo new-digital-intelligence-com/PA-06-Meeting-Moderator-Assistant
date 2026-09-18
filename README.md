@@ -10,9 +10,11 @@ paste the Meet link you already have.
 - **Presence:** [Recall.ai](https://recall.ai) Output Media. Recall joins the Meet with
   its own browser and streams a page *we* control into the call as the bot's camera, so
   Ava sits in a normal participant tile rather than taking over the screen share.
-- **Face:** [Simli](https://simli.com) — a photoreal person over WebRTC, lip-synced to
-  live audio, one continuous stream.
-- **Voice:** ElevenLabs.
+- **Face and voice:** [Anam](https://lab.anam.ai) — a photoreal person over WebRTC who
+  speaks the lines we hand her. One connection does both, so there is no audio to ship
+  between two vendors and nothing to keep in lip-sync by hand. Her own LLM is switched
+  off (`llmId: CUSTOMER_CLIENT_V1`): in a live meeting, nothing but this app should be
+  able to put words in her mouth.
 - **Ears:** Google Meet's own live captions, relayed by Recall already labelled with
   real speaker names. No second transcription vendor, and no guessing who spoke.
 - **Brain:** Claude — Haiku for live replies and note-taking, Sonnet for the write-up.
@@ -44,7 +46,7 @@ app/
   api/moderator/tick/route.ts  ← the heart: what does she say right now?
   api/moderator/notes/route.ts the note-taker, off the speaking path
   api/drive/route.ts           find files, grant the room access
-  api/{simli,tts}/route.ts     her face and her voice (keys stay server-side)
+  api/anam/route.ts            her face and voice: a short-lived session token
 lib/
   agenda.ts                    the timekeeper — no model in it, all scripted
   moderator.ts                 the three things that need one: reply, notes, write-up
@@ -54,7 +56,7 @@ lib/
 components/
   Stage.tsx                    what the meeting sees
   ControlRoom.tsx              what you see
-  useSimliStream.ts            Simli session + PCM streaming
+  useAnamStream.ts             Anam session; speak() waits for real end-of-speech
 ```
 
 ### Why the clock has no model in it
@@ -89,23 +91,24 @@ Do step 1 first; it is the long pole.
    account's region and set `RECALL_REGION` to match (`us-west-2` by default). The
    first 5 recording hours are free.
 
-3. **Her face** — at [app.simli.com](https://app.simli.com): API key, then *Create
-   Avatar* from a portrait. Front-facing, one face, eyes open, and it must be your own
-   photo, someone who agreed, or an AI-generated face. A new avatar sits in a queue for
-   a while and fails with `INVALID_FACE_ID` until it is ready. Put both in
-   `SIMLI_API_KEY` / `SIMLI_FACE_ID` and drop the same picture at `public/face.png`.
+3. **Her face and voice** — at [lab.anam.ai](https://lab.anam.ai): an API key into
+   `ANAM_API_KEY`, and the id of a persona you have built there into `ANAM_PERSONA_ID`.
 
-4. **Her voice** — an ElevenLabs key in `ELEVENLABS_API_KEY`. Free accounts get 402 on
-   Voice Library voices; the default (Bella) works.
+   The persona must have **both an avatar and a voice**. An avatar on its own cannot
+   speak on Anam's default transport, and the session will be refused. We read the
+   avatar and voice off the persona and ignore its brain.
 
-5. **Google** — Cloud Console → Credentials → OAuth 2.0 Client (Web application), with
+   Drop the same portrait at `public/face.png` — that is the still shown while the
+   stream connects.
+
+4. **Google** — Cloud Console → Credentials → OAuth 2.0 Client (Web application), with
    `http://localhost:3000/api/auth/google/callback` as an authorised redirect URI.
    Enable the **Gmail, Calendar and Drive** APIs. While the consent screen is in
    *Testing*, add yourself under *Test users*.
 
-6. **Anthropic** — `ANTHROPIC_API_KEY`.
+5. **Anthropic** — `ANTHROPIC_API_KEY`.
 
-7. `SESSION_SECRET` — any 32 bytes:
+6. `SESSION_SECRET` — any 32 bytes:
    `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 Then:
@@ -115,7 +118,7 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>, connect Google, and check all six pills are green.
+Open <http://localhost:3000>, connect Google, and check every pill is green.
 
 ## Deploying to Vercel
 
@@ -162,7 +165,7 @@ The control room shows the backend it is using for exactly this reason.
    owner per item. The participants are who gets the files and the follow-up.
 2. **Rehearse** (optional). Runs the whole agenda with no bot and no call, on the real
    clock, in a browser tab. The only way to hear the script before a room full of
-   people does, and it costs a Simli session instead of a Recall hour.
+   people does, and it costs an Anam session instead of a Recall hour.
 3. **Send Ava to the meeting.** She knocks. **Somebody has to admit her from the Meet
    window** — Google now screens suspected bots into a stricter queue that defaults to
    denying, so do it promptly or she gives up.
@@ -184,11 +187,10 @@ Per meeting hour, roughly:
 | --- | --- |
 | Recall bot | $0.50 / recording hour |
 | Transcription | $0 — Google Meet's own captions |
-| Simli | ~$0.05 / min of streamed video |
-| ElevenLabs | a few minutes of speech per hour |
+| Anam | per minute of streamed session (face and voice together) |
 | Claude | fractions of a cent |
 
-Simli is the one to watch: it bills for the whole session, not just the speaking. If
+Anam is the one to watch: it bills for the whole session, not just the speaking. If
 that matters, render the agenda panel full-width as the bot's camera and only bring the
 face in while she is talking — the stage is yours, nothing stops you.
 
@@ -207,6 +209,11 @@ face in while she is talking — the stage is yours, nothing stops you.
   whose speaking moments are mostly scheduled; it would be poor for banter.
 - `data/` holds the live meeting and is gitignored. One meeting at a time — swap
   `lib/meeting.ts` for a real table before a second host exists.
-- `simli-client` 3.0.2 ships `dist/client.js` but its index re-exports `"./Client"`,
-  which only resolves on case-insensitive filesystems. `useSimliStream.ts` imports the
-  module directly to stay portable.
+- **Delivery is confirmed, not assumed.** A scripted cue is handed to the stage with a
+  key and only recorded as spoken once she reports having said it. If her face is down,
+  the line comes back round on the next tick instead of vanishing — which is how an
+  earlier version ended up with a moderator who never introduced herself and a clock
+  that never started.
+- `speak()` resolves on Anam's `endOfSpeech` event rather than when the command is
+  accepted, so the loop genuinely knows when she has stopped. Every wait has a timeout:
+  inside Recall's browser there is nobody to notice a hung promise.

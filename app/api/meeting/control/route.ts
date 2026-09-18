@@ -75,7 +75,7 @@ export async function POST(request: Request) {
        * Open /bot in a browser tab and she performs the whole agenda to you — the
        * opening, the item announcements, the time warnings, the read-back — on the
        * real clock. It is the only way to hear the script before a room full of
-       * people does, and it costs a Simli session rather than a Recall hour.
+       * people does, and it costs an Anam session rather than a Recall hour.
        */
       case "rehearse":
         m.status = "live";

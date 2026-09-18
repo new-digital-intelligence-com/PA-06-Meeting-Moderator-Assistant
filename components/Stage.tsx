@@ -10,17 +10,23 @@
  *
  * It runs the only loop that matters:
  *
- *   captions in  →  post to /api/moderator/tick  →  speak whatever comes back
+ *   captions in  →  post to /api/moderator/tick  →  say whatever comes back
  *
- * and it only ticks while she is silent, so she can never talk over herself.
+ * and it only ticks while she is silent, so she can never talk over herself. A line is
+ * reported back as delivered on the following tick, and only then does the server
+ * record it as said — a cue she could not speak is offered again rather than lost.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSimliStream } from "./useSimliStream";
+import { useAnamStream } from "./useAnamStream";
 
 const TICK_MS = 2000;
 /** Recall exposes the live transcript to the page it is streaming, on this socket. */
 const TRANSCRIPT_WS = "wss://meeting-data.bot.recall.ai/api/v1/transcript";
+
+/** Anam attaches its media by element id, so these are fixed and referenced by name. */
+const VIDEO_ID = "ava-video";
+const AUDIO_ID = "ava-audio";
 
 type Line = { id: string; speaker: string; text: string; at: number };
 
@@ -91,7 +97,7 @@ function readLine(raw: string): Line | null {
 }
 
 export default function Stage() {
-  const { videoRef, audioRef, status, speak } = useSimliStream();
+  const { videoRef, audioRef, status, detail, speak } = useAnamStream();
 
   const [timer, setTimer] = useState<Timer | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
@@ -100,9 +106,11 @@ export default function Stage() {
 
   /** Lines heard since the last tick. */
   const buffer = useRef<Line[]>([]);
-  /** True from the moment we ask her to speak until she falls silent. */
+  /** True from the moment we ask her to speak until she has finished. */
   const speaking = useRef(false);
   const tickBusy = useRef(false);
+  /** A cue she has spoken but not yet reported; sent with the next tick. */
+  const pendingDelivery = useRef<string | null>(null);
 
   /* ── the meeting's captions ───────────────────────────────────────────── */
   useEffect(() => {
@@ -143,12 +151,14 @@ export default function Stage() {
 
     const lines = buffer.current;
     buffer.current = [];
+    const delivered = pendingDelivery.current;
+    pendingDelivery.current = null;
 
     try {
       const res = await fetch("/api/moderator/tick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lines, idle: !speaking.current }),
+        body: JSON.stringify({ lines, idle: !speaking.current, delivered }),
       });
       const data = await res.json();
       if (data.timer) setTimer(data.timer);
@@ -158,14 +168,18 @@ export default function Stage() {
         speaking.current = true;
         setCaption(`Ava: ${data.say}`);
         try {
-          await speak(data.say);
+          const said = await speak(data.say);
+          // Only a line she actually got out counts. A failed one stays unrecorded
+          // and comes back round on the next tick.
+          if (said && data.key) pendingDelivery.current = data.key;
         } finally {
           speaking.current = false;
         }
       }
     } catch {
-      // A dropped tick is harmless: the lines we took are lost from the buffer but the
-      // next tick carries on, and the timekeeper's cues are keyed so nothing repeats.
+      // A dropped tick is survivable: the lines we took are lost from the buffer, but
+      // the loop continues and undelivered cues are still pending.
+      if (delivered) pendingDelivery.current = delivered;
     } finally {
       tickBusy.current = false;
     }
@@ -183,27 +197,19 @@ export default function Stage() {
     <main className="flex h-screen w-screen overflow-hidden bg-[#0b0f17] text-white">
       {/* her face */}
       <section className="relative flex h-full w-[52%] items-center justify-center bg-black">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="h-full w-full object-cover"
-        />
-        {/* Recall captures this page's audio, so what plays here is what the room hears. */}
-        <audio ref={audioRef} autoPlay />
+        <video id={VIDEO_ID} ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+        {/* Recall captures this page's audio output, so this element is the path from
+            her voice into the meeting. It must not be muted. */}
+        <audio id={AUDIO_ID} ref={audioRef} autoPlay />
 
         {!live && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black px-8 text-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/face.png" alt="" className="h-40 w-40 rounded-full object-cover opacity-60" />
             <p className="text-lg text-white/60">
-              {status === "unconfigured"
-                ? "No Simli face configured"
-                : status === "face-pending"
-                  ? "Her face is still generating"
-                  : "Connecting…"}
+              {status === "unconfigured" ? "No Anam persona configured" : "Connecting…"}
             </p>
+            {detail && <p className="max-w-md text-sm text-white/35">{detail}</p>}
           </div>
         )}
 
@@ -236,9 +242,7 @@ export default function Stage() {
           <span className={`font-mono text-6xl tabular-nums ${over ? "text-amber-400" : "text-white"}`}>
             {timer ? mmss(timer.remaining) : "--:--"}
           </span>
-          <span className="text-base text-white/40">
-            {over ? "over time" : "left on this item"}
-          </span>
+          <span className="text-base text-white/40">{over ? "over time" : "left on this item"}</span>
         </div>
 
         {timer && timer.planned > 0 && (

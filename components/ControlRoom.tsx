@@ -16,8 +16,7 @@ type Config = {
   email: string | null;
   anthropic: boolean;
   recall: boolean;
-  simli: boolean;
-  elevenlabs: boolean;
+  anam: boolean;
   publicUrl: string;
   publicUrlReachable: boolean;
   botName: string;
@@ -280,7 +279,7 @@ export default function ControlRoom({
   // No bot means nobody is in a call: she is performing the agenda to an empty room.
   const rehearsing = status === "live" && !meeting?.botId;
   const ready =
-    config.googleConnected && config.recall && config.simli && config.elevenlabs && config.publicUrlReachable;
+    config.googleConnected && config.recall && config.anam && config.publicUrlReachable;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 p-6 pb-24">
@@ -307,8 +306,11 @@ export default function ControlRoom({
               }
             />
             <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY" />
-            <Pill ok={config.simli} label="Face" hint="SIMLI_API_KEY + SIMLI_FACE_ID" />
-            <Pill ok={config.elevenlabs} label="Voice" hint="ELEVENLABS_API_KEY" />
+            <Pill
+              ok={config.anam}
+              label="Face & voice"
+              hint="ANAM_API_KEY + ANAM_PERSONA_ID — Anam streams both on one connection"
+            />
             <Pill ok={config.publicUrlReachable} label="Public URL" hint={config.publicUrl || "PUBLIC_URL is not set"} />
             <Pill
               // On one local process a file is fine. On a serverless deployment it means

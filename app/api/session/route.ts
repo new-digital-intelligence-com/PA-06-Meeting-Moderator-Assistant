@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 import { readSession } from "@/lib/session";
-import { isConfigured as simliConfigured } from "@/lib/simli";
+import { isConfigured as anamConfigured } from "@/lib/anam";
 import { storeDiagnostics, storeKind } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -15,8 +15,7 @@ export async function GET() {
     email: session.google?.email ?? null,
     anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
     recall: recallConfigured(),
-    simli: simliConfigured(),
-    elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
+    anam: anamConfigured(),
     publicUrl,
     // The single most common reason the bot joins and shows a blank tile.
     publicUrlReachable: Boolean(publicUrl) && !/localhost|127\.0\.0\.1/.test(publicUrl),
