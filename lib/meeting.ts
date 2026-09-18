@@ -84,10 +84,53 @@ export function blank(): Meeting {
   };
 }
 
+/**
+ * Brings whatever is in the store up to the current shape.
+ *
+ * The stored meeting outlives the code that wrote it: a deployment lands while a blob
+ * from the previous version is still sitting in Redis, and the new code reads a field
+ * that did not exist yet. One `undefined.join()` in a server component is a 500 on the
+ * whole page, which is a silly way to lose an app.
+ *
+ * So every field is defaulted, and the one rename worth carrying forward is carried:
+ * `participants` became `recipients` when the agenda was replaced by a briefing.
+ */
+function normalise(raw: unknown): Meeting {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const base = blank();
+  const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
+  const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+  return {
+    id: str(o.id, base.id),
+    title: str(o.title, base.title),
+    meetingUrl: str(o.meetingUrl, ""),
+    context: str(o.context, ""),
+    // `participants` was this field's name before the agenda came out.
+    recipients: arr<string>(o.recipients ?? o.participants),
+    status: (["draft", "joining", "live", "ended"] as const).includes(o.status as MeetingStatus)
+      ? (o.status as MeetingStatus)
+      : "draft",
+    botId: typeof o.botId === "string" ? o.botId : undefined,
+    startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
+    endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,
+    transcript: arr<TranscriptLine>(o.transcript),
+    actions: arr<ActionItem>(o.actions),
+    files: arr<SharedFile>(o.files),
+    spoken: arr<string>(o.spoken),
+    notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,
+    summary: typeof o.summary === "string" ? o.summary : undefined,
+    followUp:
+      o.followUp && typeof o.followUp === "object"
+        ? (o.followUp as Meeting["followUp"])
+        : undefined,
+  };
+}
+
 function parse(raw: string | null): Meeting | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as Meeting;
+    return normalise(JSON.parse(raw));
   } catch {
     return null; // a corrupt blob should start a fresh meeting, not crash every route
   }
