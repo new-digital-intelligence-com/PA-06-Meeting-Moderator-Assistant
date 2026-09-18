@@ -92,6 +92,13 @@ export async function createBot(meetingUrl: string, opts: { botName?: string } =
         config: { url: stage },
       },
     },
+    // The default instance renders the page on a small machine, and a live photoreal
+    // avatar is more than it can keep up with — the symptom is exactly the stutter and
+    // dropped audio you get from a CPU-bound browser. Recall's own avatar sample uses
+    // the four-core variant for the same reason.
+    variant: {
+      google_meet: process.env.RECALL_BOT_VARIANT || "web_4_core",
+    },
     recording_config: {
       transcript: {
         // Google Meet's own live captions: free, already diarised by the platform, and

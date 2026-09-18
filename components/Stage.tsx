@@ -25,9 +25,8 @@ const TICK_MS = 2000;
 /** Recall exposes the live transcript to the page it is streaming, on this socket. */
 const TRANSCRIPT_WS = "wss://meeting-data.bot.recall.ai/api/v1/transcript";
 
-/** Anam attaches its media by element id, so these are fixed and referenced by name. */
+/** Anam attaches its media by element id, so this is fixed and referenced by name. */
 const VIDEO_ID = "ava-video";
-const AUDIO_ID = "ava-audio";
 
 type Line = { id: string; speaker: string; text: string; at: number };
 
@@ -78,7 +77,7 @@ function readLine(raw: string): Line | null {
 }
 
 export default function Stage() {
-  const { videoRef, audioRef, status, detail, speak } = useAnamStream();
+  const { videoRef, status, detail, speak } = useAnamStream();
   const [wsOpen, setWsOpen] = useState(false);
 
   /** Lines heard since the last tick. */
@@ -166,17 +165,9 @@ export default function Stage() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-black">
-      <video
-        id={VIDEO_ID}
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="h-full w-full object-cover"
-      />
-      {/* Recall captures this page's audio output, so this element is the path from her
-          voice into the meeting. It must never be muted. */}
-      <audio id={AUDIO_ID} ref={audioRef} autoPlay />
+      {/* Deliberately NOT muted. Recall captures this page's audio output, so a muted
+          element is a meeting that sees her mouth move and hears nothing. */}
+      <video id={VIDEO_ID} ref={videoRef} autoPlay playsInline className="h-full w-full object-cover" />
 
       {/* Only before she is up. Once the stream is live the tile is pure video — no
           overlay, nothing to read. The status here is not decoration: a black tile
