@@ -48,6 +48,71 @@ type TickBody = {
   captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
 };
 
+/**
+ * Adds a caption to the transcript, folding it into the previous line when it is the
+ * same utterance still being typed.
+ *
+ * Recall streams a running transcript rather than finished sentences: one real remark
+ * arrives as a stream of messages whose text grows word by word. Treating each as a new
+ * line gives thousands of fragments; treating them as duplicates of one key throws the
+ * remark away after its first word. Both happened here. So: if this looks like the last
+ * line growing, replace it; if it repeats something already said, drop it; otherwise it
+ * is genuinely new.
+ */
+/**
+ * Captions rarely carry punctuation, so a question mark is not enough to go on — this
+ * also looks for the shape of one.
+ */
+function looksLikeAQuestion(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (t.endsWith("?")) return true;
+  return /\b(what|when|where|which|who|why|how|can we|could we|should we|do we|does it|is it|are we|any idea|how long|how much)\b/.test(
+    t.split(/[.!?]/).pop() ?? t,
+  );
+}
+
+/** Changes whenever anything new has been said, including a line still growing. */
+function transcriptSignature(transcript: TranscriptLine[]): string {
+  const last = transcript[transcript.length - 1];
+  return `${transcript.length}:${last ? last.text.length : 0}`;
+}
+
+function fold(transcript: TranscriptLine[], line: TranscriptLine) {
+  // The most recent line by THIS speaker, not simply the last line.
+  //
+  // If she says something while somebody is still talking, her line lands between a
+  // half-finished remark and its continuation. Looking only at the very last line then
+  // fails to match, and the opening fragment is stranded as its own sentence — which is
+  // where "Helmi: Thanks everyone for" came from.
+  let last: TranscriptLine | undefined;
+  for (let i = transcript.length - 1; i >= 0 && i >= transcript.length - 6; i--) {
+    if (transcript[i].speaker === line.speaker) {
+      last = transcript[i];
+      break;
+    }
+  }
+
+  if (last && Date.now() - last.at < 120_000) {
+    const a = last.text.toLowerCase();
+    const b = line.text.toLowerCase();
+    // The same utterance, longer: replace in place and keep the original timestamp so
+    // ordering stays honest.
+    if (b.startsWith(a)) {
+      last.text = line.text;
+      return;
+    }
+    // A late or partial redelivery of what we already have: ignore it.
+    if (a.startsWith(b) || a === b) return;
+  }
+
+  // An exact repeat of something recent, from any speaker — a redelivery after a
+  // reconnect, which is common when the socket drops and comes back.
+  const recent = transcript.slice(-12);
+  if (recent.some((l) => l.speaker === line.speaker && l.text === line.text)) return;
+
+  transcript.push(line);
+}
+
 /** Loose enough to survive a caption mishearing a word or two of what she said. */
 function echoesHer(text: string, m: Meeting): boolean {
   const words = (s: string) =>
@@ -129,12 +194,7 @@ export async function POST(request: Request) {
     .filter((l) => !l.speaker.toLowerCase().includes(me) && !echoesHer(l.text, meetingBefore));
 
   let meeting = await updateMeeting((m) => {
-    const seen = new Set(m.transcript.map((t) => t.id));
-    for (const line of incoming) {
-      if (seen.has(line.id)) continue;
-      seen.add(line.id);
-      m.transcript.push(line);
-    }
+    for (const line of incoming) fold(m.transcript, line);
     if (body.delivered) commit(m, body.delivered, body.deliveredText);
     if (body.face) {
       m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions };
@@ -203,13 +263,42 @@ export async function POST(request: Request) {
   if (!Number.isFinite(base)) return quiet("set to quiet — only answers when asked");
   const cooldown = meeting.lastSpokeWasOpening ? Math.min(base, OPENING_COOLDOWN_MS) : base;
 
-  const since = meeting.lastSpokeAt ? Date.now() - meeting.lastSpokeAt : Number.POSITIVE_INFINITY;
-  if (since < cooldown) return quiet(`waiting — ${Math.ceil((cooldown - since) / 1000)}s of cooldown left`);
+  // A question asked to the room gets a much shorter leash.
+  //
+  // Pacing exists to stop her editorialising over people, not to make her sit on an
+  // answer somebody is plainly waiting for. Leaving a question hanging because she
+  // spoke six seconds ago is exactly what reads as her having checked out.
+  // The newest line from somebody who is not her. Her own contributions are appended
+  // when the tile confirms them, which can be a tick or two after the fact — so the
+  // literal last line is often hers, and looking at that meant a question addressed to
+  // the room was never seen as one.
+  const newest = [...meeting.transcript].reverse().find((l) => l.speaker !== botName());
+  const asked = Boolean(newest && looksLikeAQuestion(newest.text));
+  const effective = asked ? Math.min(cooldown, 3_000) : cooldown;
 
-  // Anything said since she last weighed it up, whether it arrived on this tick or
-  // during a cooldown that has now lifted.
-  const considered = meeting.consideredUpTo ?? 0;
-  if (meeting.transcript.length <= considered) return quiet("nothing new said since she last considered");
+  const since = meeting.lastSpokeAt ? Date.now() - meeting.lastSpokeAt : Number.POSITIVE_INFINITY;
+  if (since < effective) {
+    return quiet(`waiting — ${Math.ceil((effective - since) / 1000)}s of cooldown left`);
+  }
+
+  // Wait for a gap before speaking.
+  //
+  // Captions stream continuously while somebody is talking, so "new words have arrived"
+  // is true almost every tick and is no signal at all. A second of quiet is the signal:
+  // it is the moment a person would take their turn, and it stops her cutting across
+  // the end of somebody's sentence.
+  const quietFor = body.captions?.secondsSinceLast;
+  if (quietFor !== null && quietFor !== undefined && quietFor < 1) {
+    return quiet("somebody is mid-sentence");
+  }
+
+  // A signature rather than a count: folding means the last line grows in place, so a
+  // long uninterrupted remark never changes the length and would otherwise never be
+  // weighed up at all.
+  const signature = transcriptSignature(meeting.transcript);
+  if (signature === meeting.consideredSignature) {
+    return quiet("nothing new said since she last considered");
+  }
 
   try {
     const { worth_saying, say } = await considerSpeaking(
@@ -218,17 +307,16 @@ export async function POST(request: Request) {
       meeting.lastSpokeAt ? since / 1000 : null,
     );
 
-    const upTo = meeting.transcript.length;
     if (worth_saying) {
       meeting = await updateMeeting((m) => {
-        m.consideredUpTo = upTo;
+        m.consideredSignature = signature;
         m.lastDecision = { at: Date.now(), reason: "spoke up" };
       });
-      return NextResponse.json({ say, kind: "volunteer", key: `volunteer:${upTo}`, ...view() });
+      return NextResponse.json({ say, kind: "volunteer", key: `volunteer:${signature}`, ...view() });
     }
 
     meeting = await updateMeeting((m) => {
-      m.consideredUpTo = upTo;
+      m.consideredSignature = signature;
     });
     return quiet("judged there was nothing worth adding");
   } catch (e) {
