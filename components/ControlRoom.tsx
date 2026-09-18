@@ -43,7 +43,12 @@ type Meeting = {
   actions: Action[];
   files: SharedFile[];
   lastDecision?: { at: number; reason: string };
-  stage?: { face: string; detail?: string; at: number };
+  stage?: {
+    face: string;
+    detail?: string;
+    at: number;
+    captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
+  };
   summary?: string;
   followUp?: { to: string; subject: string; body: string; sentAt?: number };
 };
@@ -526,6 +531,22 @@ export default function ControlRoom({
               <span className={meeting.stage?.face === "live" || meeting.stage?.face === "speaking" ? "text-emerald-300" : "text-amber-300"}>
                 {meeting.stage?.face ?? "no word from the tile yet"}
               </span>
+            </span>
+            <span>
+              <span className="text-white/35">her ears: </span>
+              {meeting.stage?.captions ? (
+                <span className={meeting.stage.captions.socket ? "text-emerald-300" : "text-rose-300"}>
+                  {meeting.stage.captions.socket ? "listening" : "caption feed down"}
+                  <span className="text-white/45">
+                    {" "}· {meeting.stage.captions.received} captions
+                    {meeting.stage.captions.secondsSinceLast !== null
+                      ? `, last ${meeting.stage.captions.secondsSinceLast}s ago`
+                      : ", none yet"}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-white/45">no word yet</span>
+              )}
             </span>
             {meeting.stage?.detail && <span className="text-rose-300">{meeting.stage.detail}</span>}
             {meeting.lastDecision && (

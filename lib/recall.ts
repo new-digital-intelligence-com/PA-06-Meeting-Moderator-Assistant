@@ -101,13 +101,21 @@ export async function createBot(meetingUrl: string, opts: { botName?: string } =
     },
     recording_config: {
       transcript: {
-        // Google Meet's own live captions: free, already diarised by the platform, and
-        // no second vendor in the path. Swap to recallai_streaming (paid) if the
-        // captions prove too lossy — the payload shape is the same either way.
+        // Recall's own transcription, not Google Meet's captions.
+        //
+        // The captions looked attractive — free, and diarised by the platform — but in
+        // practice they depend on Meet's live captions being on, they attributed the
+        // bot's own voice to "Unknown", and in a real meeting they simply stopped
+        // arriving after three lines. A moderator who cannot hear the room is useless,
+        // and this costs cents an hour. Set RECALL_TRANSCRIPT_PROVIDER=meeting_captions
+        // to go back.
         provider:
-          process.env.RECALL_TRANSCRIPT_PROVIDER === "recallai"
-            ? { recallai_streaming: { mode: "prioritize_low_latency", language_code: "en" } }
-            : { meeting_captions: {} },
+          process.env.RECALL_TRANSCRIPT_PROVIDER === "meeting_captions"
+            ? { meeting_captions: {} }
+            : { recallai_streaming: { mode: "prioritize_low_latency", language_code: "en" } },
+        // Per-participant streams where the platform offers them, so speaker names are
+        // real rather than guessed.
+        diarization: { use_separate_streams_when_available: true },
       },
     },
   };
