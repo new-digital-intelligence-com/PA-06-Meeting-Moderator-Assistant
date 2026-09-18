@@ -139,6 +139,10 @@ export default function Stage() {
           idle: !speaking.current,
           delivered: delivered?.key,
           deliveredText: delivered?.text,
+          // Nobody can see this page while it is inside Recall's browser, so it
+          // reports its own state and the control room shows it.
+          face: status,
+          faceDetail: detail ?? undefined,
         }),
       });
       const data = await res.json();
@@ -172,7 +176,7 @@ export default function Stage() {
     } finally {
       tickBusy.current = false;
     }
-  }, [speak]);
+  }, [speak, status, detail]);
 
   useEffect(() => {
     const id = window.setInterval(tick, TICK_MS);

@@ -42,6 +42,8 @@ type Meeting = {
   transcript: TranscriptLine[];
   actions: Action[];
   files: SharedFile[];
+  lastDecision?: { at: number; reason: string };
+  stage?: { face: string; detail?: string; at: number };
   summary?: string;
   followUp?: { to: string; subject: string; body: string; sentAt?: number };
 };
@@ -515,6 +517,25 @@ export default function ControlRoom({
             ) : null
           }
         >
+          {/* Her tile lives inside Recall's browser where nobody can inspect it, so
+              what it reports about itself, and why she last said nothing, are shown
+              here. Without this "she stopped talking" is unanswerable. */}
+          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-black/30 px-3 py-2 text-xs">
+            <span>
+              <span className="text-white/35">her face: </span>
+              <span className={meeting.stage?.face === "live" || meeting.stage?.face === "speaking" ? "text-emerald-300" : "text-amber-300"}>
+                {meeting.stage?.face ?? "no word from the tile yet"}
+              </span>
+            </span>
+            {meeting.stage?.detail && <span className="text-rose-300">{meeting.stage.detail}</span>}
+            {meeting.lastDecision && (
+              <span>
+                <span className="text-white/35">last decision: </span>
+                <span className="text-white/60">{meeting.lastDecision.reason}</span>
+              </span>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-baseline gap-6">
             <p className="font-mono text-3xl tabular-nums">{mmss(secs)}</p>
             <p className="text-sm text-white/40">
