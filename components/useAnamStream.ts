@@ -36,8 +36,16 @@ export type FaceStatus =
 const RECONNECT_MS = 10_000;
 /** Longest we will wait for a connection before calling it failed. */
 const CONNECT_TIMEOUT_MS = 25_000;
-/** Nothing she says is anywhere near this long; past it, assume the stream is gone. */
-const SPEAK_TIMEOUT_MS = 90_000;
+/**
+ * How long to wait for her to finish a line before giving up on it.
+ *
+ * Scaled to the words rather than a flat ceiling: a flat one was long enough that a
+ * single missed end-of-speech event looked exactly like her having died.
+ */
+function speakTimeout(text: string) {
+  const words = text.trim().split(/\s+/).length;
+  return Math.min(40_000, Math.max(8_000, (words / 2.3) * 1000 + 6_000));
+}
 
 export function useAnamStream() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -183,7 +191,7 @@ export function useAnamStream() {
         });
 
         await client.talk(text);
-        await withTimeout(finished, SPEAK_TIMEOUT_MS, "she never reported finishing the line");
+        await withTimeout(finished, speakTimeout(text), "she never reported finishing the line");
 
         setStatus((s) => (s === "speaking" ? "live" : s));
         return true;

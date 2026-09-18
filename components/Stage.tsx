@@ -31,6 +31,8 @@ const TRANSCRIPT_WS = "wss://meeting-data.bot.recall.ai/api/v1/transcript";
 
 /** Anam attaches its media by element id, so this is fixed and referenced by name. */
 const VIDEO_ID = "ava-video";
+/** Past this, an utterance is assumed wedged and she is freed to speak again. */
+const STUCK_MS = 45_000;
 
 type Line = { id: string; speaker: string; text: string; at: number };
 
@@ -90,6 +92,8 @@ export default function Stage() {
   const buffer = useRef<Line[]>([]);
   /** True from the moment we ask her to speak until she has finished. */
   const speaking = useRef(false);
+  /** When that started, so a wedged utterance cannot silence her for the rest of the call. */
+  const speakingSince = useRef<number | null>(null);
   const tickBusy = useRef(false);
   /** A line she has spoken but not yet reported; sent with the next tick. */
   const pendingDelivery = useRef<{ key: string; text: string } | null>(null);
@@ -112,6 +116,15 @@ export default function Stage() {
     if (tickBusy.current) return;
     tickBusy.current = true;
 
+    // Last-resort watchdog. `speak()` has its own timeout, but if the flag were ever
+    // left set — a rejection on a path we did not foresee, a torn-down client — she
+    // would be mute for the rest of the meeting with no way back. Nothing she says is
+    // anywhere near this long.
+    if (speaking.current && speakingSince.current && Date.now() - speakingSince.current > STUCK_MS) {
+      speaking.current = false;
+      speakingSince.current = null;
+    }
+
     const lines = buffer.current;
     buffer.current = [];
     const delivered = pendingDelivery.current;
@@ -132,14 +145,25 @@ export default function Stage() {
 
       if (data.say && !speaking.current) {
         speaking.current = true;
-        try {
-          const said = await speak(data.say);
-          // Only a line she actually got out counts. A failed one stays unrecorded
-          // and comes back round on the next tick.
-          if (said && data.key) pendingDelivery.current = { key: data.key, text: data.say };
-        } finally {
-          speaking.current = false;
-        }
+        speakingSince.current = Date.now();
+        // Deliberately NOT awaited.
+        //
+        // Awaiting here held `tickBusy` for the whole utterance, which froze the loop:
+        // no captions collected, no heartbeat, nothing. If the end-of-speech event was
+        // ever missed it stayed frozen until the timeout, so she would say one or two
+        // things and then appear to die. Speaking is fire-and-forget; the loop keeps
+        // running and reports `idle: false` until she is done.
+        void (async () => {
+          try {
+            const said = await speak(data.say);
+            // Only a line she actually got out counts. A failed one stays unrecorded
+            // and comes back round on a later tick.
+            if (said && data.key) pendingDelivery.current = { key: data.key, text: data.say };
+          } finally {
+            speaking.current = false;
+            speakingSince.current = null;
+          }
+        })();
       }
     } catch {
       // A dropped tick is survivable: the lines we took are lost from the buffer, but
