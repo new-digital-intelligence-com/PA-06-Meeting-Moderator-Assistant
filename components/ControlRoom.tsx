@@ -160,19 +160,6 @@ export default function ControlRoom({
       .catch(() => undefined);
   }, [config.googleConnected]);
 
-  /* The note-taker runs on its own clock, well away from her speaking loop. */
-  useEffect(() => {
-    if (meeting.status !== "live") return;
-    const id = window.setInterval(() => {
-      fetch("/api/moderator/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      }).catch(() => undefined);
-    }, 20_000);
-    return () => window.clearInterval(id);
-  }, [meeting.status]);
-
   /* ── actions ───────────────────────────────────────────────────────────── */
 
   const call = async (label: string, fn: () => Promise<Response>) => {

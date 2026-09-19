@@ -33,6 +33,8 @@ const TRANSCRIPT_WS = "wss://meeting-data.bot.recall.ai/api/v1/transcript";
 const VIDEO_ID = "ava-video";
 /** Past this, an utterance is assumed wedged and she is freed to speak again. */
 const STUCK_MS = 45_000;
+/** How often the note-taker reads whatever has been said since last time. */
+const NOTES_MS = 20_000;
 
 type Line = { id: string; speaker: string; text: string; at: number };
 
@@ -96,11 +98,40 @@ function readLine(raw: string): Line | null {
 /** Monotonic per page load. See readLine. */
 let seq = 0;
 
+/**
+ * Is this caption just her own voice coming back?
+ *
+ * Recall's captions include her, so without this she would hear herself, take it for
+ * somebody interrupting, and cut herself off a second into every sentence. Deliberately
+ * loose: captions mishear words, and a false "that was me" only costs one missed
+ * barge-in whereas a false "that was someone else" makes her unable to finish a
+ * sentence at all.
+ */
+function echoOfHer(heard: string, saying: string): boolean {
+  if (!saying) return false;
+  const words = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 3),
+    );
+  const a = words(heard);
+  if (!a.size) return true; // too short to tell — assume it was her and keep talking
+  const b = words(saying);
+  let shared = 0;
+  for (const w of a) if (b.has(w)) shared++;
+  return shared / a.size > 0.4;
+}
+
 export default function Stage() {
-  const { videoRef, status, detail, speak } = useAnamStream();
+  const { videoRef, status, detail, speak, interrupt } = useAnamStream();
   const [wsOpen, setWsOpen] = useState(false);
   /** Her name, for spotting when a caption is aimed at her. */
   const nameRef = useRef<RegExp | null>(null);
+  /** What she is saying right now, so she does not mistake her own voice for a barge-in. */
+  const sayingRef = useRef<string>("");
 
   /** Lines heard since the last tick. */
   const buffer = useRef<Line[]>([]);
@@ -177,6 +208,7 @@ export default function Stage() {
       if (data.say && !speaking.current) {
         speaking.current = true;
         speakingSince.current = Date.now();
+        sayingRef.current = data.say;
         // Deliberately NOT awaited.
         //
         // Awaiting here held `tickBusy` for the whole utterance, which froze the loop:
@@ -193,6 +225,7 @@ export default function Stage() {
           } finally {
             speaking.current = false;
             speakingSince.current = null;
+            sayingRef.current = "";
           }
         })();
       }
@@ -209,6 +242,25 @@ export default function Stage() {
     const id = window.setInterval(tick, TICK_MS);
     return () => window.clearInterval(id);
   }, [tick]);
+
+  /**
+   * The note-taker, on its own clock and well away from her speaking loop.
+   *
+   * It runs here rather than in the control room because this page is the one thing
+   * guaranteed to be open for the whole meeting: it IS the bot. Driving it from the
+   * control room meant that closing that tab quietly stopped any actions being
+   * captured — and the actions are the reason she is in the room.
+   */
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      fetch("/api/moderator/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => undefined);
+    }, NOTES_MS);
+    return () => window.clearInterval(id);
+  }, []);
 
   /* ── the meeting's captions ───────────────────────────────────────────── */
   useEffect(() => {
@@ -233,6 +285,19 @@ export default function Stage() {
         heardCount.current++;
         heardAt.current = Date.now();
         buffer.current.push(line);
+
+        // Somebody started talking while she is mid-sentence: stop.
+        //
+        // A participant who ploughs on through being interrupted is the single most
+        // irritating thing a bot in a meeting can do, and it is what makes her feel
+        // like a recording rather than somebody in the room. Her own voice comes back
+        // through these same captions, so a line that is mostly the words she is
+        // currently saying is her, not an interruption.
+        if (speaking.current && !echoOfHer(line.text, sayingRef.current)) {
+          interrupt();
+          speaking.current = false;
+          speakingSince.current = null;
+        }
         // Somebody just said her name. Waiting out the heartbeat before even noticing
         // would put a second on top of a reply that is already slower than a person's,
         // so go now. The tick guards itself against overlapping.
@@ -245,9 +310,10 @@ export default function Stage() {
       window.clearTimeout(retry);
       socket?.close();
     };
-    // `tick` is stable after mount — its whole chain of callbacks is — so naming it
-    // here does not reconnect the socket. It is listed because the socket calls it.
-  }, [tick]);
+    // `tick` and `interrupt` are stable after mount — their whole chain of callbacks
+    // is — so naming them here does not reconnect the socket. They are listed because
+    // the socket calls them.
+  }, [tick, interrupt]);
 
   const live = status === "live" || status === "speaking";
 
