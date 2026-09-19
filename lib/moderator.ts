@@ -37,6 +37,27 @@ export function isAddressed(text: string): boolean {
   return new RegExp(`\\b${name}\\b`, "i").test(text);
 }
 
+/**
+ * How she sounds, shared by everything she says out loud.
+ *
+ * Worth being explicit about: a model asked for "one or two sentences" reliably returns
+ * something that reads well and sounds like a press release. This is speech. Nobody can
+ * re-read it, nobody can skim it, and the difference between "Our SOC 2 report was
+ * renewed last month and is ready to send" and "Good news — we renewed the SOC 2 last
+ * month, I can send it over now" is the difference between a service announcement and
+ * somebody in the room.
+ */
+const VOICE = [
+  "How you sound:",
+  "- Talk, do not present. Contractions, plain words, the way somebody speaks in a meeting.",
+  "- Use people's names when you are answering them. You can see who said what.",
+  "- Lead with the useful bit. No throat-clearing, no 'great question', no restating what was asked.",
+  "- Two sentences is usually plenty. One is often better.",
+  "- No markdown, no lists, no URLs, no emoji — every word is read aloud.",
+  "- Say numbers and dates the way you would speak them: 'about five working days', 'March', 'forty thousand a year'.",
+  "- If you are offering to do something, say so as an offer, not as a thing already done.",
+].join("\n");
+
 /** The briefing, plus what has actually happened since. */
 function brief(m: Meeting): string {
   const who = speakers(m);
@@ -97,13 +118,14 @@ function replySystem() {
     "",
     "Somebody just said your name. Answer them.",
     "",
-    "- One to three short sentences. Spoken prose only: no markdown, no bullets, no URLs, no emoji. Somebody has to listen to this, not read it.",
-    "- Use the briefing and what has been said so far. If you were asked something the briefing and the conversation do not answer, say plainly that you do not know rather than inventing it.",
+    "- Use the briefing and what has been said so far. If you were asked something neither answers, say plainly that you do not know rather than inventing it.",
     "- If asked to note something down, record it with add_actions and confirm in a few words.",
     "- If asked what has been covered, or where things stand, summarise what was actually said — briefly.",
     "- If your name came up in passing and nothing was asked of you, return an empty say. Saying nothing is a valid and often correct answer; interrupting a meeting you were not invited into is the worst thing you can do.",
     "- Never invent a decision, a commitment or a deadline that was not said out loud.",
     "- You are a guest here, not the chair. Do not push people along or take sides in their decisions.",
+    "",
+    VOICE,
   ].join("\n");
 }
 
@@ -228,10 +250,12 @@ export async function considerSpeaking(
     "",
     ...posture,
     "",
-    "When you do speak: one or two short sentences of spoken prose. No markdown, lists, URLs or emoji.",
     "Never invent a fact, a decision or a deadline.",
     "Describe things as the briefing describes them. If the briefing says a document is ready to send, it has NOT been sent — do not say it has. Offering to do something and having done it are different, and a room will act on the difference.",
     "You are a guest, not the chair. Do not manage them or push them along.",
+    "",
+    VOICE,
+    "",
     secondsSinceSheSpoke !== null
       ? `You last spoke ${Math.round(secondsSinceSheSpoke)} seconds ago. Your own lines appear in the transcript under your name — read them before deciding.`
       : "You have not spoken yet beyond introducing yourself.",
