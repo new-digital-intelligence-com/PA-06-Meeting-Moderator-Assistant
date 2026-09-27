@@ -190,8 +190,15 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
     if (c) void c.stopStreaming().catch(() => {});
   };
 
+  /**
+   * When not to try again. Anam refusing because the plan's minutes are used up will not
+   * change mid-meeting, and every attempt made her wait before answering; anything else
+   * gets a short pause before the next try.
+   */
+  let faceRetryAt = 0;
+
   const openFace = (): Promise<boolean> => {
-    if (mode !== "avatar") return Promise.resolve(false);
+    if (mode !== "avatar" || Date.now() < faceRetryAt) return Promise.resolve(false);
     if (face === "live") return Promise.resolve(true);
     if (opening) return opening;
     const gen = ++generation;
@@ -240,7 +247,14 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
         log(`face live (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
         return true;
       } catch (e) {
-        if (gen === generation) dropFace(`could not connect: ${e instanceof Error ? e.message : e}`);
+        const why = e instanceof Error ? e.message : String(e);
+        if (/usage limit|upgrade your plan|quota/i.test(why)) {
+          faceRetryAt = Number.POSITIVE_INFINITY;
+          log(`Anam refused: ${why} — she carries on with her voice and her resting face`);
+        } else {
+          faceRetryAt = Date.now() + 30_000;
+        }
+        if (gen === generation) dropFace(`could not connect: ${why}`);
         if (video !== faceVideo) video?.remove();
         return false;
       } finally {
