@@ -15,7 +15,8 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "127.0.0.1:8080:8080"
+      # AVA_SCREEN_PORT if 8080 is already taken on this machine.
+      - "127.0.0.1:${AVA_SCREEN_PORT:-8080}:8080"
     volumes:
       # Her signed-in Chrome profile and the list of meetings she has attended. Without a
       # persistent volume she is signed out every time the container restarts.

@@ -23,16 +23,15 @@ export async function signedInAs() {
   });
   try {
     const page = context.pages()[0] ?? (await context.newPage());
-    await page.goto("https://myaccount.google.com/", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.goto("https://myaccount.google.com/personal-info", { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForTimeout(2500);
     // Signed out, Google bounces to its sign-in page on accounts.google.com.
     if (new URL(page.url()).hostname !== "myaccount.google.com") return null;
-    const label = await page
-      .locator('[aria-label*="Google Account"]')
-      .first()
-      .getAttribute("aria-label", { timeout: 5000 })
-      .catch(() => null);
-    return label?.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)?.[0] ?? "signed in";
+    // Her address is on the personal-info page. Workspace also shows an internal alias
+    // ending in .test-google-a.com, which is not the one anybody means.
+    const text = await page.evaluate(() => document.body.innerText).catch(() => "");
+    const emails = [...new Set(text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [])];
+    return emails.find((e) => !e.endsWith(".test-google-a.com")) ?? emails[0] ?? "an unidentified account";
   } finally {
     await context.close().catch(() => {});
   }
