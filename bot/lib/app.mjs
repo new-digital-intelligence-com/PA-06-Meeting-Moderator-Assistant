@@ -30,8 +30,11 @@ export const brief = (meeting) => call("PUT", "/api/meeting", meeting);
 /** Tell the server she is in the room, as herself — not a rehearsal, not a Recall bot. */
 export const attend = () => call("POST", "/api/meeting/control", { command: "attend" });
 
-/** A short-lived token for her face and voice. */
-export const anamToken = async () => (await call("POST", "/api/anam")).sessionToken;
+/**
+ * A short-lived session for her face: `{ sessionToken, avatarId }`. The face lip-syncs to
+ * her own voice, which is sent to it, so it has no voice of its own.
+ */
+export const anamSession = () => call("POST", "/api/anam", { passthrough: true });
 
 /** Hand over what was heard; get back what to say, if anything. */
 export const tick = (body) => call("POST", "/api/moderator/tick", body);

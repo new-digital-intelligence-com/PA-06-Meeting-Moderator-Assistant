@@ -38,9 +38,20 @@ export const CHROME =
 
 /**
  * voice (default): she joins camera-off with her profile photo and an ElevenLabs voice.
- * avatar: the Anam face as her camera. Voice first — it has nothing to drop mid-meeting.
+ * avatar: the same voice, plus the Anam face as her camera, lip-synced to it.
  */
 export const MODE = process.env.AVA_MODE === "avatar" ? "avatar" : "voice";
+
+/**
+ * Her face's limits. Anam cuts each session off after a set time that depends on the
+ * plan (three minutes on Free, five on Starter, ten on Explorer, two hours on Growth), so
+ * she renews it before then. And it bills by the minute, so the face rests when the
+ * conversation goes quiet.
+ */
+export const FACE = {
+  sessionSeconds: Number(process.env.ANAM_SESSION_SECONDS || 180),
+  idleSeconds: Number(process.env.AVA_FACE_IDLE_SECONDS || 45),
+};
 
 /** Running in the server container rather than on somebody's desktop. */
 export const IN_CONTAINER = process.env.AVA_CONTAINER === "1";

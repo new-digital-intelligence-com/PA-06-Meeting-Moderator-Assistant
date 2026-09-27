@@ -10,13 +10,16 @@ const DEFAULT_MODEL = "eleven_flash_v2_5";
 
 export const voiceConfigured = () => Boolean(process.env.ELEVENLABS_API_KEY);
 
-/** The sentence as spoken audio, base64-encoded mp3, ready to hand to the page. */
-export async function speech(text) {
+/**
+ * The sentence as spoken audio, base64-encoded, ready to hand to the page: mp3 by
+ * default, or raw 16 kHz PCM ("pcm_16000") for her face to lip-sync to.
+ */
+export async function speech(text, format = "mp3_44100_128") {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error("ELEVENLABS_API_KEY is not set in bot/.env — she has no voice.");
   const voice = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE;
   const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=${format}`,
     {
       method: "POST",
       headers: { "xi-api-key": key, "Content-Type": "application/json" },

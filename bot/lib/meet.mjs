@@ -1,9 +1,10 @@
 // Ava attending one meeting, in person: her own signed-in Chrome, her avatar as the
 // camera, her voice as the microphone, Meet's captions as her ears.
+import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { MODE, PROFILE, platformArgs, requireChrome, root } from "./config.mjs";
+import { FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
 import { speech } from "./voice.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
@@ -12,6 +13,21 @@ const TICK_MS = 1200;
 const ALONE_MS = 3 * 60_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * A few seconds of her face at rest, filmed from the live avatar the first time, and
+ * shown whenever the live face is not connected. Kept per avatar: a clip of a different
+ * face would be worse than none.
+ */
+const idleClipFile = (avatarId) => path.join(STATE_DIR, `idle-${String(avatarId).replace(/[^\w-]/g, "")}.json`);
+function readIdleClip(avatarId) {
+  try {
+    const frames = JSON.parse(fs.readFileSync(idleClipFile(avatarId), "utf8"));
+    return Array.isArray(frames) && frames.length ? frames : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Attends one meeting from start to finish, then writes and sends the notes.
@@ -69,6 +85,9 @@ export async function attend(meeting, { log = console.log } = {}) {
   let wordsHeard = 0;
   let wordsWhenSheStarted = 0;
   let pauseTimer = null;
+  /** How many people are in the call, her included — two means everything is said to her. */
+  let people = null;
+  let warmedAt = 0;
 
   await context.exposeBinding("__avaLog", (_src, m) => log(`  [meet] ${m}`));
   await context.exposeBinding("__avaHeard", (_src, speaker, text, blockId) => {
@@ -97,8 +116,35 @@ export async function attend(meeting, { log = console.log } = {}) {
     // heartbeat.
     clearTimeout(pauseTimer);
     pauseTimer = setTimeout(() => wake(), 1100);
+
+    // One-on-one, she answers everything — so have her face connecting while they are
+    // still talking, and it is there by the time she replies.
+    if (MODE === "avatar" && (people === null || people <= 2) && Date.now() - warmedAt > 3000) {
+      warmedAt = Date.now();
+      void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+    }
   });
-  await context.addInitScript({ content: `window.__AVA_MODE = ${JSON.stringify(MODE)};` });
+
+  // Her face asks for a new session each time it connects: after resting, and ahead of
+  // Anam's time limit.
+  let avatarId = null;
+  await context.exposeBinding("__avaAnamToken", async () => {
+    const s = await app.anamSession();
+    avatarId = s.avatarId;
+    return s.sessionToken;
+  });
+  await context.exposeBinding("__avaIdleClip", (_src, frames) => {
+    if (!avatarId || !Array.isArray(frames)) return;
+    try {
+      fs.writeFileSync(idleClipFile(avatarId), JSON.stringify(frames));
+      log("  kept her idle clip for next time");
+    } catch (e) {
+      log(`  could not keep her idle clip: ${e.message}`);
+    }
+  });
+  await context.addInitScript({
+    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify(FACE)};`,
+  });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 
   const page = context.pages()[0] ?? (await context.newPage());
@@ -108,9 +154,19 @@ export async function attend(meeting, { log = console.log } = {}) {
 
   // 4 — her voice (and face, in avatar mode). Meet is already asking for devices; it
   // waits until these are up.
-  const token = MODE === "avatar" ? await app.anamToken() : undefined;
-  await page.evaluate((t) => window.__ava.start(t), token);
-  log(MODE === "avatar" ? "  her face and voice are up" : "  her voice is up (voice mode, no camera)");
+  let startWith = {};
+  if (MODE === "avatar") {
+    const s = await app.anamSession().catch((e) => {
+      log(`  no face to start with (${e.message}) — she will speak without it`);
+      return null;
+    });
+    if (s) {
+      avatarId = s.avatarId;
+      startWith = { token: s.sessionToken, idleClip: readIdleClip(s.avatarId) };
+    }
+  }
+  await page.evaluate((o) => window.__ava.start(o), startWith);
+  log(MODE === "avatar" ? "  her voice is up, and her face" : "  her voice is up (voice mode, no camera)");
 
   // 5 — walk in.
   await join(page, log, MODE);
@@ -121,9 +177,8 @@ export async function attend(meeting, { log = console.log } = {}) {
   let pending = null;
   let aloneSince = null;
   let over = false;
-  /** How many people are in the call, her included — two means everything is said to her. */
-  let people = null;
   let lastReason = null;
+  let faceState = MODE === "avatar" ? "down" : "voice";
   /** Ended from the control room, which then writes and sends the notes itself. */
   let endedElsewhere = false;
 
@@ -147,7 +202,7 @@ export async function attend(meeting, { log = console.log } = {}) {
         delivered: delivered?.key,
         deliveredText: delivered?.text,
         deliveredAt: delivered?.at,
-        face: speaking ? "speaking" : "live",
+        face: speaking ? "speaking" : faceState,
         captions: {
           socket: true,
           received: heardCount,
@@ -187,10 +242,10 @@ export async function attend(meeting, { log = console.log } = {}) {
         log(`  ▸ ${say}`);
         // Not awaited: the loop keeps listening while she talks, which is what lets
         // somebody interrupt her.
-        const spoken =
-          MODE === "avatar"
-            ? page.evaluate((t) => window.__ava.talk(t), say)
-            : speech(say).then((audio) => page.evaluate((a) => window.__ava.play(a), audio));
+        // Avatar mode sends raw audio, which is what her face lip-syncs to.
+        const spoken = speech(say, MODE === "avatar" ? "pcm_16000" : undefined).then((audio) =>
+          page.evaluate((a) => window.__ava.play(a), audio),
+        );
         void spoken
           .then((ok) => {
             if (ok && key) pending = { key, text: say, at };
@@ -225,9 +280,11 @@ export async function attend(meeting, { log = console.log } = {}) {
           inCall: Boolean(document.querySelector('[aria-label*="Leave call" i]')),
           text: document.body?.innerText?.slice(0, 4000) ?? "",
           people: Math.max(tiles, badge) || null,
+          face: window.__ava?.face?.() ?? null,
         };
       })
-      .catch(() => ({ inCall: false, text: "", people: null }));
+      .catch(() => ({ inCall: false, text: "", people: null, face: null }));
+    if (state.face) faceState = state.face;
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
 
