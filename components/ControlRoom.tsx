@@ -24,6 +24,8 @@ type Config = {
   googleClient: boolean;
   googleRedirectUri: string;
   store: "redis" | "mongo" | "file";
+  /** She has a Google account of her own, rather than knocking as a guest. */
+  signedIn: boolean;
 };
 
 type Action = { id: string; text: string; owner?: string; due?: string };
@@ -37,8 +39,9 @@ type Meeting = {
   context: string;
   recipients: string[];
   activity: "quiet" | "balanced" | "active";
-  status: "draft" | "joining" | "live" | "ended";
+  status: "draft" | "scheduled" | "joining" | "live" | "ended";
   botId?: string;
+  joinAt?: number;
   transcript: TranscriptLine[];
   actions: Action[];
   files: SharedFile[];
@@ -55,6 +58,25 @@ type Meeting = {
 
 type DriveFile = { id: string; name: string; mimeType: string; link: string; owner?: string };
 type CalMeeting = { id: string; title: string; start: string; meetingUrl: string; attendees: string[] };
+
+/** "14:30", or "Tue 14:30" when it is not today. */
+function clock(ms?: number | null) {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const today = new Date();
+  return d.toDateString() === today.toDateString()
+    ? time
+    : `${d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} ${time}`;
+}
+
+/** Converts between epoch ms and the value a datetime-local input wants. */
+const toLocalInput = (ms: number | null) => {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 const mmss = (s: number) =>
   `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -107,6 +129,9 @@ export default function ControlRoom({
 }) {
   const [meeting, setMeeting] = useState<Meeting>(initialMeeting);
   const [secs, setSecs] = useState(initialElapsed);
+  // Render must not read the clock directly — React treats that as impure, and it is:
+  // two renders a millisecond apart would disagree. The poll advances this instead.
+  const [now, setNow] = useState(() => Date.now());
   const [calendar, setCalendar] = useState<CalMeeting[]>([]);
   const [drive, setDrive] = useState<DriveFile[]>([]);
   const [driveQuery, setDriveQuery] = useState("");
@@ -124,6 +149,8 @@ export default function ControlRoom({
     recipients: initialMeeting.recipients.join(", "),
     context: initialMeeting.context,
     activity: initialMeeting.activity ?? "active",
+    /** When she should walk in, epoch ms. Null means "as soon as I press the button". */
+    joinAt: initialMeeting.joinAt ?? (null as number | null),
   });
   const [followUp, setFollowUp] = useState(
     initialMeeting.followUp ?? { to: "", subject: "", body: "" },
@@ -147,7 +174,10 @@ export default function ControlRoom({
   }, []);
 
   useEffect(() => {
-    const id = window.setInterval(refresh, 2000);
+    const id = window.setInterval(() => {
+      setNow(Date.now());
+      void refresh();
+    }, 2000);
     return () => window.clearInterval(id);
   }, [refresh]);
 
@@ -189,6 +219,7 @@ export default function ControlRoom({
           meetingUrl: draft.meetingUrl,
           context: draft.context,
           activity: draft.activity,
+          joinAt: draft.joinAt,
           recipients: draft.recipients.split(/[,\s;]+/).filter(Boolean),
         }),
       }),
@@ -197,7 +228,14 @@ export default function ControlRoom({
   const sendAva = async () => {
     await savePlan();
     const data = await call("start", () => fetch("/api/meeting/start", { method: "POST" }));
-    if (data) say("She is knocking — let her in from the Meet window.");
+    if (!data) return;
+    if (data.meeting?.status === "scheduled") {
+      say(`Booked. She will join by herself at ${clock(data.meeting.joinAt)}.`);
+    } else if (config.signedIn) {
+      say("She is on her way in.");
+    } else {
+      say("She is knocking — let her in from the Meet window.");
+    }
   };
 
   /**
@@ -215,6 +253,10 @@ export default function ControlRoom({
       }),
     );
     if (!stopped) return;
+    if (stopped.cancelled) {
+      say("Booking cancelled. She will not join.");
+      return;
+    }
     if (stopped.rehearsal) {
       say("Rehearsal over.");
       return;
@@ -312,6 +354,20 @@ export default function ControlRoom({
             }
           />
           <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY + RECALL_REGION" />
+          {/* Not a fault when off — she still works as a guest. Amber, not red. */}
+          <span
+            title={
+              config.signedIn
+                ? "She joins as her own Google account, with its name and photo."
+                : "She joins as a guest and has to be let in. Set RECALL_GOOGLE_LOGIN_GROUP_ID to give her an account — see the README."
+            }
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+              config.signedIn ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${config.signedIn ? "bg-emerald-400" : "bg-amber-400"}`} />
+            {config.signedIn ? "Own account" : "Guest"}
+          </span>
           <Pill ok={config.anam} label="Face & voice" hint="ANAM_API_KEY + ANAM_PERSONA_ID" />
           <Pill ok={config.publicUrlReachable} label="Public URL" hint={config.publicUrl || "PUBLIC_URL is not set"} />
           <Pill
@@ -357,6 +413,9 @@ export default function ControlRoom({
                       ...d,
                       title: found.title,
                       meetingUrl: found.meetingUrl,
+                      // Picking a meeting from the calendar books her for its start
+                      // time — which is the whole reason to pick it from there.
+                      joinAt: Date.parse(found.start) || null,
                       recipients: found.attendees.join(", "),
                     }));
                   }
@@ -457,13 +516,54 @@ export default function ControlRoom({
             />
           </label>
 
+          <div className="mt-4 space-y-1">
+            <span className="text-xs text-white/40">
+              When does she join?{" "}
+              <span className="text-white/25">
+                Pick the meeting from your calendar and this fills itself in. Anything less than ten
+                minutes away and she goes straight in.
+              </span>
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDraft({ ...draft, joinAt: null })}
+                className={`${button} ${
+                  !draft.joinAt ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40" : "bg-white/5 text-white/50 hover:bg-white/10"
+                }`}
+              >
+                Now
+              </button>
+              <input
+                type="datetime-local"
+                className={`${field} ${draft.joinAt ? "ring-1 ring-sky-400/40" : ""}`}
+                value={toLocalInput(draft.joinAt)}
+                onChange={(e) => setDraft({ ...draft, joinAt: e.target.value ? new Date(e.target.value).getTime() : null })}
+              />
+              {draft.joinAt && draft.joinAt < now && (
+                <span className="text-xs text-amber-300">That time has passed — she will join now.</span>
+              )}
+            </div>
+          </div>
+
+          {!config.signedIn && (
+            <p className="mt-4 rounded-lg bg-amber-400/5 px-3 py-2 text-xs text-amber-200/80">
+              She will join as a <strong>guest</strong> and somebody in the meeting will have to let her in.
+              {draft.joinAt ? " For a booked meeting, keep an eye on the Meet window at the start time." : ""}
+            </p>
+          )}
+
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
               className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
               disabled={!ready || !draft.meetingUrl || busy !== null}
               onClick={sendAva}
             >
-              {busy === "start" ? "Sending…" : `Send ${name} to the meeting`}
+              {busy === "start"
+                ? "Sending…"
+                : draft.joinAt && draft.joinAt - now > 10 * 60_000
+                  ? `Book ${name} for ${clock(draft.joinAt)}`
+                  : `Send ${name} to the meeting`}
             </button>
             <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
               Save
@@ -483,32 +583,55 @@ export default function ControlRoom({
         /* ── in the room ──────────────────────────────────────────────────── */
         <Section
           title={
-            status === "joining"
-              ? "Knocking — admit her in Google Meet"
-              : rehearsing
-                ? "Rehearsing — no bot, no call"
-                : status === "ended"
-                  ? "Ended"
-                  : "In the meeting"
+            status === "scheduled"
+              ? `Booked for ${clock(meeting.joinAt)}`
+              : status === "joining"
+                ? config.signedIn
+                  ? "On her way in"
+                  : "Knocking — admit her in Google Meet"
+                : rehearsing
+                  ? "Rehearsing — no bot, no call"
+                  : status === "ended"
+                    ? "Ended"
+                    : "In the meeting"
           }
           aside={
             status !== "ended" ? (
               <button
-                className={`${button} bg-rose-500/80 text-white hover:bg-rose-500`}
+                className={`${button} ${
+                  status === "scheduled"
+                    ? "bg-white/5 text-white/70 hover:bg-rose-500/20 hover:text-rose-200"
+                    : "bg-rose-500/80 text-white hover:bg-rose-500"
+                }`}
                 onClick={endAndSend}
                 disabled={busy !== null}
               >
                 {busy === "stop"
-                  ? "Ending…"
+                  ? status === "scheduled"
+                    ? "Cancelling…"
+                    : "Ending…"
                   : busy === "write"
                     ? "Writing the notes…"
-                    : rehearsing
-                      ? "Stop rehearsal"
-                      : "End & send notes"}
+                    : status === "scheduled"
+                      ? "Cancel booking"
+                      : rehearsing
+                        ? "Stop rehearsal"
+                        : "End & send notes"}
               </button>
             ) : null
           }
         >
+          {status === "scheduled" && (
+            <div className="mb-4 rounded-lg bg-sky-400/5 px-4 py-3 text-sm text-sky-100/80">
+              She will join{" "}
+              <a href={meeting.meetingUrl} target="_blank" rel="noreferrer" className="underline decoration-sky-400/40">
+                the meeting
+              </a>{" "}
+              by herself at <strong>{clock(meeting.joinAt)}</strong>
+              {config.signedIn ? " as her own account." : " — somebody will need to let her in."} You can close this page;
+              she does not need it open.
+            </div>
+          )}
           {/* Her tile lives inside Recall's browser where nobody can inspect it, so
               what it reports about itself, and why she last said nothing, are shown
               here. Without this "she stopped talking" is unanswerable. */}

@@ -37,7 +37,12 @@ export type SharedFile = {
   sharedWith: string[];
 };
 
-export type MeetingStatus = "draft" | "joining" | "live" | "ended";
+/**
+ * `scheduled` is a bot that exists at Recall but has not joined yet — it is waiting for
+ * the meeting's start time. It is distinct from `joining`, which means she is at the
+ * door right now and somebody needs to let her in.
+ */
+export type MeetingStatus = "draft" | "scheduled" | "joining" | "live" | "ended";
 
 /**
  * How forward she is.
@@ -83,6 +88,8 @@ export type Meeting = {
   recipients: string[];
   status: MeetingStatus;
   botId?: string;
+  /** When she is due to join, epoch ms. Unset means she joined as soon as she was sent. */
+  joinAt?: number;
   startedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
@@ -165,9 +172,10 @@ function normalise(raw: unknown): Meeting {
     context: str(o.context, ""),
     // `participants` was this field's name before the agenda came out.
     recipients: arr<string>(o.recipients ?? o.participants),
-    status: (["draft", "joining", "live", "ended"] as const).includes(o.status as MeetingStatus)
+    status: (["draft", "scheduled", "joining", "live", "ended"] as const).includes(o.status as MeetingStatus)
       ? (o.status as MeetingStatus)
       : "draft",
+    joinAt: typeof o.joinAt === "number" ? o.joinAt : undefined,
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
     endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,

@@ -48,3 +48,7 @@ next-env.d.ts
 
 # local meeting state
 data/
+
+# SSO key material for her Google account — effectively her password
+*.key
+ava-sso.*

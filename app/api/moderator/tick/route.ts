@@ -201,7 +201,9 @@ export async function POST(request: Request) {
     }
     // The stage rendering at all means Recall's browser loaded the page, which only
     // happens once the bot is in the call.
-    if (m.status === "joining") m.status = "live";
+    // Recall only loads this page once the bot is actually in the call — whether it was
+    // sent a moment ago or booked a week ago and has just turned up at the start time.
+    if (m.status === "joining" || m.status === "scheduled") m.status = "live";
   });
 
   const view = () => ({

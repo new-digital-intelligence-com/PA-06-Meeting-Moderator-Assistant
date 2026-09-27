@@ -19,6 +19,8 @@ type Patch = {
   context?: string;
   recipients?: string[];
   activity?: Activity;
+  /** Epoch ms, or null to clear it and have her join as soon as she is sent. */
+  joinAt?: number | null;
 };
 
 /** The briefing. Editable right up until she is in the room. */
@@ -38,6 +40,9 @@ export async function PUT(request: Request) {
     if (patch.context !== undefined) m.context = patch.context;
     if (patch.activity && ["quiet", "balanced", "active"].includes(patch.activity)) {
       m.activity = patch.activity;
+    }
+    if (patch.joinAt !== undefined) {
+      m.joinAt = typeof patch.joinAt === "number" && patch.joinAt > 0 ? patch.joinAt : undefined;
     }
     if (patch.recipients) {
       m.recipients = Array.from(

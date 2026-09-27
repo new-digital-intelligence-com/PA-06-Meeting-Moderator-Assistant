@@ -202,30 +202,92 @@ Files: search your Drive from the control room and *Grant access* to give every
 recipient the file. That one is never triggered by anything she hears — only by you.
 
 
+## Booking her for a meeting in advance
+
+Pick the meeting from **Fill from calendar** and its start time fills in by itself. The
+button becomes **Book Ava for 14:30**, and she joins on her own at that time — you can
+close the control room, she does not need it open. **Cancel booking** takes her back off.
+
+Anything less than ten minutes away and she simply goes now: Recall needs that much
+notice to guarantee a booked bot is ready, and if the meeting is about to start you want
+her there anyway.
+
+## Giving her her own Google account
+
+By default she joins as a **guest** called `BOT_NAME`, and somebody in the meeting has to
+let her in. Google screens suspected bots into a queue that defaults to denying, so on a
+booked meeting that nobody is watching for, she can end up waiting at the door.
+
+With her own account she arrives as herself — her Google name and profile photo — and
+when her address is on the calendar invite she **walks straight in**, like anybody else
+who was invited.
+
+This is set up once, outside this app, and it has one hard rule:
+
+> **It cannot be `ava@new-digital-intelligence.com`.** Recall signs her in through SAML
+> SSO, and switching SSO on changes how *every* user in that Workspace signs in. Doing
+> it on your main Workspace would lock out your whole company.
+
+So she gets a small Workspace of her own, on a subdomain:
+
+1. **A new Google Workspace** (Business Starter is enough, one seat) whose **primary
+   domain** is a subdomain — for example `ava.new-digital-intelligence.com`. It must be
+   a *separate* Workspace; adding the subdomain as an alias or secondary domain of your
+   existing one does not qualify. Verify the subdomain's DNS when Google asks.
+2. **Two users in it**: a super-admin you keep for managing it, and a *standard*
+   (non-admin) user for her, e.g. `ava@ava.new-digital-intelligence.com`. Recall's login
+   fails if her account is an admin.
+3. **Sign in as her once, before switching on SSO.** Set her display name to **Ava** and
+   upload her **profile photo** — the portrait you gave Anam, so the tile and the name
+   in the participant list are the same person. Complete any setup prompts Google shows.
+4. **Generate a key and certificate** for the SSO trust:
+
+   ```bash
+   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+     -keyout ava-sso.key -out ava-sso.crt -subj "/CN=recall-ava"
+   ```
+
+   Keep `ava-sso.key` private — it is effectively her password. Never commit it.
+5. **Switch on SSO in the new Workspace** and upload `ava-sso.crt`, following Recall's
+   guide for the exact sign-in and sign-out URLs:
+   <https://docs.recall.ai/docs/google-meet-login-getting-started>
+6. **In Recall**, create a Google Login with her address, the key and the certificate,
+   put it in a Login Group, and copy the **login group id**.
+7. **Set it** in Vercel and redeploy:
+
+   ```
+   RECALL_GOOGLE_LOGIN_GROUP_ID=<the login group id>
+   ```
+
+   The header pill turns from amber **Guest** to green **Own account**.
+
+From then on, **invite her address to your meetings** the same way you invite a person.
+Being on the invite is what lets her skip the waiting room — and combined with booking,
+it is the whole of "create a meeting and she turns up at the start".
+
 ## What it costs
 
 Per meeting hour, roughly:
 
 | | |
 | --- | --- |
-| Recall bot | $0.50 / recording hour |
-| Transcription | $0 — Google Meet's own captions |
+| Recall bot (four-core instance) | about $0.50–1 / hour |
+| Transcription | about $0.15 / hour — Recall's own |
 | Anam | per minute of streamed session (face and voice together) |
 | Claude | fractions of a cent |
+| Her Workspace, if you give her an account | one Business Starter seat / month |
 
-Anam is the one to watch: it bills for the whole session, not just the speaking. If
-that matters, render the agenda panel full-width as the bot's camera and only bring the
-face in while she is talking — the stage is yours, nothing stops you.
+Anam is the one to watch: it bills for the whole session, not just the speaking. A
+booked bot costs nothing until it actually joins.
 
 ## Notes
 
 - **Google Meet only**, deliberately. Recall would take a Zoom or Teams link, but the
   timings here — how long admission takes, that the captions carry speaker names —
   were tuned against Meet. `app/api/meeting/start/route.ts` enforces it.
-- **She joins as a guest**, so her name is `BOT_NAME` and somebody admits her. Making
-  her skip the waiting room means a *signed-in* bot, which requires a dedicated paid
-  Workspace on its own domain and SAML SSO — and that changes sign-in for every user in
-  the Workspace you apply it to. Not worth it on your main domain.
+- **Guest or account.** Without her own Google account she knocks and somebody admits
+  her; see *Giving her her own Google account* above for the alternative, and why it
+  must never be done on your main Workspace.
 - **Announce her.** She is a participant that records and transcribes. Say so at the
   top of the call; in a two-party-consent jurisdiction you have to.
 - **Latency** from end-of-sentence to her first word is 1.5–3s. Fine for a moderator,

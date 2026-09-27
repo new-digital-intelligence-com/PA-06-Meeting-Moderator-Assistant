@@ -30,18 +30,28 @@ export async function POST() {
     );
   }
   if (meeting.botId) {
-    return NextResponse.json({ error: "Ava is already on her way to this meeting." }, { status: 409 });
+    return NextResponse.json(
+      { error: meeting.status === "scheduled" ? "She is already booked for this meeting." : "Ava is already on her way to this meeting." },
+      { status: 409 },
+    );
   }
+
+  // A start time in the past is a meeting already under way: send her now.
+  const joinAt = meeting.joinAt && meeting.joinAt > Date.now() ? meeting.joinAt : undefined;
+  // Recall needs ten minutes' notice to guarantee a scheduled bot is ready. Nearer
+  // than that she goes now, which is also what anybody would want.
+  const scheduled = Boolean(joinAt && joinAt - Date.now() > 10 * 60_000);
 
   try {
     // Fails loudly here rather than 30 seconds later as a blank tile in the call.
     const stage = `${publicUrl()}/bot`;
 
-    const bot = await createBot(meeting.meetingUrl);
+    const bot = await createBot(meeting.meetingUrl, { joinAt });
 
     const updated = await updateMeeting((m) => {
       m.botId = bot.id;
-      m.status = "joining";
+      m.status = scheduled ? "scheduled" : "joining";
+      if (!scheduled) m.joinAt = undefined;
       // The clock starts when she is admitted and introduces herself, not now — see
       // /api/moderator/tick, which banks the opening once she has actually said it.
     });

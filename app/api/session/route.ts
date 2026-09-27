@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isConfigured as recallConfigured } from "@/lib/recall";
+import { isConfigured as recallConfigured, signedIn } from "@/lib/recall";
 import { readSession } from "@/lib/session";
 import { isConfigured as anamConfigured } from "@/lib/anam";
 import { storeDiagnostics, storeKind } from "@/lib/store";
@@ -21,6 +21,7 @@ export async function GET() {
     publicUrlReachable: Boolean(publicUrl) && !/localhost|127\.0\.0\.1/.test(publicUrl),
     botName: process.env.BOT_NAME || "Ava — Moderator",
     store: storeKind(),
+    signedIn: signedIn(),
     // Names only, never values — enough to tell a missing variable from a prefixed one.
     storage: storeDiagnostics(),
     recallRegion: process.env.RECALL_REGION || "us-west-2 (default — unset)",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
-import { RecallError, leaveCall } from "@/lib/recall";
+import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -32,7 +32,9 @@ export async function POST(request: Request) {
 
   if (before.botId) {
     try {
-      await leaveCall(before.botId);
+      // A booked bot is waiting, not in a call — it has to be deleted, not hung up.
+      if (before.status === "scheduled") await cancelBot(before.botId);
+      else await leaveCall(before.botId);
     } catch (e) {
       // A bot that already left, or was never admitted, 404s here. Closing the
       // meeting locally is still the right outcome.
@@ -48,9 +50,12 @@ export async function POST(request: Request) {
   // A rehearsal has no bot and nothing said during one is worth keeping, so ending it
   // returns to the briefing rather than producing a write-up of an empty room.
   const wasRehearsal = !before.botId;
+  // Cancelling a booking is not ending a meeting: nothing was said, there is nothing
+  // to write up, and the briefing should still be there to rebook.
+  const wasBooking = before.status === "scheduled";
 
   const meeting = await updateMeeting((m) => {
-    if (wasRehearsal) {
+    if (wasRehearsal || wasBooking) {
       m.status = "draft";
       m.startedAt = undefined;
       m.endedAt = undefined;
@@ -65,5 +70,10 @@ export async function POST(request: Request) {
     m.botId = undefined;
   });
 
-  return NextResponse.json({ meeting, elapsed: elapsed(meeting), rehearsal: wasRehearsal });
+  return NextResponse.json({
+    meeting,
+    elapsed: elapsed(meeting),
+    rehearsal: wasRehearsal,
+    cancelled: wasBooking,
+  });
 }

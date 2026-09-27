@@ -78,11 +78,21 @@ export type RecallBot = {
   status_changes?: { code: string; created_at: string; message?: string | null }[];
 };
 
-export async function createBot(meetingUrl: string, opts: { botName?: string } = {}): Promise<RecallBot> {
+/** Is she signed in to a Google account of her own, rather than knocking as a guest? */
+export function signedIn() {
+  return Boolean(process.env.RECALL_GOOGLE_LOGIN_GROUP_ID);
+}
+
+export async function createBot(
+  meetingUrl: string,
+  opts: { botName?: string; joinAt?: number } = {},
+): Promise<RecallBot> {
   const stage = `${publicUrl()}/bot`;
 
   const body: Record<string, unknown> = {
     meeting_url: meetingUrl,
+    // Ignored when she is signed in: an authenticated bot shows the Google account's
+    // own name and profile picture, which is the point of signing her in.
     bot_name: opts.botName || process.env.BOT_NAME || "Ava — Moderator",
     // The camera, not a screenshare: a screenshare takes over everyone's main stage and
     // makes her the presenter. A camera puts her in a participant tile, like a person.
@@ -120,7 +130,57 @@ export async function createBot(meetingUrl: string, opts: { botName?: string } =
     },
   };
 
+  /**
+   * Her own Google account, when one has been set up.
+   *
+   * A signed-in bot arrives as itself — its Google display name and profile picture,
+   * and, when its address is on the invite, straight in rather than knocking. A guest
+   * has to be admitted by somebody, and Google now screens suspected bots into a queue
+   * that defaults to denying, which is a poor way to start a meeting you scheduled.
+   *
+   * The setup is not something this code can do: it needs a Google Workspace of its own
+   * with SAML SSO, and Recall holds the credentials as a login group. See the README.
+   */
+  if (signedIn()) {
+    body.google_meet = {
+      google_login_group_id: process.env.RECALL_GOOGLE_LOGIN_GROUP_ID,
+      // Sign in even when the meeting would have let a guest in, so she is consistently
+      // the same identity to everyone in the room.
+      login_required: true,
+    };
+  }
+
+  /**
+   * Joining later, at the time the meeting actually starts.
+   *
+   * Recall wants at least ten minutes' notice to guarantee the bot is ready, so
+   * anything nearer than that is sent as an ad-hoc join instead — which is the right
+   * behaviour anyway: if the meeting starts in three minutes you want her now.
+   */
+  if (opts.joinAt && opts.joinAt - Date.now() > 10 * 60_000) {
+    body.join_at = new Date(opts.joinAt).toISOString();
+  }
+
   return call<RecallBot>("/bot/", { method: "POST", body: JSON.stringify(body) });
+}
+
+/**
+ * Cancels a bot that has not joined yet.
+ *
+ * A scheduled bot is waiting rather than in a call, so asking it to leave one is
+ * meaningless; it has to be deleted. Falls back to hanging up, since by the time
+ * somebody presses cancel it may have joined.
+ */
+export async function cancelBot(id: string): Promise<void> {
+  try {
+    await call(`/bot/${encodeURIComponent(id)}/`, { method: "DELETE" });
+  } catch (e) {
+    if (e instanceof RecallError && e.status >= 400 && e.status < 500) {
+      await leaveCall(id);
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function getBot(id: string): Promise<RecallBot> {
