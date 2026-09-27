@@ -11,7 +11,7 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { PROFILE, requireChrome } from "./lib/config.mjs";
+import { PROFILE, platformArgs, requireChrome } from "./lib/config.mjs";
 
 const chrome = requireChrome();
 fs.mkdirSync(PROFILE, { recursive: true });
@@ -23,7 +23,7 @@ console.log("  3. Close the window. That's it — she stays signed in.\n");
 
 const child = spawn(
   chrome,
-  [`--user-data-dir=${PROFILE}`, "--no-first-run", "--no-default-browser-check", "https://accounts.google.com/"],
+  [`--user-data-dir=${PROFILE}`, "--no-first-run", "--no-default-browser-check", ...platformArgs(), "https://accounts.google.com/"],
   { stdio: "ignore" },
 );
 

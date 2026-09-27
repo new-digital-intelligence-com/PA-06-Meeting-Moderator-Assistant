@@ -1,0 +1,27 @@
+# Ava, always on, on any Linux server with Docker.
+#
+#   cp .env.example .env      # then fill it in
+#   docker compose up -d --build
+#
+# Her screen is only reachable from the server itself — it is a signed-in Google account,
+# and a password sent over plain HTTP could be read by anyone on the path. Reach it from
+# your own computer through an SSH tunnel:
+#
+#   ssh -L 8080:localhost:8080 root@<server>      then open http://localhost:8080/vnc.html
+
+services:
+  ava:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Her signed-in Chrome profile and the list of meetings she has attended. Without a
+      # persistent volume she is signed out every time the container restarts.
+      - ava-data:/data
+    # Chrome crashes tabs when /dev/shm is Docker's default 64 MB.
+    shm_size: "1gb"
+
+volumes:
+  ava-data:

@@ -32,8 +32,29 @@ export const CHROME =
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     path.join(process.env.LOCALAPPDATA || "", "Google\\Chrome\\Application\\chrome.exe"),
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome-stable",
     "/usr/bin/google-chrome",
   ].find((p) => p && fs.existsSync(p));
+
+/** Running in the server container rather than on somebody's desktop. */
+export const IN_CONTAINER = process.env.AVA_CONTAINER === "1";
+
+/** Where she keeps what must survive a restart — the list of meetings already attended. */
+export const STATE_DIR = process.env.AVA_STATE_DIR || root;
+
+/**
+ * Chrome flags that differ between a desktop and the server container.
+ *
+ * In the container Chrome runs as root, where its sandbox cannot start, and /dev/shm is
+ * tiny, which crashes tabs under load. There is also no desktop keyring, and without
+ * `basic` Chrome stalls waiting for one — or fails to keep her signed-in cookies at all.
+ */
+export function platformArgs() {
+  const args = [];
+  if (IN_CONTAINER) args.push("--no-sandbox", "--disable-dev-shm-usage");
+  if (process.platform === "linux") args.push("--password-store=basic");
+  return args;
+}
 
 /** Her calendar's private iCal address. Her invites arrive here. */
 export const CALENDAR_ICS = process.env.AVA_CALENDAR_ICS_URL || "";

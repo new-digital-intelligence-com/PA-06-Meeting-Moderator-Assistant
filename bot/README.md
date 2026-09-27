@@ -1,93 +1,115 @@
 # Ava in person
 
 Ava attending meetings as **herself** — `ava@new-digital-intelligence.com`, a normal
-member of your Workspace — instead of as a Recall bot knocking at the door.
+member of your Workspace — and turning up to whatever she is invited to, on her own, at
+the start time. She runs on a server, always on; nothing depends on anybody's PC.
 
-This is a real Chrome, signed in to her Google account. When a meeting she is invited to
-starts, it opens the Meet link and walks in: she is on the invite, so she is let straight
-in, with her own name and photo. Meet asks the browser for a camera and a microphone, and
-gets her — the Anam avatar is the camera, her voice is the microphone. Meet's own live
-captions are her ears.
+## How it works
 
-Her brain is not here. The runner hands what she hears to the deployed app and says what
-comes back, exactly as the Recall tile did, so everything already built — answering when
-named, joining in, taking notes, writing and sending the follow-up — works unchanged.
+Two parts:
 
-## What she does
+- **Her brain** is the web app on Vercel. It decides what she says, keeps the transcript,
+  takes the notes and writes and sends the follow-up.
+- **Her body** is this folder, running as one container on a server. Inside it is a real
+  Google Chrome on a virtual screen, signed in as her.
+
+```
+you invite ava@ to a meeting
+  → it lands on her Google Calendar
+  → the container sees it, and a minute before the start opens the Meet link in her Chrome
+  → she is on the invite and in your organisation, so Meet lets her straight in —
+    her own name, her own photo, no knocking
+  → Meet asks the browser for a camera and a microphone and gets HER: the Anam avatar's
+    face is the camera, her voice is the microphone
+  → Meet's live captions are her ears; what people say goes to the brain
+  → the brain decides when to answer or join in, and she says it out loud
+  → the meeting ends; she leaves; the notes go to the guests from her own account
+```
+
+Before: the invite's description is her briefing and its guests are who the notes go to.
+Declined meetings and all-day entries are ignored. One meeting at a time.
+
+**Proven, not assumed:** the container itself was run and pointed at a real Google Meet —
+Meet listed "Ava" as both its camera and microphone and showed her face in its preview.
+
+## Where to run it
+
+Any Linux server with Docker, **2 vCPU and 4 GB RAM**, with a disk that survives restarts.
 
 | | |
 | --- | --- |
-| **Before** | Watches her own calendar. The invite's description becomes her briefing; its guests become the people the notes go to. Declined meetings and all-day entries are ignored. |
-| **During** | Joins about a minute before the start, turns on her camera, microphone and captions, introduces herself, listens, answers when named, joins in on her own, stops when talked over. |
-| **After** | Leaves when the meeting ends — or three minutes after she is the only one left — then writes the notes and emails them to the guests **from her own account**. |
+| **A small VPS** — Hetzner CX22, DigitalOcean, OVH, Scaleway… | cheapest (about €5–25 a month) and the simplest. Recommended. |
+| **Render / Railway / Fly.io** — Docker from this repo | no server to look after, but you must add a persistent disk at `/data`, and plans with 4 GB are dearer. |
+
+Use your own account on whichever you pick.
 
 ## Setting it up
 
 Once, in this order.
 
-**1. The app needs two more variables** — in Vercel, then redeploy:
+**1. The app** — in Vercel's environment variables, then redeploy:
 
 ```
-AVA_RUNNER_KEY=<the value from ../.env.local>
+AVA_RUNNER_KEY=<a long random value — the same one goes in step 3>
 AVA_EMAIL=ava@new-digital-intelligence.com
 ```
 
-`AVA_RUNNER_KEY` is the shared secret that lets this runner read her calendar and send
-mail as her. Without it those routes refuse, which is the point: anybody could otherwise
-read her invites by finding the URL.
-
 **2. Connect her Google account to the app.** In the control room, click the amber
-**Connect Ava's Google** pill and choose `ava@…`. It refuses any other account. This is
-what lets her read her invites and send the notes as herself, with nobody's browser open.
+**Connect Ava's Google** pill and pick `ava@…` (it refuses any other account). This lets
+her read her invites and send the notes as herself.
 
-**3. Install and sign her in to Chrome** — on the machine that will run her:
-
-```bash
-cd bot
-npm install
-npm run login
-```
-
-A normal Chrome window opens with a profile of her own. Sign in as her, open
-<https://meet.google.com> once, then close the window. (It has to be a normal window:
-Google refuses sign-ins from automated browsers. After this, she stays signed in.)
-
-**4. Check her face works in Meet** — optional, but it is how you find out before a room
-does:
+**3. On the server** (a VPS with Docker installed):
 
 ```bash
-npm run check -- https://meet.google.com/any-meeting-link
+git clone <this repo>
+cd <repo>/bot
+cp .env.example .env
+nano .env                       # AVA_APP_URL, AVA_RUNNER_KEY, AVA_ADMIN_PASSWORD
+docker compose up -d --build
 ```
 
-Opens that meeting's pre-join screen as a throwaway guest, turns her on as the camera and
-saves a screenshot. It never presses Join.
-
-**5. Put her on duty:**
+**4. Sign her in, once.** Her screen is only reachable from the server itself, so tunnel
+to it from your computer:
 
 ```bash
-npm run watch
+ssh -L 8080:localhost:8080 root@<your-server>
 ```
 
-Leave it running. From now on, **invite `ava@new-digital-intelligence.com` to a meeting
-like anybody else**, and she turns up.
+then open <http://localhost:8080/vnc.html> — user `ava`, password `AVA_ADMIN_PASSWORD`.
+A Chrome window is waiting at the Google sign-in page. Sign in as her, open
+<https://meet.google.com> once, then **close that window**. She checks again, finds
+herself signed in, and goes on duty.
 
-To send her into one meeting right now instead:
+**5. Invite `ava@new-digital-intelligence.com` to a meeting**, like anybody else.
 
-```bash
-npm run join -- https://meet.google.com/abc-defg-hij --to sam@acme.com --about "Q3 review with Acme"
-```
+To follow what she is doing: `docker compose logs -f`. To watch her in a meeting, open
+the same screen page — you see exactly what her Chrome sees.
+
+### On Render / Railway / Fly instead of a VPS
+
+Create a Docker service from this repo with root directory `bot`, a plan with 4 GB RAM,
+a **persistent disk mounted at `/data`**, and the variables from `.env.example`. The
+platform gives you HTTPS, so her screen page is at `https://<service-url>/vnc.html`.
+
+## Her Google account — settings that keep her working
+
+- **Google Cloud → OAuth consent screen → User type: Internal.** In *Testing*, Google
+  expires the sign-in after 7 days and she silently stops reading her calendar and
+  sending notes. (If Internal is greyed out, *Publish app* instead.)
+- **Admin console → Security → Google session control:** a long web session for her, so
+  she is not signed out mid-week.
+- **2-Step Verification:** if enforced, complete it in step 4 and tick *Don't ask again on
+  this computer*.
+- **Admin console → Security → API controls:** if unknown apps are blocked, trust this one.
+- **Her account:** name *Ava*, profile photo the NDI portrait; in Google Calendar settings,
+  *Add invitations to my calendar → From everyone*.
 
 ## Things worth knowing
 
-- **The machine has to be on.** She runs where this runs. A laptop that sleeps through
-  the meeting means she misses it. For always-on, run it on a small cloud server with a
-  desktop (any VM that can run Chrome); the same commands work.
-- **You will see her Chrome window.** It is deliberately not headless — Meet degrades
-  headless browsers and Google is warier of them. Leave it alone; minimising is fine.
-- **One meeting at a time.** If two invites overlap she attends the earlier one.
-- **If Google signs her out** — it occasionally asks accounts to re-verify — run
-  `npm run login` again.
-- **Captions are her ears**, so what she hears is as good as Meet's captions. They
-  are English by default; the runner opens Meet in English for the same reason.
-- **Her profile lives outside OneDrive**, in `%LOCALAPPDATA%\ava-runner`, because a
-  Chrome profile being synced mid-write corrupts and signs her out.
+- **If Google ever signs her out** she stops, says so in the logs, and reopens the sign-in
+  window — she will not wander into meetings as an anonymous guest. Repeat step 4.
+- **Her ears are Meet's captions**, so what she hears is as good as they are. The Meet UI
+  is forced to English, and captions default to English.
+- **Development on your own machine:** `npm install`, then `npm run login` once and
+  `npm run watch`. `npm run check -- <meet link>` shows her face in a meeting's pre-join
+  screen without joining.

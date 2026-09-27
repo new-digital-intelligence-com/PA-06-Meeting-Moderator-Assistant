@@ -9,7 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as app from "./lib/app.mjs";
-import { EARLY_MS, root } from "./lib/config.mjs";
+import { EARLY_MS, STATE_DIR } from "./lib/config.mjs";
+import { ensureSignedIn } from "./lib/account.mjs";
 import { attend } from "./lib/meet.mjs";
 
 const POLL_MS = 60_000;
@@ -19,7 +20,7 @@ const POLL_MS = 60_000;
  * middle of the day does not send her back into a meeting that is still running without
  * her, or one she already finished.
  */
-const doneFile = path.join(root, ".attended.json");
+const doneFile = path.join(STATE_DIR, ".attended.json");
 const done = new Set(fs.existsSync(doneFile) ? JSON.parse(fs.readFileSync(doneFile, "utf8")) : []);
 const remember = (id) => {
   done.add(id);
@@ -56,6 +57,9 @@ async function nextMeeting() {
 
 log(`  Ava is on duty. Watching her calendar every ${POLL_MS / 1000}s. Ctrl+C to stop.`);
 
+// Signed in first. Everything below assumes she walks into meetings as herself.
+await ensureSignedIn({ log });
+
 let announced = "";
 for (;;) {
   try {
@@ -89,6 +93,9 @@ for (;;) {
     }
   } catch (e) {
     log(`  ${e.message}`);
+    // Google occasionally signs accounts out. Rather than knock on the next meeting as a
+    // stranger, stop and get her signed back in.
+    if (/not signed in/i.test(e.message)) await ensureSignedIn({ log });
   }
   await new Promise((r) => setTimeout(r, POLL_MS));
 }

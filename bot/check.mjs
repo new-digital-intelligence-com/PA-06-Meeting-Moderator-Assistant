@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import { anamToken } from "./lib/app.mjs";
-import { requireChrome, root } from "./lib/config.mjs";
+import { platformArgs, requireChrome, root } from "./lib/config.mjs";
 
 const url = process.argv[2];
 if (!url?.startsWith("https://meet.google.com/")) {
@@ -32,6 +32,7 @@ const ctx = await chromium.launchPersistentContext(profile, {
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
     "--no-first-run",
+    ...platformArgs(),
   ],
 });
 const logs = [];

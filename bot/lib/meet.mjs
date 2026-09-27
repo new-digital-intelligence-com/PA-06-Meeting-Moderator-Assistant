@@ -3,7 +3,7 @@
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { PROFILE, requireChrome, root } from "./config.mjs";
+import { PROFILE, platformArgs, requireChrome, root } from "./config.mjs";
 
 /** The heartbeat. Being named cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -53,6 +53,7 @@ export async function attend(meeting, { log = console.log } = {}) {
       "--disable-renderer-backgrounding",
       "--no-first-run",
       "--no-default-browser-check",
+      ...platformArgs(),
     ],
   });
   await context.grantPermissions(["camera", "microphone"], { origin: "https://meet.google.com" });
