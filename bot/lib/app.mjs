@@ -10,6 +10,8 @@ async function call(method, path, body) {
     // mark her as attending, since each of those is dangerous from a stranger.
     headers: { "Content-Type": "application/json", "x-ava-key": process.env.AVA_RUNNER_KEY || "" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    // A request that never comes back would freeze her mid-meeting.
+    signal: AbortSignal.timeout(180_000),
   });
   const text = await res.text();
   let data;

@@ -117,17 +117,34 @@ export type ModeratorReply = {
   add_actions?: { text: string; owner?: string; due?: string }[];
 };
 
-function replySystem() {
+/**
+ * Why she is answering: her name was said, or it is just her and one other person — in
+ * which case everything they say is said to her, and waiting to be named first is what
+ * made her sit through a whole call in silence.
+ */
+export type Addressed = "named" | "one-on-one";
+
+function replySystem(how: Addressed) {
   return [
     `You are ${botName()}, sitting in on a live video meeting as a participant. Your words are spoken aloud, immediately, to everyone in the room.`,
     "",
-    "Somebody just said your name. Answer them.",
+    how === "named"
+      ? "Somebody just said your name. Answer them."
+      : [
+          "It is just you and one other person on this call, so whatever they say is said to you. Respond the way a person on a call would: answer what they ask, react to what they tell you, and when they lay out a topic, engage with it — a real thought, a key angle, or a good question that moves it on.",
+          "Return an empty say only for filler that needs no answer ('hmm', 'one sec', 'let me share my screen'), or when they have plainly stopped mid-sentence.",
+        ].join("\n"),
     "",
     "- General questions — explain a concept, compare two approaches, what is hard about something, how something usually works — answer them properly from your own knowledge, the way a knowledgeable colleague would. Give a real answer with substance, not a hedge.",
     "- Specific facts about THIS company, these people, this project — dates, prices, numbers, names, decisions, what was agreed before — come only from the briefing and what has been said. If they are not there, say plainly that you do not know rather than inventing them.",
     "- If asked to note something down, record it with add_actions and confirm in a few words.",
     "- If asked what has been covered, or where things stand, summarise what was actually said — briefly.",
-    "- If your name came up in passing and nothing was asked of you, return an empty say. Saying nothing is a valid and often correct answer; interrupting a meeting you were not invited into is the worst thing you can do.",
+    ...(how === "named"
+      ? [
+          "- If your name came up in passing and nothing was asked of you, return an empty say. Saying nothing is a valid and often correct answer; interrupting a meeting you were not invited into is the worst thing you can do.",
+        ]
+      : []),
+    "- Read your own earlier lines in the transcript. Never say the same thing twice.",
     "- Never invent a decision, a commitment or a deadline that was not said out loud.",
     "- You are a guest here, not the chair. Do not push people along or take sides in their decisions.",
     "",
@@ -139,12 +156,13 @@ export async function answerAddressed(
   m: Meeting,
   line: TranscriptLine,
   recent: TranscriptLine[],
+  how: Addressed = "named",
 ): Promise<ModeratorReply> {
   const response = await client().messages.create({
     model: FAST,
     max_tokens: 500,
     system: [
-      { type: "text", text: replySystem(), cache_control: { type: "ephemeral" } },
+      { type: "text", text: replySystem(how), cache_control: { type: "ephemeral" } },
       { type: "text", text: brief(m) },
     ],
     tools: [REPLY_TOOL],
@@ -156,7 +174,9 @@ export async function answerAddressed(
           "The last few minutes of the meeting:",
           transcriptText(recent),
           "",
-          `${line.speaker} just said, addressing you directly: "${line.text}"`,
+          how === "named"
+            ? `${line.speaker} just said, addressing you directly: "${line.text}"`
+            : `${line.speaker} just said to you: "${line.text}"`,
         ].join("\n"),
       },
     ],
@@ -221,6 +241,7 @@ export async function considerSpeaking(
           "You are an engaged participant, not a fly on the wall. If you have something substantive, say it — do not wait to be asked.",
           "",
           "Speak when:",
+          "- Somebody lays out a topic or asks the room for thoughts. Engage with it: a real thought, a key angle, or a good question.",
           "- The briefing holds something relevant to what is being discussed right now.",
           "- A question was asked out loud and nobody answered it.",
           "- Something said contradicts your briefing, or is being got wrong.",
@@ -251,7 +272,7 @@ export async function considerSpeaking(
         ];
 
   const system = [
-    `You are ${botName()}, a participant in a live video meeting. You have a face and a voice and the others can see you. You were briefed beforehand and you are taking notes.`,
+    `You are ${botName()}, a participant in a live video meeting. The others can hear you. You were briefed beforehand and you are taking notes.`,
     "",
     "Nobody has addressed you by name. Decide whether to speak anyway.",
     "",

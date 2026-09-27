@@ -9,56 +9,56 @@ import {
   type Meeting,
   type TranscriptLine,
 } from "@/lib/meeting";
-import { answerAddressed, botName, considerSpeaking, isAddressed, mergeActions } from "@/lib/moderator";
+import { answerAddressed, botName, considerSpeaking, isAddressed, mergeActions, type Addressed } from "@/lib/moderator";
 import { dueCue } from "@/lib/script";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * The tick. The stage calls this on a short heartbeat, and immediately whenever a
- * caption contains her name. It hands over whatever was said since last time and gets
- * back the one thing to say now.
+ * The tick. The stage calls this on a short heartbeat, and as soon as somebody pauses.
+ * It hands over whatever was said since last time and gets back the one thing to say now.
  *
- * She speaks in three situations, in this order of priority:
+ * She works in turns, like a person on a call: somebody talks, pauses, and she decides
+ * what to do about what they just said — once. In order of priority:
  *
  *   1. The opening, once, to say who she is.
- *   2. Somebody addressed her. This always wins — ignoring a direct question is the
- *      worst thing she can do.
- *   3. She has something worth adding. A model call decides, at the end of somebody's
- *      utterance, and only once the cooldown for the chosen activity level has passed.
+ *   2. Somebody said her name, or it is just her and one other person — then whatever
+ *      they say is said to her. She answers.
+ *   3. In a group, unnamed: a model call decides whether she has something worth adding,
+ *      and only once the cooldown for the chosen activity level has passed.
  *
  * At most one line per tick, and nothing at all while she is mid-sentence.
  *
  * Delivery is confirmed rather than assumed: a line goes out with a key and is only
- * recorded once the stage reports she actually said it. If her face is down the line
- * comes back round instead of vanishing.
+ * recorded once the stage reports she actually said it.
  */
 
 type TickBody = {
   lines?: { speaker?: string; text?: string; at?: number; id?: string }[];
   /** The stage says it is idle; if she is mid-sentence we return nothing. */
   idle?: boolean;
-  /** The key of the line she has just finished saying, and the words themselves. */
+  /** The key of the line she has just finished saying, the words, and when she started. */
   delivered?: string;
   deliveredText?: string;
+  deliveredAt?: number;
   /** What the stage sees of her face and voice — the only window we have into it. */
   face?: string;
   faceDetail?: string;
   captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
+  /** How many people are in the call, her included. Null when the page cannot tell. */
+  people?: number | null;
 };
 
+/** A second of silence in the captions: the moment a person would take their turn. */
+const PAUSE_S = 1;
 /**
- * Adds a caption to the transcript, folding it into the previous line when it is the
- * same utterance still being typed.
- *
- * Recall streams a running transcript rather than finished sentences: one real remark
- * arrives as a stream of messages whose text grows word by word. Treating each as a new
- * line gives thousands of fragments; treating them as duplicates of one key throws the
- * remark away after its first word. Both happened here. So: if this looks like the last
- * line growing, replace it; if it repeats something already said, drop it; otherwise it
- * is genuinely new.
+ * Meet keeps rewriting a caption after it has been said — punctuation, "gonna" into
+ * "going to" — so a turn only counts as having more in it once it has grown by more
+ * than that.
  */
+const GREW = 12;
+
 /**
  * Captions rarely carry punctuation, so a question mark is not enough to go on — this
  * also looks for the shape of one.
@@ -71,32 +71,56 @@ function looksLikeAQuestion(text: string): boolean {
   );
 }
 
-/** Changes whenever anything new has been said, including a line still growing. */
-function transcriptSignature(transcript: TranscriptLine[]): string {
-  const last = transcript[transcript.length - 1];
-  return `${transcript.length}:${last ? last.text.length : 0}`;
+/** The part of a caption block's text from `from` on, starting at a word. */
+function tail(text: string, from: number): string {
+  if (from <= 0) return text.trim();
+  let rest = text.slice(from);
+  // Meet rewrote the words before the cut, so it can land mid-word.
+  if (/\w/.test(text[from - 1] ?? "") && /^\w/.test(rest)) rest = rest.replace(/^\S*/, "");
+  return rest.replace(/^[\s,.;:!?-]+/, "").trim();
 }
 
+/**
+ * Adds a caption to the transcript.
+ *
+ * Google Meet does not append to a caption, it rewrites it as the sentence goes on —
+ * punctuation shifts, "EI" becomes "AI", "Ava Ava!" becomes "Ava, Ava." — so her runner
+ * sends the id of the caption block itself, and the line with that id is replaced.
+ *
+ * Meet also keeps one block per speaker for as long as they keep talking, across
+ * several turns. Once she has answered a line it is sealed, and whatever the block says
+ * after that becomes a new line, after her answer — otherwise everything said to her
+ * lands above her reply to it, and she reads her own answer as coming first.
+ */
 function fold(transcript: TranscriptLine[], line: TranscriptLine) {
-  // Same caption block as a line we already have: replace its text in place.
-  //
-  // Google Meet does not append to a caption, it rewrites it as the sentence goes on —
-  // punctuation shifts, "EI" becomes "AI", "Ava Ava!" becomes "Ava, Ava." — so none of
-  // the text comparisons below recognise the rewrite, and in a real meeting each one
-  // became its own line: over a hundred fragments of three sentences. Her runner now
-  // sends the id of the caption block itself, which is the only reliable key.
-  const same = transcript.findLast((l) => l.id === line.id);
-  if (same) {
-    same.text = line.text;
+  const parts = transcript.filter((l) => (l.block ?? l.id) === line.id);
+  const part = parts[parts.length - 1];
+  if (part) {
+    if (!part.sealed) {
+      part.text = tail(line.text, part.from ?? 0) || part.text;
+      part.full = line.text.length;
+      return;
+    }
+    const from = part.full ?? (part.from ?? 0) + part.text.length;
+    const rest = tail(line.text, from);
+    if (!rest) return;
+    transcript.push({
+      id: `${line.id}#${parts.length}`,
+      block: line.id,
+      from,
+      full: line.text.length,
+      speaker: line.speaker,
+      text: rest,
+      at: Date.now(),
+    });
     return;
   }
 
-  // The most recent line by THIS speaker, not simply the last line.
+  // No block id (the Recall stage): fold by text instead.
   //
-  // If she says something while somebody is still talking, her line lands between a
-  // half-finished remark and its continuation. Looking only at the very last line then
-  // fails to match, and the opening fragment is stranded as its own sentence — which is
-  // where "Helmi: Thanks everyone for" came from.
+  // The most recent line by THIS speaker, not simply the last line — if she says
+  // something while somebody is still talking, her line lands between a half-finished
+  // remark and its continuation.
   let last: TranscriptLine | undefined;
   for (let i = transcript.length - 1; i >= 0 && i >= transcript.length - 6; i--) {
     if (transcript[i].speaker === line.speaker) {
@@ -105,11 +129,10 @@ function fold(transcript: TranscriptLine[], line: TranscriptLine) {
     }
   }
 
-  if (last && Date.now() - last.at < 120_000) {
+  if (last && !last.sealed && Date.now() - last.at < 120_000) {
     const a = last.text.toLowerCase();
     const b = line.text.toLowerCase();
-    // The same utterance, longer: replace in place and keep the original timestamp so
-    // ordering stays honest.
+    // The same utterance, longer: replace in place.
     if (b.startsWith(a)) {
       last.text = line.text;
       return;
@@ -118,12 +141,11 @@ function fold(transcript: TranscriptLine[], line: TranscriptLine) {
     if (a.startsWith(b) || a === b) return;
   }
 
-  // An exact repeat of something recent, from any speaker — a redelivery after a
-  // reconnect, which is common when the socket drops and comes back.
+  // An exact repeat of something recent — a redelivery after a reconnect.
   const recent = transcript.slice(-12);
   if (recent.some((l) => l.speaker === line.speaker && l.text === line.text)) return;
 
-  transcript.push(line);
+  transcript.push({ ...line, full: line.text.length });
 }
 
 /** Loose enough to survive a caption mishearing a word or two of what she said. */
@@ -146,26 +168,20 @@ function echoesHer(text: string, m: Meeting): boolean {
   });
 }
 
-function commit(m: Meeting, key: string, text?: string) {
+function commit(m: Meeting, key: string, text?: string, startedAt?: number) {
   if (key.startsWith("open") && !m.spoken.includes(key)) {
     m.spoken.push(key);
     m.startedAt = Date.now();
   }
 
-  // Her own words go into the transcript, spoken by her.
-  //
-  // They were being dropped entirely, which left her blind to what she had already
-  // said — so she repeated a point verbatim two turns later, and drifted into claiming
-  // things had been done that had only been mentioned. A participant who cannot hear
-  // themselves is not a participant. It also means the write-up covers what she
-  // contributed, which is part of the meeting like anything else.
-  if (text?.trim()) {
-    m.transcript.push({
-      id: `said:${key}`,
-      speaker: botName(),
-      text: text.trim(),
-      at: Date.now(),
-    });
+  // Her own words go into the transcript, spoken by her — a participant who cannot hear
+  // themselves repeats themselves. It goes in where she started saying it: anything
+  // said while she was talking came after the start of her line, not before it.
+  if (text?.trim() && !m.transcript.some((l) => l.id === `said:${key}`)) {
+    const at = startedAt ?? Date.now();
+    let i = m.transcript.length;
+    while (i > 0 && m.transcript[i - 1].at > at) i--;
+    m.transcript.splice(i, 0, { id: `said:${key}`, speaker: botName(), text: text.trim(), at });
   }
   // Everything she says paces what she volunteers next, and is remembered so she does
   // not make the same point twice.
@@ -174,6 +190,17 @@ function commit(m: Meeting, key: string, text?: string) {
   // gets treated as something she must avoid repeating.
   m.lastSpokeWasOpening = key.startsWith("open");
   if (text?.trim() && !m.lastSpokeWasOpening) m.lastSaid = text.trim();
+}
+
+/**
+ * Is it just her and one other person? Her browser counts the people in the call; when
+ * it cannot, the fallback is how many people have spoken in the last ten minutes.
+ */
+function oneOnOne(m: Meeting, people: number | null | undefined): boolean {
+  if (typeof people === "number" && people > 0) return people <= 2;
+  const since = Date.now() - 10 * 60_000;
+  const voices = new Set(m.transcript.filter((l) => l.at >= since && l.speaker !== botName()).map((l) => l.speaker));
+  return voices.size <= 1;
 }
 
 export async function POST(request: Request) {
@@ -198,24 +225,17 @@ export async function POST(request: Request) {
       at: l.at ?? Date.now(),
     }))
     // Google captions her too, and those captions are an echo of words we already
-    // recorded ourselves the moment she said them.
-    //
-    // Matching on her name is not enough: Meet attributed her opening to "Unknown", so
-    // the echo slipped through and she filed her own introduction as somebody else's
-    // remark. Matching on what she actually just said catches it whatever label Google
-    // decides to hang on her.
+    // recorded ourselves the moment she said them. Matching on what she actually just
+    // said catches it whatever label Google decides to hang on her.
     .filter((l) => !l.speaker.toLowerCase().includes(me) && !echoesHer(l.text, meetingBefore));
 
   let meeting = await updateMeeting((m) => {
     for (const line of incoming) fold(m.transcript, line);
-    if (body.delivered) commit(m, body.delivered, body.deliveredText);
+    if (body.delivered) commit(m, body.delivered, body.deliveredText, body.deliveredAt);
     if (body.face) {
-      m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions };
+      m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions, people: body.people };
     }
-    // The stage rendering at all means Recall's browser loaded the page, which only
-    // happens once the bot is in the call.
-    // Recall only loads this page once the bot is actually in the call — whether it was
-    // sent a moment ago or booked a week ago and has just turned up at the start time.
+    // The stage only ticks once she is actually in the call.
     if (m.status === "joining" || m.status === "scheduled") m.status = "live";
   });
 
@@ -236,6 +256,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ say: null, reason, ...view() });
   };
 
+  /** Marks a turn as dealt with; `answered` also seals it, so what follows goes after her. */
+  const handle = (turn: TranscriptLine, answered: boolean, reason: string) =>
+    updateMeeting((m) => {
+      m.handled = { id: turn.id, len: turn.text.length };
+      m.lastDecision = { at: Date.now(), reason };
+      if (answered) {
+        const line = m.transcript.find((l) => l.id === turn.id);
+        if (line) line.sealed = true;
+      }
+    });
+
   if (meeting.status !== "live") return quiet(`meeting is ${meeting.status}`);
   if (body.idle === false) return quiet("she is still speaking");
 
@@ -243,11 +274,30 @@ export async function POST(request: Request) {
   const cue = dueCue(meeting);
   if (cue) return NextResponse.json({ say: cue.text, kind: cue.kind, key: cue.key, ...view() });
 
-  /* 2 ─ somebody said her name */
-  const addressed = incoming.filter((l) => isAddressed(l.text)).pop();
-  if (addressed) {
+  // The turn she would be responding to: the newest thing somebody else said.
+  const turn = [...meeting.transcript].reverse().find((l) => l.speaker !== botName());
+  if (!turn) return quiet("nobody has said anything yet");
+
+  const h = meeting.handled;
+  const sameTurn = h?.id === turn.id;
+  if (sameTurn && turn.text.length - h.len < GREW) return quiet("listening — nothing new since she last responded");
+
+  // Wait for them to finish. Captions stream while somebody is talking; a pause is the
+  // end of their turn, and answering before it cuts across them — and answers half a
+  // question, again for every rewrite of it.
+  const quietFor = body.captions?.secondsSinceLast;
+  if (quietFor !== null && quietFor !== undefined && quietFor < PAUSE_S) {
+    return quiet("somebody is mid-sentence");
+  }
+
+  // Only the part she has not already responded to can summon her again.
+  const fresh = sameTurn ? turn.text.slice(Math.max(0, h.len - 12)) : turn.text;
+  const how: Addressed | null = isAddressed(fresh) ? "named" : oneOnOne(meeting, body.people) ? "one-on-one" : null;
+
+  /* 2 ─ said to her */
+  if (how) {
     try {
-      const reply = await answerAddressed(meeting, addressed, meeting.transcript.slice(-30));
+      const reply = await answerAddressed(meeting, turn, meeting.transcript.slice(-30), how);
 
       if (reply.add_actions?.length) {
         meeting = await updateMeeting((m) => {
@@ -255,64 +305,35 @@ export async function POST(request: Request) {
         });
       }
 
-      if (reply.say?.trim()) {
-        return NextResponse.json({
-          say: reply.say.trim(),
-          kind: "reply",
-          key: `reply:${addressed.id}`,
-          ...view(),
-        });
+      const say = reply.say?.trim();
+      meeting = await handle(turn, Boolean(say), say ? `answered (${how})` : `heard ${turn.speaker}, nothing to say back`);
+      if (say) {
+        return NextResponse.json({ say, kind: "reply", key: `reply:${turn.id}:${turn.text.length}`, ...view() });
       }
-      // An empty `say` is her judging the remark was not really for her. Fall through.
+      return NextResponse.json({ say: null, reason: meeting.lastDecision?.reason, ...view() });
     } catch (e) {
       // A model failure must not stop the meeting: she stays quiet, and the transcript
       // is still being recorded for the write-up.
       console.warn("[moderator] reply failed:", e instanceof Error ? e.message : e);
+      return quiet(`could not answer: ${e instanceof Error ? e.message : "model error"}`);
     }
   }
 
-  /* 3 ─ has she got something worth saying? */
+  /* 3 ─ a group, and nobody asked her: has she got something worth saying? */
 
   // "Quiet" means never, and the opening's shorter leash must not smuggle her past it.
   const base = COOLDOWN_MS[meeting.activity];
   if (!Number.isFinite(base)) return quiet("set to quiet — only answers when asked");
   const cooldown = meeting.lastSpokeWasOpening ? Math.min(base, OPENING_COOLDOWN_MS) : base;
 
-  // A question asked to the room gets a much shorter leash.
-  //
-  // Pacing exists to stop her editorialising over people, not to make her sit on an
-  // answer somebody is plainly waiting for. Leaving a question hanging because she
-  // spoke six seconds ago is exactly what reads as her having checked out.
-  // The newest line from somebody who is not her. Her own contributions are appended
-  // when the tile confirms them, which can be a tick or two after the fact — so the
-  // literal last line is often hers, and looking at that meant a question addressed to
-  // the room was never seen as one.
-  const newest = [...meeting.transcript].reverse().find((l) => l.speaker !== botName());
-  const asked = Boolean(newest && looksLikeAQuestion(newest.text));
-  const effective = asked ? Math.min(cooldown, 3_000) : cooldown;
+  // A question asked to the room gets a much shorter leash: leaving it hanging because
+  // she spoke six seconds ago is exactly what reads as her having checked out.
+  const effective = looksLikeAQuestion(turn.text) ? Math.min(cooldown, 3_000) : cooldown;
 
   const since = meeting.lastSpokeAt ? Date.now() - meeting.lastSpokeAt : Number.POSITIVE_INFINITY;
   if (since < effective) {
+    // Not marked as handled: once the cooldown lifts she weighs it up after all.
     return quiet(`waiting — ${Math.ceil((effective - since) / 1000)}s of cooldown left`);
-  }
-
-  // Wait for a gap before speaking.
-  //
-  // Captions stream continuously while somebody is talking, so "new words have arrived"
-  // is true almost every tick and is no signal at all. A second of quiet is the signal:
-  // it is the moment a person would take their turn, and it stops her cutting across
-  // the end of somebody's sentence.
-  const quietFor = body.captions?.secondsSinceLast;
-  if (quietFor !== null && quietFor !== undefined && quietFor < 1) {
-    return quiet("somebody is mid-sentence");
-  }
-
-  // A signature rather than a count: folding means the last line grows in place, so a
-  // long uninterrupted remark never changes the length and would otherwise never be
-  // weighed up at all.
-  const signature = transcriptSignature(meeting.transcript);
-  if (signature === meeting.consideredSignature) {
-    return quiet("nothing new said since she last considered");
   }
 
   try {
@@ -322,18 +343,11 @@ export async function POST(request: Request) {
       meeting.lastSpokeAt ? since / 1000 : null,
     );
 
+    meeting = await handle(turn, worth_saying, worth_saying ? "spoke up" : "judged there was nothing worth adding");
     if (worth_saying) {
-      meeting = await updateMeeting((m) => {
-        m.consideredSignature = signature;
-        m.lastDecision = { at: Date.now(), reason: "spoke up" };
-      });
-      return NextResponse.json({ say, kind: "volunteer", key: `volunteer:${signature}`, ...view() });
+      return NextResponse.json({ say, kind: "volunteer", key: `volunteer:${turn.id}:${turn.text.length}`, ...view() });
     }
-
-    meeting = await updateMeeting((m) => {
-      m.consideredSignature = signature;
-    });
-    return quiet("judged there was nothing worth adding");
+    return NextResponse.json({ say: null, reason: meeting.lastDecision?.reason, ...view() });
   } catch (e) {
     console.warn("[moderator] considerSpeaking failed:", e instanceof Error ? e.message : e);
     return quiet(`could not decide: ${e instanceof Error ? e.message : "model error"}`);

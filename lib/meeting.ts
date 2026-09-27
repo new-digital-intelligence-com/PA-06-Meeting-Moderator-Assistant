@@ -20,6 +20,20 @@ export type TranscriptLine = {
   text: string;
   /** epoch ms */
   at: number;
+  /**
+   * The Meet caption block this line is part of. Meet keeps one block per speaker for
+   * as long as they keep talking, so one block can span several turns of a conversation.
+   */
+  block?: string;
+  /** Where in the block's text this line starts. */
+  from?: number;
+  /** The block's full text length when last seen. */
+  full?: number;
+  /**
+   * She has answered this line. Whatever the block says next belongs after her answer,
+   * so it becomes a new line rather than growing this one.
+   */
+  sealed?: boolean;
 };
 
 export type ActionItem = {
@@ -118,8 +132,12 @@ export type Meeting = {
    * revisited. Now anything unconsidered is still waiting when the cooldown lifts.
    */
   consideredUpTo?: number;
-  /** Signature of the transcript when she last weighed up whether to speak. */
-  consideredSignature?: string;
+  /**
+   * The last thing somebody said that she has dealt with — answered, or decided to let
+   * pass — and how long it was then. She takes it up again only once it has grown by
+   * more than Meet's rewriting of it, so each turn gets one response, not one per rewrite.
+   */
+  handled?: { id: string; len: number };
   /** Why she did or did not speak last time, for the control room. */
   lastDecision?: { at: number; reason: string };
   /** What the stage reports about her face and voice — the only window into it. */
@@ -128,6 +146,8 @@ export type Meeting = {
     detail?: string;
     at: number;
     captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
+    /** How many people are in the call, her included, as her browser counts them. */
+    people?: number | null;
   };
   /** Last line index handed to the note-taker, so it only reads what is new. */
   notedUpTo: number;
@@ -197,7 +217,7 @@ function normalise(raw: unknown): Meeting {
     lastSaid: typeof o.lastSaid === "string" ? o.lastSaid : undefined,
     lastSpokeWasOpening: o.lastSpokeWasOpening === true,
     consideredUpTo: typeof o.consideredUpTo === "number" ? o.consideredUpTo : 0,
-    consideredSignature: typeof o.consideredSignature === "string" ? o.consideredSignature : undefined,
+    handled: o.handled && typeof o.handled === "object" ? (o.handled as Meeting["handled"]) : undefined,
     lastDecision: o.lastDecision && typeof o.lastDecision === "object" ? (o.lastDecision as Meeting["lastDecision"]) : undefined,
     stage: o.stage && typeof o.stage === "object" ? (o.stage as Meeting["stage"]) : undefined,
     notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,

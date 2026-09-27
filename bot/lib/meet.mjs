@@ -3,10 +3,10 @@
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { MODE, NAMES, PROFILE, platformArgs, requireChrome, root } from "./config.mjs";
+import { MODE, PROFILE, platformArgs, requireChrome, root } from "./config.mjs";
 import { speech } from "./voice.mjs";
 
-/** The heartbeat. Being named cuts it short — see `wake`. */
+/** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
 /** How long she stays once she is the only one left. */
 const ALONE_MS = 3 * 60_000;
@@ -19,10 +19,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[] }} meeting
  */
 export async function attend(meeting, { log = console.log } = {}) {
-  // Any of her names — captions often hear "Ava" as "Eva".
-  const escaped = NAMES.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const name = new RegExp(`\\b(${escaped.join("|")})\\b`, "i");
-
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   await app.brief({
     title: meeting.title || "Meeting",
@@ -67,6 +63,12 @@ export async function attend(meeting, { log = console.log } = {}) {
   let lastHeardAt = null;
   let speaking = false;
   let wake = () => {};
+  /** Words heard so far in each caption block, to tell new speech from Meet tidying up. */
+  const wordsIn = new Map();
+  /** New words heard in total — what counts as somebody talking. */
+  let wordsHeard = 0;
+  let wordsWhenSheStarted = 0;
+  let pauseTimer = null;
 
   await context.exposeBinding("__avaLog", (_src, m) => log(`  [meet] ${m}`));
   await context.exposeBinding("__avaHeard", (_src, speaker, text, blockId) => {
@@ -81,13 +83,20 @@ export async function attend(meeting, { log = console.log } = {}) {
     if (i >= 0) heard[i] = line;
     else heard.push(line);
 
-    // Somebody talked over her: stop, like a person would.
-    if (speaking) {
+    const words = text.trim().split(/\s+/).length;
+    wordsHeard += Math.max(0, words - (wordsIn.get(id) ?? 0));
+    wordsIn.set(id, Math.max(words, wordsIn.get(id) ?? 0));
+
+    // Somebody talked over her: stop, like a person would. Not for Meet correcting a
+    // caption from a moment ago, which used to cut her off at her first word.
+    if (speaking && wordsHeard - wordsWhenSheStarted >= 3) {
       void page.evaluate(() => window.__ava?.interrupt()).catch(() => {});
       speaking = false;
     }
-    // Named: answer now rather than on the next heartbeat.
-    if (name.test(text)) wake();
+    // A pause is the end of their turn: take it the moment it happens, not on the next
+    // heartbeat.
+    clearTimeout(pauseTimer);
+    pauseTimer = setTimeout(() => wake(), 1100);
   });
   await context.addInitScript({ content: `window.__AVA_MODE = ${JSON.stringify(MODE)};` });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
@@ -112,6 +121,9 @@ export async function attend(meeting, { log = console.log } = {}) {
   let pending = null;
   let aloneSince = null;
   let over = false;
+  /** How many people are in the call, her included — two means everything is said to her. */
+  let people = null;
+  let lastReason = null;
   /** Ended from the control room, which then writes and sends the notes itself. */
   let endedElsewhere = false;
 
@@ -128,18 +140,36 @@ export async function attend(meeting, { log = console.log } = {}) {
     pending = null;
 
     try {
+      const wordsBefore = wordsHeard;
       const out = await app.tick({
         lines,
         idle: !speaking,
         delivered: delivered?.key,
         deliveredText: delivered?.text,
+        deliveredAt: delivered?.at,
         face: speaking ? "speaking" : "live",
         captions: {
           socket: true,
           received: heardCount,
-          secondsSinceLast: lastHeardAt ? Math.round((Date.now() - lastHeardAt) / 1000) : null,
+          secondsSinceLast: lastHeardAt ? Math.round((Date.now() - lastHeardAt) / 100) / 10 : null,
         },
+        people,
       });
+
+      // Why she is quiet, whenever that changes — "she stopped talking" should be
+      // answerable from this log alone.
+      if (out.reason && out.reason !== lastReason && !/mid-sentence|still speaking/.test(out.reason)) {
+        log(`  · ${out.reason}`);
+      }
+      if (out.reason) lastReason = out.reason;
+
+      // They carried on talking while she was deciding: what she was about to say
+      // answers something they have already moved past. The server hears the rest and
+      // she answers that instead.
+      if (out.say && wordsHeard - wordsBefore >= 4) {
+        log(`  (dropped — they kept talking) ${out.say}`);
+        out.say = null;
+      }
 
       // Ended from the control room: leave the call. Without this her Chrome stayed in
       // the meeting after you had ended it, then sent the notes again when it finally left.
@@ -151,7 +181,9 @@ export async function attend(meeting, { log = console.log } = {}) {
 
       if (out.say && !speaking) {
         speaking = true;
+        wordsWhenSheStarted = wordsHeard;
         const { say, key } = out;
+        const at = Date.now();
         log(`  ▸ ${say}`);
         // Not awaited: the loop keeps listening while she talks, which is what lets
         // somebody interrupt her.
@@ -161,11 +193,13 @@ export async function attend(meeting, { log = console.log } = {}) {
             : speech(say).then((audio) => page.evaluate((a) => window.__ava.play(a), audio));
         void spoken
           .then((ok) => {
-            if (ok && key) pending = { key, text: say };
+            if (ok && key) pending = { key, text: say, at };
+            else log("  (could not say it)");
           })
-          .catch(() => {})
+          .catch((e) => log(`  (could not say it: ${e.message})`))
           .finally(() => {
             speaking = false;
+            wake();
           });
       }
     } catch (e) {
@@ -175,11 +209,27 @@ export async function attend(meeting, { log = console.log } = {}) {
 
     // Has the meeting ended, or has everybody gone?
     const state = await page
-      .evaluate(() => ({
-        inCall: Boolean(document.querySelector('[aria-label*="Leave call" i]')),
-        text: document.body?.innerText?.slice(0, 4000) ?? "",
-      }))
-      .catch(() => ({ inCall: false, text: "" }));
+      .evaluate(() => {
+        // Everyone in the call, her included: one tile per person, and the People
+        // button's badge once there are more people than tiles.
+        const tiles = new Set(
+          [...document.querySelectorAll("[data-participant-id]")].map((e) => e.getAttribute("data-participant-id")),
+        ).size;
+        let badge = 0;
+        for (const b of document.querySelectorAll("button[aria-label]")) {
+          if (!/people|everyone|participants/i.test(b.getAttribute("aria-label") ?? "")) continue;
+          const n = (b.textContent ?? "").match(/\d+/);
+          if (n) badge = Math.max(badge, Number(n[0]));
+        }
+        return {
+          inCall: Boolean(document.querySelector('[aria-label*="Leave call" i]')),
+          text: document.body?.innerText?.slice(0, 4000) ?? "",
+          people: Math.max(tiles, badge) || null,
+        };
+      })
+      .catch(() => ({ inCall: false, text: "", people: null }));
+    if (state.people !== people && state.people) log(`  ${state.people} in the call`);
+    people = state.people;
 
     if (!state.inCall || /you left the meeting|meeting has ended|you've been removed|return to home screen/i.test(state.text)) {
       await finish("the meeting ended");

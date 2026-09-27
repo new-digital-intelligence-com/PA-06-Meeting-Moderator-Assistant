@@ -20,6 +20,8 @@ export async function speech(text) {
     {
       method: "POST",
       headers: { "xi-api-key": key, "Content-Type": "application/json" },
+      // A hung request would leave her "about to speak", and so silent, for good.
+      signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
         text,
         model_id: process.env.ELEVENLABS_MODEL_ID || DEFAULT_MODEL,

@@ -42,17 +42,6 @@ export const CHROME =
  */
 export const MODE = process.env.AVA_MODE === "avatar" ? "avatar" : "voice";
 
-/**
- * The names she answers to. Captions routinely hear "Ava" as "Eva", so both count unless
- * AVA_ALIASES says otherwise.
- */
-export const NAMES = [
-  (process.env.BOT_NAME || "Ava").split(/[—-]/)[0].trim(),
-  ...(process.env.AVA_ALIASES ?? "Eva").split(","),
-]
-  .map((n) => n.trim())
-  .filter(Boolean);
-
 /** Running in the server container rather than on somebody's desktop. */
 export const IN_CONTAINER = process.env.AVA_CONTAINER === "1";
 

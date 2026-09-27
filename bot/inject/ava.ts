@@ -238,7 +238,9 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
           source.onended = () => r();
         });
         source.start();
-        await ended;
+        // A suspended audio context never fires `ended`, which would leave her
+        // "speaking" — and so silent — for the rest of the meeting.
+        await Promise.race([ended, new Promise((r) => setTimeout(r, buffer.duration * 1000 + 2000))]);
         return true;
       } catch (e) {
         log(`play failed: ${e instanceof Error ? e.message : e}`);
