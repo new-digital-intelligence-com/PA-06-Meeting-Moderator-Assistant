@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Vendored third-party bundles served as static assets.
     "public/**",
+    // The runner is its own package with its own dependencies, and bot/dist is a bundle.
+    "bot/**",
   ]),
 ]);
 

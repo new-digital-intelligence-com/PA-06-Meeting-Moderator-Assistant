@@ -23,14 +23,14 @@ function key(): Buffer {
   return crypto.createHash("sha256").update(secret).digest();
 }
 
-function encrypt(value: string): string {
+export function encrypt(value: string): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(ALG, key(), iv);
   const ct = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
   return Buffer.concat([iv, cipher.getAuthTag(), ct]).toString("base64url");
 }
 
-function decrypt(value: string): string | null {
+export function decrypt(value: string): string | null {
   try {
     const raw = Buffer.from(value, "base64url");
     const iv = raw.subarray(0, 12);

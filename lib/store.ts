@@ -28,6 +28,9 @@ export type StoreKind = "redis" | "mongo" | "file";
 export type Store = {
   read(): Promise<string | null>;
   write(value: string): Promise<void>;
+  /** Any other small value, under its own key — her Google sign-in, for one. */
+  readKey(key: string): Promise<string | null>;
+  writeKey(key: string, value: string): Promise<void>;
   /** Read-modify-write, serialised against every other writer. */
   withLock<T>(fn: () => Promise<T>): Promise<T>;
   readonly kind: StoreKind;
@@ -70,6 +73,12 @@ function redisStore(creds: { url: string; token: string }): Store {
     },
     async write(value) {
       await command(["SET", KEY, value]);
+    },
+    async readKey(key) {
+      return command<string | null>(["GET", key]);
+    },
+    async writeKey(key, value) {
+      await command(["SET", key, value]);
     },
     async withLock(fn) {
       const token = crypto.randomBytes(12).toString("hex");
@@ -133,6 +142,13 @@ function mongoStore(uri: string): Store {
     async write(value) {
       await (await collection()).updateOne({ _id: KEY }, { $set: { value } }, { upsert: true });
     },
+    async readKey(key) {
+      const doc = await (await collection()).findOne({ _id: key });
+      return doc?.value ?? null;
+    },
+    async writeKey(key, value) {
+      await (await collection()).updateOne({ _id: key }, { $set: { value } }, { upsert: true });
+    },
     async withLock(fn) {
       const col = await collection();
       const token = crypto.randomBytes(12).toString("hex");
@@ -187,11 +203,35 @@ function fileStore(): Store {
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, value, "utf8");
     },
+    async readKey(key) {
+      try {
+        return await fs.readFile(keyFile(key), "utf8");
+      } catch {
+        return null;
+      }
+    },
+    async writeKey(key, value) {
+      await fs.mkdir(path.dirname(keyFile(key)), { recursive: true });
+      await fs.writeFile(keyFile(key), value, "utf8");
+    },
     async withLock(fn) {
       const run = queue.then(fn, fn);
       queue = run.catch(() => undefined);
       return run;
     },
+  };
+}
+
+/** A safe filename for a key: "google:ava" → data/google_ava.txt. */
+function keyFile(key: string) {
+  return path.join(process.cwd(), "data", `${key.replace(/[^a-z0-9_-]/gi, "_")}.txt`);
+}
+
+/** One named value, whichever backend is in use. */
+export function redisOrMongoKey(key: string) {
+  return {
+    read: () => store().readKey(key),
+    write: (value: string) => store().writeKey(key, value),
   };
 }
 

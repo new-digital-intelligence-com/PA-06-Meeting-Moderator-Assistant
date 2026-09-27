@@ -1,0 +1,20 @@
+{
+  "name": "ava-runner",
+  "private": true,
+  "type": "module",
+  "description": "Ava in person: a real Chrome, signed in as her own Google account, that joins the meetings she is invited to.",
+  "scripts": {
+    "build": "node build.mjs",
+    "login": "node login.mjs",
+    "join": "node build.mjs && node join.mjs",
+    "watch": "node build.mjs && node watch.mjs",
+    "check": "node build.mjs && node check.mjs"
+  },
+  "dependencies": {
+    "@anam-ai/js-sdk": "^4.27.0",
+    "playwright-core": "^1.55.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

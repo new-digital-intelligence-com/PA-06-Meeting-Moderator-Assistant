@@ -212,7 +212,19 @@ Anything less than ten minutes away and she simply goes now: Recall needs that m
 notice to guarantee a booked bot is ready, and if the meeting is about to start you want
 her there anyway.
 
-## Giving her her own Google account
+## Ava in person — her own Google account (recommended)
+
+She can attend as **herself**: `ava@new-digital-intelligence.com`, a normal member of the
+Workspace, in a real signed-in Chrome, walking into whatever she is invited to at the
+start time. No Recall, no SSO, no separate Workspace, no knocking. Invite her like anybody
+else and she turns up; the invite's description is her briefing, and afterwards she mails
+the notes to the guests from her own account.
+
+That is the runner in [`bot/`](bot/README.md) — setup is five steps there.
+
+## Giving her her own Google account through Recall (alternative)
+
+Only relevant if you keep using Recall bots rather than the runner above.
 
 By default she joins as a **guest** called `BOT_NAME`, and somebody in the meeting has to
 let her in. Google screens suspected bots into a queue that defaults to denying, so on a

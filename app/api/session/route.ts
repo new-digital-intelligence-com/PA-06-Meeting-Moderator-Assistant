@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isConfigured as recallConfigured, signedIn } from "@/lib/recall";
+import { avaEmail } from "@/lib/ava";
 import { readSession } from "@/lib/session";
 import { isConfigured as anamConfigured } from "@/lib/anam";
 import { storeDiagnostics, storeKind } from "@/lib/store";
@@ -22,6 +23,10 @@ export async function GET() {
     botName: process.env.BOT_NAME || "Ava — Moderator",
     store: storeKind(),
     signedIn: signedIn(),
+    // Her own Google account — the one she reads invites from and sends notes as.
+    avaAccount: await avaEmail(),
+    avaExpected: process.env.AVA_EMAIL || null,
+    runnerKey: Boolean(process.env.AVA_RUNNER_KEY),
     // Names only, never values — enough to tell a missing variable from a prefixed one.
     storage: storeDiagnostics(),
     recallRegion: process.env.RECALL_REGION || "us-west-2 (default — unset)",

@@ -30,7 +30,7 @@ export function redirectUri() {
   );
 }
 
-export function buildAuthUrl(state: string) {
+export function buildAuthUrl(state: string, loginHint?: string) {
   const { client_id } = creds();
   const params = new URLSearchParams({
     client_id,
@@ -39,9 +39,12 @@ export function buildAuthUrl(state: string) {
     scope: GOOGLE_SCOPES.join(" "),
     access_type: "offline",
     include_granted_scopes: "true",
-    prompt: "consent",
+    // select_account as well as consent: connecting Ava is done from a browser that is
+    // usually signed in as somebody else, and Google would otherwise quietly pick them.
+    prompt: loginHint ? "select_account consent" : "consent",
     state,
   });
+  if (loginHint) params.set("login_hint", loginHint);
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 

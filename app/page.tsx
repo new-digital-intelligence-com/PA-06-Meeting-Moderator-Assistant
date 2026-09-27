@@ -1,6 +1,7 @@
 import ControlRoom from "@/components/ControlRoom";
 import { elapsed, getMeeting } from "@/lib/meeting";
 import { isConfigured as recallConfigured, signedIn } from "@/lib/recall";
+import { avaEmail } from "@/lib/ava";
 import { readSession } from "@/lib/session";
 import { storeKind } from "@/lib/store";
 import { isConfigured as anamConfigured } from "@/lib/anam";
@@ -41,6 +42,10 @@ export default async function Home({
         botName: process.env.BOT_NAME || "Ava — Moderator",
         store: storeKind(),
         signedIn: signedIn(),
+        // Her own Google account — the one she reads invites from and sends notes as.
+        avaAccount: await avaEmail(),
+        avaExpected: process.env.AVA_EMAIL || null,
+        runnerKey: Boolean(process.env.AVA_RUNNER_KEY),
         // Both are needed to complete a sign-in, and a missing one fails it silently:
         // without SESSION_SECRET the callback cannot encrypt the cookie it just earned.
         sessionSecret: Boolean(process.env.SESSION_SECRET),

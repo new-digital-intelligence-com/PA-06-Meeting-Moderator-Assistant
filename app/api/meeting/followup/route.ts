@@ -3,6 +3,7 @@ import { GoogleClient } from "@/lib/google";
 import { getMeeting, updateMeeting } from "@/lib/meeting";
 import { composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
 import { readSession, sessionCookie } from "@/lib/session";
+import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
 import { createDraft, sendEmail } from "@/lib/workspace";
 
 export const runtime = "nodejs";
@@ -26,7 +27,11 @@ export async function POST(request: Request) {
   }
 
   const session = await readSession();
-  const sender = session.google?.email ?? "the organiser";
+  // From the control room it is whoever is signed in there. From the runner, at the end
+  // of a meeting nobody was watching, it is her own stored account — never anybody's
+  // for a caller that merely knows the URL, since this sends mail.
+  const runner = isRunner(request);
+  const sender = session.google?.email ?? (runner ? await avaEmail() : null) ?? "the organiser";
   let meeting = await getMeeting();
 
   if (!meeting.transcript.length) {
@@ -68,7 +73,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: null });
   }
 
-  const google = GoogleClient.fromSession(session);
+  const google = GoogleClient.fromSession(session) ?? (runner ? await avaGoogle() : null);
   if (!google) return NextResponse.json({ error: "Google is not connected." }, { status: 401 });
   if (!to) {
     return NextResponse.json(

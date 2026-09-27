@@ -90,6 +90,12 @@ export type Meeting = {
   botId?: string;
   /** When she is due to join, epoch ms. Unset means she joined as soon as she was sent. */
   joinAt?: number;
+  /**
+   * "self" when she is attending in her own signed-in Chrome rather than as a Recall bot.
+   * There is no bot id in that case, and without this the meeting would be mistaken for
+   * a rehearsal — whose ending throws the transcript away instead of writing it up.
+   */
+  attendedBy?: "self";
   startedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
@@ -176,6 +182,7 @@ function normalise(raw: unknown): Meeting {
       ? (o.status as MeetingStatus)
       : "draft",
     joinAt: typeof o.joinAt === "number" ? o.joinAt : undefined,
+    attendedBy: o.attendedBy === "self" ? "self" : undefined,
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
     endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,

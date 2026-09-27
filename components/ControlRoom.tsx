@@ -26,6 +26,10 @@ type Config = {
   store: "redis" | "mongo" | "file";
   /** She has a Google account of her own, rather than knocking as a guest. */
   signedIn: boolean;
+  /** The Google account she reads invites from and sends notes as, if connected. */
+  avaAccount: string | null;
+  avaExpected: string | null;
+  runnerKey: boolean;
 };
 
 type Action = { id: string; text: string; owner?: string; due?: string };
@@ -42,6 +46,7 @@ type Meeting = {
   status: "draft" | "scheduled" | "joining" | "live" | "ended";
   botId?: string;
   joinAt?: number;
+  attendedBy?: "self";
   transcript: TranscriptLine[];
   actions: Action[];
   files: SharedFile[];
@@ -326,7 +331,8 @@ export default function ControlRoom({
 
   const status = meeting.status;
   const planning = status === "draft";
-  const rehearsing = status === "live" && !meeting.botId;
+  // No Recall bot and not her own Chrome either: nobody is in a call.
+  const rehearsing = status === "live" && !meeting.botId && meeting.attendedBy !== "self";
   const ready = config.googleConnected && config.recall && config.anam && config.publicUrlReachable;
   const name = config.botName.split("—")[0].trim();
 
@@ -354,6 +360,22 @@ export default function ControlRoom({
             }
           />
           <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY + RECALL_REGION" />
+          {config.avaAccount ? (
+            <Pill
+              ok
+              label={`Ava: ${config.avaAccount}`}
+              hint="Her own Google account — she reads her invites from it and sends the notes as her."
+            />
+          ) : (
+            <a
+              href="/api/auth/google?as=ava"
+              title={`Connect her account${config.avaExpected ? ` (${config.avaExpected})` : ""} so she can read her invites and send notes as herself.`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              Connect Ava&apos;s Google
+            </a>
+          )}
           {/* Not a fault when off — she still works as a guest. Amber, not red. */}
           <span
             title={
@@ -583,7 +605,9 @@ export default function ControlRoom({
         /* ── in the room ──────────────────────────────────────────────────── */
         <Section
           title={
-            status === "scheduled"
+            status === "live" && meeting.attendedBy === "self"
+              ? "In the meeting — as herself"
+              : status === "scheduled"
               ? `Booked for ${clock(meeting.joinAt)}`
               : status === "joining"
                 ? config.signedIn

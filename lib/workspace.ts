@@ -183,3 +183,93 @@ export async function upcomingMeetings(google: GoogleClient, timezone: string) {
     })
     .filter((e) => e.meetingUrl);
 }
+
+type InviteEvent = Omit<CalendarEvent, "attendees"> & {
+  status?: string;
+  end?: { dateTime?: string; date?: string };
+  organizer?: { email?: string; displayName?: string };
+  attendees?: {
+    email: string;
+    displayName?: string;
+    self?: boolean;
+    resource?: boolean;
+    responseStatus?: string;
+  }[];
+};
+
+export type Invite = {
+  id: string;
+  title: string;
+  /** epoch ms */
+  start: number;
+  end: number;
+  meetingUrl: string;
+  /** The invite's own description, which becomes her briefing. */
+  description: string;
+  organizer: string;
+  /** Real people on the invite, not rooms and not her. The notes go to them. */
+  guests: { email: string; name?: string }[];
+};
+
+/**
+ * The meetings she has been invited to, soonest first.
+ *
+ * Singled out from `upcomingMeetings` because her needs differ: recurring meetings must
+ * be expanded into their actual occurrences (singleEvents does this — parsing recurrence
+ * rules by hand is how a weekly stand-up gets silently skipped), meetings she declined
+ * must be left alone, and the guest list must exclude meeting rooms and herself or the
+ * notes get mailed to a conference room.
+ */
+export async function avaInvites(google: GoogleClient, hoursAhead = 12): Promise<Invite[]> {
+  const now = Date.now();
+  const params = new URLSearchParams({
+    // A little into the past, so a meeting that started a few minutes ago — or that
+    // the runner was restarted during — is still picked up.
+    timeMin: new Date(now - 30 * 60_000).toISOString(),
+    timeMax: new Date(now + hoursAhead * 60 * 60_000).toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "25",
+  });
+  const data = await google.request<{ items?: InviteEvent[] }>(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+  );
+
+  return (data.items ?? [])
+    .filter((e) => e.status !== "cancelled")
+    // All-day entries are not meetings she can walk into.
+    .filter((e) => Boolean(e.start?.dateTime))
+    .filter((e) => (e.attendees ?? []).find((a) => a.self)?.responseStatus !== "declined")
+    .map((e) => {
+      const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri;
+      return {
+        id: e.id,
+        title: e.summary ?? "Meeting",
+        start: Date.parse(e.start!.dateTime!),
+        end: Date.parse(e.end?.dateTime ?? e.start!.dateTime!),
+        meetingUrl: e.hangoutLink ?? video ?? "",
+        description: stripHtml(e.description ?? ""),
+        organizer: e.organizer?.displayName || e.organizer?.email || "",
+        guests: (e.attendees ?? [])
+          .filter((a) => !a.self && !a.resource && a.email)
+          .map((a) => ({ email: a.email.toLowerCase(), name: a.displayName })),
+      };
+    })
+    .filter((e) => /^https:\/\/meet\.google\.com\//.test(e.meetingUrl));
+}
+
+/** Calendar descriptions are often HTML; she wants the words. */
+function stripHtml(s: string) {
+  return s
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
