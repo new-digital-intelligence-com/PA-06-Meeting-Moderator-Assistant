@@ -342,7 +342,10 @@ export default function ControlRoom({
         <div>
           <h1 className="text-2xl font-semibold">Meeting Moderator</h1>
           <p className="text-sm text-white/40">
-            {name} sits in on your Google Meet, answers when asked, and emails the notes afterwards.
+            {name} sits in on your Google Meet, answers when asked, and emails the notes afterwards.{" "}
+            <a href="/docs" className="text-sky-300/80 underline decoration-sky-400/40 hover:text-sky-200">
+              How she works →
+            </a>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
