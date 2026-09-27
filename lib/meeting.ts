@@ -110,6 +110,12 @@ export type Meeting = {
    * a rehearsal — whose ending throws the transcript away instead of writing it up.
    */
   attendedBy?: "self";
+  /**
+   * Sent from the control room to her runner, rather than found on her calendar — how
+   * she gets into a Teams meeting. `at` is when to go; `takenAt` is when the runner
+   * picked it up, so it is only ever taken once.
+   */
+  dispatch?: { at: number; takenAt?: number };
   startedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
@@ -203,6 +209,7 @@ function normalise(raw: unknown): Meeting {
       : "draft",
     joinAt: typeof o.joinAt === "number" ? o.joinAt : undefined,
     attendedBy: o.attendedBy === "self" ? "self" : undefined,
+    dispatch: o.dispatch && typeof o.dispatch === "object" ? (o.dispatch as Meeting["dispatch"]) : undefined,
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
     endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,

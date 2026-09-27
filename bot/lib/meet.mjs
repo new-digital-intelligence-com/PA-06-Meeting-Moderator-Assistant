@@ -1,11 +1,13 @@
-// Ava attending one meeting, in person: her own signed-in Chrome, her avatar as the
-// camera, her voice as the microphone, Meet's captions as her ears.
+// Ava attending one meeting, in person: her own Chrome, her voice as the microphone (and
+// in avatar mode her face as the camera), the meeting's own captions as her ears. What
+// differs between Google Meet and Teams lives in platforms.mjs.
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
 import { FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
 import { speech } from "./voice.mjs";
+import { platformOf } from "./platforms.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -33,18 +35,25 @@ function readIdleClip(avatarId) {
  * Attends one meeting from start to finish, then writes and sends the notes.
  *
  * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[] }} meeting
+ * @param {{ log?: (m: string) => void, briefed?: boolean }} options `briefed`: sent from the
+ *   control room, whose briefing is already on the server and must not be overwritten.
  */
-export async function attend(meeting, { log = console.log } = {}) {
+export async function attend(meeting, { log = console.log, briefed = false } = {}) {
+  const platform = platformOf(meeting.meetingUrl);
+  if (!platform) throw new Error(`Not a Google Meet or Teams link: ${meeting.meetingUrl}`);
+
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
-  await app.brief({
-    title: meeting.title || "Meeting",
-    meetingUrl: meeting.meetingUrl,
-    context: meeting.context || "",
-    recipients: meeting.recipients || [],
-    joinAt: null,
-  });
+  if (!briefed) {
+    await app.brief({
+      title: meeting.title || "Meeting",
+      meetingUrl: meeting.meetingUrl,
+      context: meeting.context || "",
+      recipients: meeting.recipients || [],
+      joinAt: null,
+    });
+  }
   await app.attend();
-  log(`  briefed: ${meeting.title || meeting.meetingUrl}`);
+  log(`  ${briefed ? "sent from the control room" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name})`);
 
   // 2 — her browser.
   const context = await chromium.launchPersistentContext(PROFILE, {
@@ -71,9 +80,10 @@ export async function attend(meeting, { log = console.log } = {}) {
       ...platformArgs(),
     ],
   });
-  await context.grantPermissions(["camera", "microphone"], { origin: "https://meet.google.com" });
+  for (const origin of platform.origins) await context.grantPermissions(["camera", "microphone"], { origin });
 
-  // 3 — her ears. Meet labels your own captions "You", which is her: never an input.
+  // 3 — her ears. Her own words come back as captions too ("You" in Meet, her name in
+  // Teams): never an input.
   const heard = [];
   let heardCount = 0;
   let lastHeardAt = null;
@@ -91,7 +101,7 @@ export async function attend(meeting, { log = console.log } = {}) {
 
   await context.exposeBinding("__avaLog", (_src, m) => log(`  [meet] ${m}`));
   await context.exposeBinding("__avaHeard", (_src, speaker, text, blockId) => {
-    if (!text || /^you$/i.test(speaker)) return;
+    if (!text || platform.isSelf(speaker)) return;
     heardCount++;
     lastHeardAt = Date.now();
     // Meet rewrites a caption as the sentence goes on. Only the latest version of each
@@ -148,9 +158,7 @@ export async function attend(meeting, { log = console.log } = {}) {
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 
   const page = context.pages()[0] ?? (await context.newPage());
-  const url = new URL(meeting.meetingUrl);
-  url.searchParams.set("hl", "en"); // English UI, so the buttons below have names we know
-  await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  await page.goto(platform.url(meeting.meetingUrl), { waitUntil: "domcontentloaded" });
 
   // 4 — her voice (and face, in avatar mode). Meet is already asking for devices; it
   // waits until these are up.
@@ -165,12 +173,36 @@ export async function attend(meeting, { log = console.log } = {}) {
       startWith = { token: s.sessionToken, idleClip: readIdleClip(s.avatarId) };
     }
   }
-  await page.evaluate((o) => window.__ava.start(o), startWith);
-  log(MODE === "avatar" ? "  her voice is up, and her face" : "  her voice is up (voice mode, no camera)");
+  // Started on whichever page she is on, and again if it navigates: Teams' launcher loads
+  // a new page, whose fresh copy of her script would otherwise leave Teams waiting for a
+  // microphone that never comes.
+  let announcedVoice = false;
+  const ensureStarted = async () => {
+    const started = await page.evaluate(() => Boolean(window.__ava?.started?.())).catch(() => true);
+    if (started) return;
+    await page.evaluate((o) => window.__ava?.start(o), startWith).catch(() => {});
+    // The first Anam token is used up by the first start; later ones fetch their own.
+    startWith = { ...startWith, token: undefined };
+    if (!announcedVoice) {
+      announcedVoice = true;
+      log(MODE === "avatar" ? "  her voice is up, and her face" : "  her voice is up (voice mode, no camera)");
+    }
+  };
+  // Meet asks for devices on the first page. Teams only on its pre-join page, and starting
+  // her on the launcher before that would spend a face session on a page about to vanish.
+  if (platform.id === "meet") await ensureStarted();
 
   // 5 — walk in.
-  await join(page, log, MODE);
-  await captionsOn(page, log);
+  try {
+    await platform.join(page, log, MODE, { ready: ensureStarted });
+  } catch (e) {
+    await context.close().catch(() => {});
+    // Nobody let her in, or the page was not what we expected: close the meeting so the
+    // control room does not show her as in it.
+    await app.stop().catch(() => {});
+    throw e;
+  }
+  await platform.captionsOn(page, log);
   log("  in the meeting");
 
   // 6 — the conversation.
@@ -190,6 +222,7 @@ export async function attend(meeting, { log = console.log } = {}) {
   process.once("SIGINT", () => void finish("stopped by you"));
 
   while (!over) {
+    await ensureStarted();
     const lines = heard.splice(0);
     const delivered = pending;
     pending = null;
@@ -264,35 +297,17 @@ export async function attend(meeting, { log = console.log } = {}) {
 
     // Has the meeting ended, or has everybody gone?
     const state = await page
-      .evaluate(() => {
-        // Everyone in the call, her included: one tile per person, and the People
-        // button's badge once there are more people than tiles.
-        const tiles = new Set(
-          [...document.querySelectorAll("[data-participant-id]")].map((e) => e.getAttribute("data-participant-id")),
-        ).size;
-        let badge = 0;
-        for (const b of document.querySelectorAll("button[aria-label]")) {
-          if (!/people|everyone|participants/i.test(b.getAttribute("aria-label") ?? "")) continue;
-          const n = (b.textContent ?? "").match(/\d+/);
-          if (n) badge = Math.max(badge, Number(n[0]));
-        }
-        return {
-          inCall: Boolean(document.querySelector('[aria-label*="Leave call" i]')),
-          text: document.body?.innerText?.slice(0, 4000) ?? "",
-          people: Math.max(tiles, badge) || null,
-          face: window.__ava?.face?.() ?? null,
-        };
-      })
-      .catch(() => ({ inCall: false, text: "", people: null, face: null }));
+      .evaluate(platform.state)
+      .catch(() => ({ inCall: false, ended: false, alone: false, people: null, face: null }));
     if (state.face) faceState = state.face;
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
 
-    if (!state.inCall || /you left the meeting|meeting has ended|you've been removed|return to home screen/i.test(state.text)) {
+    if (!state.inCall || state.ended) {
       await finish("the meeting ended");
       break;
     }
-    if (/you're the only one here|only one here/i.test(state.text)) {
+    if (state.alone) {
       aloneSince ??= Date.now();
       if (Date.now() - aloneSince > ALONE_MS) {
         await finish("everybody else left");
@@ -306,11 +321,7 @@ export async function attend(meeting, { log = console.log } = {}) {
   }
 
   // 7 — after: leave, then the notes.
-  await page
-    .getByRole("button", { name: /leave call/i })
-    .first()
-    .click({ timeout: 3000 })
-    .catch(() => {});
+  await platform.leave(page).catch(() => {});
   await context.close().catch(() => {});
 
   // The control room is already writing the notes when it ended the meeting. Writing
@@ -327,69 +338,4 @@ export async function attend(meeting, { log = console.log } = {}) {
   } catch (e) {
     log(`  notes not sent: ${e.message}`);
   }
-}
-
-/** Gets from the pre-join screen into the call. */
-async function join(page, log, mode = "voice") {
-  // A guest name box means she is not signed in, and would arrive as an anonymous
-  // stranger knocking at the door. Refuse rather than do that.
-  const guest = page.getByRole("textbox", { name: /your name/i });
-  if (await guest.isVisible({ timeout: 8000 }).catch(() => false)) {
-    throw new Error("She is not signed in to Google in this profile. Run `npm run login` first.");
-  }
-
-  // Meet layers tips and announcements over the pre-join screen ("Got it", "Dismiss"),
-  // and one sitting on top of the Join button is enough to strand her in the lobby.
-  await dismissPopups(page);
-
-  // Make sure camera and microphone are on before walking in — Meet remembers the last
-  // choice per account, and she must never arrive muted with her camera off.
-  // In voice mode there is no camera to turn on — she joins with her profile photo.
-  const wanted = mode === "avatar" ? [/turn on microphone/i, /turn on camera/i] : [/turn on microphone/i];
-  for (const label of wanted) {
-    const b = page.getByRole("button", { name: label }).first();
-    if (await b.isVisible({ timeout: 1500 }).catch(() => false)) await b.click().catch(() => {});
-  }
-
-  const button = page.getByRole("button", { name: /^(join now|ask to join|join)$/i }).first();
-  await button.waitFor({ state: "visible", timeout: 60_000 });
-  const label = (await button.textContent())?.trim();
-  await button.click();
-  log(`  pressed "${label}"`);
-  // A confirmation can follow the click in voice mode ("continue without camera?").
-  await dismissPopups(page);
-
-  if (/ask to join/i.test(label ?? "")) {
-    log("  she is waiting to be let in — this meeting does not recognise her as invited");
-  }
-
-  await page.waitForSelector('[aria-label*="Leave call" i]', { timeout: 10 * 60_000 });
-}
-
-/** Clears Meet's tips and one-off announcements, which otherwise block the buttons. */
-async function dismissPopups(page) {
-  for (let round = 0; round < 3; round++) {
-    let cleared = false;
-    // "Continue without camera" / "Join anyway": in voice mode she has no camera on
-    // purpose, and Meet can ask to confirm that before letting her in.
-    for (const label of [/^got it$/i, /^dismiss$/i, /^no thanks$/i, /^close$/i, /continue without (camera|video)/i, /^join anyway$/i]) {
-      const b = page.getByRole("button", { name: label }).first();
-      if (await b.isVisible({ timeout: 800 }).catch(() => false)) {
-        await b.click().catch(() => {});
-        cleared = true;
-      }
-    }
-    if (!cleared) return;
-  }
-}
-
-/** Her ears are Meet's own captions, so they must be on. */
-async function captionsOn(page, log) {
-  const on = page.getByRole("button", { name: /turn on captions/i }).first();
-  if (await on.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await on.click().catch(() => {});
-  } else {
-    await page.keyboard.press("c").catch(() => {});
-  }
-  log("  captions on");
 }

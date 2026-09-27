@@ -1,9 +1,9 @@
 /**
- * Runs inside meet.google.com, before Meet's own code, in the Chrome that is signed in
- * as Ava.
+ * Runs inside the meeting page — Google Meet or Microsoft Teams — before the page's own
+ * code, in the Chrome that is signed in as Ava.
  *
- * Meet asks the browser for a camera and a microphone like any web page does, through
- * navigator.mediaDevices. This answers those requests with Ava herself.
+ * Meet and Teams ask the browser for a camera and a microphone like any web page does,
+ * through navigator.mediaDevices. This answers those requests with Ava herself.
  *
  *   voice   (default) — no camera; she joins with her profile photo, and her microphone
  *           is a live audio track we play her speech into. Nothing to connect to, so
@@ -62,6 +62,11 @@ type AvaApi = {
   speaking(): boolean;
   /** "live", "connecting" or "down" — and "voice" in voice mode. */
   face(): string;
+  /**
+   * Whether `start` has run on this page. A page that navigates (Teams' launcher does)
+   * gets a fresh copy of this script, which has to be started again.
+   */
+  started(): boolean;
 };
 
 /** Avatar mode's audio format, which is what Anam lip-syncs to. */
@@ -86,8 +91,16 @@ const log = (m: string) => {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const bytesOf = (base64: string) => Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 
-// Init scripts run in every frame and on every navigation. Only the Meet page itself.
-if (window.top === window && location.hostname === "meet.google.com" && !window.__ava) {
+/** Which meeting page this is, if any. */
+const platform =
+  location.hostname === "meet.google.com"
+    ? "meet"
+    : /^teams\.(microsoft\.com|live\.com|cloud\.microsoft)$/.test(location.hostname)
+      ? "teams"
+      : null;
+
+// Init scripts run in every frame and on every navigation. Only the meeting page itself.
+if (window.top === window && platform && !window.__ava) {
   const mode = window.__AVA_MODE === "avatar" ? "avatar" : "voice";
   const options: FaceOptions = { sessionSeconds: 180, idleSeconds: 45, ...window.__AVA_FACE };
   let isSpeaking = false;
@@ -465,7 +478,43 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
   const looksLikeChrome = (line: string) =>
     /^[a-z]+(_[a-z]+)*$/.test(line) || /^(jump to bottom|summari[sz]e captions|close|captions)$/i.test(line);
 
+  /** Hands one caption block to the runner, if its text changed since last time. */
+  const report = (block: Element, speaker: string, text: string) => {
+    if (!text || text === sent.get(block)) return;
+    sent.set(block, text);
+    try {
+      window.__avaHeard?.(speaker, text, idOf(block));
+    } catch {
+      /* runner not listening yet */
+    }
+  };
+
+  /**
+   * Teams: each caption entry holds its author and its text, marked with `data-tid`
+   * attributes, and like Meet it rewrites the entry in place as the sentence goes on.
+   * The entry is found by climbing from the text to the nearest element that also holds
+   * an author — climbing further would reach the whole list and the first author in it.
+   */
+  const readTeamsCaptions = () => {
+    const texts = document.querySelectorAll<HTMLElement>('[data-tid="closed-caption-text"]');
+    for (const t of Array.from(texts)) {
+      let entry: HTMLElement | null = t.parentElement;
+      let author: Element | null = null;
+      for (let i = 0; i < 6 && entry; i++) {
+        author = entry.querySelector('[data-tid="author"]');
+        if (author) break;
+        entry = entry.parentElement;
+      }
+      report(entry ?? t, author?.textContent?.trim() || "Someone", t.innerText.trim());
+    }
+    return texts.length > 0;
+  };
+
   const readCaptions = () => {
+    // Teams, when its own markers are there; otherwise the generic reader below, which is
+    // how Meet draws them and a fair guess at anything labelled as captions.
+    if (platform === "teams" && readTeamsCaptions()) return;
+
     const region = document.querySelector<HTMLElement>('[role="region"][aria-label*="aption" i]');
     if (!region) return;
 
@@ -483,14 +532,7 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
         .filter((l) => !looksLikeChrome(l))
         .join(" ")
         .trim();
-      if (!text || text === sent.get(block)) continue;
-      sent.set(block, text);
-
-      try {
-        window.__avaHeard?.(speaker, text, idOf(block));
-      } catch {
-        /* runner not listening yet */
-      }
+      report(block, speaker, text);
     }
   };
 
@@ -507,8 +549,12 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
     finished = null;
   };
 
+  let startCalled = false;
+
   const api: AvaApi = {
     async start(opts = {}) {
+      if (startCalled) return;
+      startCalled = true;
       ensureAudio();
       if (mode === "voice") {
         log("voice ready");
@@ -611,6 +657,7 @@ if (window.top === window && location.hostname === "meet.google.com" && !window.
 
     speaking: () => isSpeaking,
     face: () => (mode === "voice" ? "voice" : face),
+    started: () => startCalled,
   };
 
   window.__ava = api;

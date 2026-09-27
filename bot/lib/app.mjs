@@ -36,6 +36,13 @@ export const attend = () => call("POST", "/api/meeting/control", { command: "att
  */
 export const anamSession = () => call("POST", "/api/anam", { passthrough: true });
 
+/**
+ * Has the control room sent her somewhere? Takes it if so — once — and returns the
+ * meeting `{ meetingUrl, title, context, recipients, platform }`, or null.
+ */
+export const claimDispatch = async (earlySeconds) =>
+  (await call("POST", "/api/ava/dispatch", { earlySeconds })).meeting ?? null;
+
 /** Hand over what was heard; get back what to say, if anything. */
 export const tick = (body) => call("POST", "/api/moderator/tick", body);
 

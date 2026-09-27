@@ -30,6 +30,11 @@ you invite ava@ to a meeting
 Before: the invite's description is her briefing and its guests are who the notes go to.
 Declined meetings and all-day entries are ignored. One meeting at a time.
 
+**Microsoft Teams** is sent from the control room instead: paste the Teams link and press
+Send. The container checks every 10 seconds, opens it as a guest named Ava, and waits in
+the lobby until somebody admits her. `npm run check -- <teams link>` goes as far as the
+pre-join screen without joining.
+
 **Proven, not assumed:** the container itself was run and pointed at a real Google Meet —
 Meet listed "Ava" as both its camera and microphone and showed her face in its preview.
 

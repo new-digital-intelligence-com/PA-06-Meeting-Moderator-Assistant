@@ -1,8 +1,9 @@
-// Is her face working in Meet? Opens a meeting's pre-join screen with a throwaway guest
-// profile, turns her on as the camera and takes a screenshot. It never presses Join, so
-// nobody in the meeting is notified.
+// Is she working in a meeting? Opens a Google Meet or Teams pre-join screen with a
+// throwaway profile, starts her voice (and face), has her say a line and takes a
+// screenshot. It never presses Join, so nobody in the meeting is notified.
 //
 //   npm run check -- https://meet.google.com/abc-defg-hij
+//   npm run check -- <a Teams meeting link>
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,10 +11,12 @@ import { chromium } from "playwright-core";
 import { anamSession } from "./lib/app.mjs";
 import { FACE, MODE, platformArgs, requireChrome, root } from "./lib/config.mjs";
 import { speech } from "./lib/voice.mjs";
+import { platformOf } from "./lib/platforms.mjs";
 
 const url = process.argv[2];
-if (!url?.startsWith("https://meet.google.com/")) {
-  console.error("\n  Usage: npm run check -- https://meet.google.com/abc-defg-hij\n");
+const platform = platformOf(url ?? "");
+if (!platform) {
+  console.error("\n  Usage: npm run check -- <a Google Meet or Teams link>\n");
   process.exit(1);
 }
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "ava-camtest-"));
@@ -45,20 +48,25 @@ await ctx.addInitScript({
   content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify(FACE)};`,
 });
 await ctx.addInitScript({ path: path.join(root, "dist", "ava.js") });
-console.log(`  mode: ${MODE}`);
+console.log(`  ${platform.name}, mode: ${MODE}`);
 
 const page = ctx.pages()[0] ?? (await ctx.newPage());
-const u = new URL(url);
-u.searchParams.set("hl", "en");
-await page.goto(u.toString(), { waitUntil: "domcontentloaded" });
+await page.goto(platform.url(url), { waitUntil: "domcontentloaded" });
 
-const hasAva = await page.evaluate(() => typeof window.__ava?.start === "function");
-console.log("  in-page script loaded:", hasAva);
+const start = async () => {
+  const t0 = Date.now();
+  const token = MODE === "avatar" ? (await anamSession()).sessionToken : undefined;
+  await page.evaluate((t) => window.__ava.start({ token: t }), token);
+  console.log(`  ${MODE} started in ${((Date.now() - t0) / 1000).toFixed(1)}s, face: ${await page.evaluate(() => window.__ava.face())}`);
+};
 
-const t0 = Date.now();
-const token = MODE === "avatar" ? (await anamSession()).sessionToken : undefined;
-await page.evaluate((t) => window.__ava.start({ token: t }), token);
-console.log(`  ${MODE} started in ${((Date.now() - t0) / 1000).toFixed(1)}s, face: ${await page.evaluate(() => window.__ava.face())}`);
+if (platform.id === "teams") {
+  // Through the launcher to the pre-join screen, name typed in — everything short of Join.
+  await platform.prejoin(page, (m) => console.log(m), MODE, { ready: start });
+} else {
+  await start();
+}
+console.log("  in-page script loaded:", await page.evaluate(() => typeof window.__ava?.start === "function"));
 
 // Have her actually say something, which proves the whole path — ElevenLabs, then either
 // her microphone directly or her face lip-syncing to it.

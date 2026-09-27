@@ -22,6 +22,7 @@ const SECTIONS = [
   { id: "architecture", label: "How it’s built" },
   { id: "talking", label: "When she talks" },
   { id: "voice", label: "Voice and face" },
+  { id: "teams", label: "Microsoft Teams" },
   { id: "notes", label: "Notes and follow-up" },
   { id: "brain", label: "Modules: the brain" },
   { id: "runner", label: "Modules: the runner" },
@@ -59,7 +60,8 @@ export default function Docs() {
             <p className="mt-4 max-w-3xl text-lg leading-8 text-white/60">
               Ava joins your <strong className="font-semibold text-white/85">Google Meet</strong> as a normal member, with her own
               Google account. Invite her like anybody else: she turns up at the start time, listens, answers and joins in out
-              loud, takes notes, and emails the write-up to the guests when it ends.
+              loud, takes notes, and emails the write-up to the guests when it ends. She can also be sent into a{" "}
+              <strong className="font-semibold text-white/85">Microsoft Teams</strong> meeting from the control room.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -312,6 +314,53 @@ export default function Docs() {
               </div>
             </Section>
 
+            {/* ── teams ────────────────────────────────────────────────── */}
+            <Section
+              id="teams"
+              eyebrow="Second platform"
+              title="Microsoft Teams"
+              intro="Teams meetings never reach her calendar, so she is sent from the control room. Everything after she is in — listening, talking, notes — is the same as in Meet."
+            >
+              <Steps
+                items={[
+                  {
+                    title: "Paste the Teams link in the control room",
+                    body: "With the briefing and who gets the notes, then press Send (or set a time to book her for later).",
+                    tone: "sky",
+                  },
+                  {
+                    title: "Her container picks it up",
+                    body: "It asks the app every 10 seconds whether she has been sent anywhere, and takes each meeting once.",
+                    tone: "sky",
+                  },
+                  {
+                    title: "She joins as a guest",
+                    body: "No Microsoft account: “Continue on this browser”, name Ava, microphone on, Join now.",
+                    tone: "emerald",
+                  },
+                  {
+                    title: "Somebody admits her from the lobby",
+                    body: "She waits up to 20 minutes. Teams shows her as a guest.",
+                    tone: "amber",
+                  },
+                  {
+                    title: "Live captions on, and she is in",
+                    body: "More → Language and speech → Turn on live captions. From here it is the same brain as Meet.",
+                    tone: "emerald",
+                  },
+                ]}
+              />
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <Callout tone="amber" title="Depends on the other company’s Teams settings">
+                  Their IT can turn off guest joining or live captions. If they have, she cannot get in, or cannot hear.
+                </Callout>
+                <Callout tone="sky" title="When something goes wrong">
+                  If a step fails she saves a screenshot and the page to her disk (<C>/data/debug-teams-*.png</C>) and says so in
+                  the log.
+                </Callout>
+              </div>
+            </Section>
+
             {/* ── notes ────────────────────────────────────────────────── */}
             <Section id="notes" eyebrow="Afterwards" title="Notes and follow-up">
               <div className="grid gap-4 md:grid-cols-3">
@@ -348,6 +397,10 @@ export default function Docs() {
                 <FileRow path="lib/workspace.ts">Calendar (her invites), Gmail (drafts and sending), Drive (search and sharing).</FileRow>
                 <FileRow path="lib/google.ts · lib/session.ts">Google OAuth and the encrypted session cookie for whoever uses the control room.</FileRow>
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
+                <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams.</FileRow>
+                <FileRow path="app/api/ava/dispatch">
+                  Where her runner asks “have I been sent anywhere?” — each meeting sent from the control room is taken once.
+                </FileRow>
                 <FileRow path="components/ControlRoom.tsx">
                   The page at <C>/</C>: connect accounts, see the transcript and actions live, end a meeting, edit and resend notes.
                 </FileRow>
@@ -361,16 +414,20 @@ export default function Docs() {
             <Section id="runner" eyebrow="Modules" title="The runner — bot/" intro="One Docker container: Node, Google Chrome, a virtual screen, and a web view of that screen.">
               <div className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/[0.02] px-5">
                 <FileRow path="watch.mjs" tag={<Chip tone="sky">entry point</Chip>}>
-                  On duty: checks she is signed in, reads her calendar every minute, attends each meeting, remembers which ones she
-                  already did.
+                  On duty: checks she is signed in, reads her calendar every minute and the control room every 10 seconds, attends
+                  each meeting, remembers which ones she already did.
                 </FileRow>
                 <FileRow path="lib/meet.mjs">
-                  One meeting: brief the brain, open Chrome, join, turn captions on, run the heartbeat, speak, notice the end, leave,
-                  send the notes.
+                  One meeting, on either platform: brief the brain, open Chrome, join, turn captions on, run the heartbeat, speak,
+                  notice the end, leave, send the notes.
+                </FileRow>
+                <FileRow path="lib/platforms.mjs">
+                  What differs between Google Meet and Teams: getting in, switching captions on, telling the call is over,
+                  leaving.
                 </FileRow>
                 <FileRow path="inject/ava.ts">
-                  Runs inside the Meet page before Meet does: answers Meet’s request for a microphone (and camera) with her, reads
-                  the captions, plays her voice, draws her face.
+                  Runs inside the Meet or Teams page before its own code: answers its request for a microphone (and camera) with
+                  her, reads the captions, plays her voice, draws her face.
                 </FileRow>
                 <FileRow path="lib/voice.mjs">ElevenLabs text-to-speech: mp3 for voice mode, raw audio for the face to lip-sync to.</FileRow>
                 <FileRow path="lib/account.mjs">Is she signed in to Google? If not, opens a sign-in window instead of joining as a stranger.</FileRow>
@@ -393,8 +450,9 @@ export default function Docs() {
                 rows={[
                   [<C key="r">POST /api/moderator/tick</C>, "Runner", "What was heard in; what to say out"],
                   [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her invites for the next hours"],
+                  [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from the control room"],
                   [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, control room", "Read, brief or clear the meeting"],
-                  [<C key="r">POST /api/meeting/control</C>, "Runner, control room", "attend · stop · rehearse"],
+                  [<C key="r">POST /api/meeting/control</C>, "Runner, control room", "attend · dispatch · stop · rehearse"],
                   [<C key="r">POST · PUT /api/meeting/followup</C>, "Runner, control room", "Write the notes; send or re-send them"],
                   [<C key="r">POST · PUT /api/moderator/notes</C>, "Recall stage", "Pull actions from new transcript as it goes; edit them"],
                   [<C key="r">POST /api/anam</C>, "Runner", "A short-lived token for her face"],
@@ -435,6 +493,7 @@ export default function Docs() {
                       [<C key="v">AVA_RUNNER_KEY</C>, "Same value as the app"],
                       [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen"],
                       [<C key="v">AVA_MODE</C>, "voice or avatar"],
+                      [<C key="v">AVA_DISPLAY_NAME</C>, "Her name as a Teams guest (Ava)"],
                       [<C key="v">ELEVENLABS_API_KEY · _VOICE_ID</C>, "Her voice"],
                       [<C key="v">AVA_JOIN_EARLY_SECONDS</C>, "How early she opens a meeting (60)"],
                       [<C key="v">ANAM_SESSION_SECONDS</C>, "Your Anam plan’s session limit (180)"],
@@ -462,7 +521,8 @@ ssh -L 8080:localhost:8080 root@<server>`}</CodeBlock>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <Card title="Signed out?">She stops and opens a Google sign-in window. Sign her in on her screen and close it.</Card>
                 <Card title="Test without a meeting">
-                  <C>npm run check -- &lt;meet link&gt;</C> speaks a line on the pre-join screen and never joins.
+                  <C>npm run check -- &lt;Meet or Teams link&gt;</C> goes as far as the pre-join screen, speaks a line, and never
+                  joins.
                 </Card>
                 <Card title="Switch to the face">
                   Set <C>AVA_MODE=avatar</C> in <C>bot/.env</C>, then <C>docker compose up -d</C>.
@@ -479,6 +539,7 @@ ssh -L 8080:localhost:8080 root@<server>`}</CodeBlock>
                   ["Anam (face)", "Free: 3-minute sessions, 30 minutes a month", "Starter $12 · Explorer $49 · Growth $299 a month"],
                   ["Claude", "—", "A few cents a meeting"],
                   ["Meet captions", "As good as Google’s captions; English", "Free"],
+                  ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
                 ]}
               />

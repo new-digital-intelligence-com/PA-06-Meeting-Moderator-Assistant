@@ -1,6 +1,7 @@
 // Ava, on duty: she watches her own calendar and walks into each meeting she is invited
 // to when it starts. Invite ava@ to a meeting the way you would invite anybody, and she
-// turns up.
+// turns up. She also goes wherever the control room sends her — which is how she gets
+// into a Teams meeting.
 //
 //   npm run watch
 //
@@ -13,7 +14,9 @@ import { EARLY_MS, STATE_DIR } from "./lib/config.mjs";
 import { ensureSignedIn } from "./lib/account.mjs";
 import { attend } from "./lib/meet.mjs";
 
+/** Her calendar changes slowly; a send from the control room should feel immediate. */
 const POLL_MS = 60_000;
+const DISPATCH_MS = 10_000;
 
 /**
  * Meetings she has already attended, kept on disk so that restarting the runner in the
@@ -60,8 +63,34 @@ log(`  Ava is on duty. Watching her calendar every ${POLL_MS / 1000}s. Ctrl+C to
 // Signed in first. Everything below assumes she walks into meetings as herself.
 await ensureSignedIn({ log });
 
+/** Sent from the control room? Goes straight in, with the briefing typed there. */
+async function dispatched() {
+  const meeting = await app.claimDispatch(EARLY_MS / 1000);
+  if (!meeting) return false;
+  log(`  → sent from the control room: ${meeting.title || meeting.meetingUrl}`);
+  try {
+    await attend(meeting, { log, briefed: true });
+    log(`  ← finished ${meeting.title || "the meeting"}`);
+  } catch (e) {
+    log(`  could not attend: ${e.message}`);
+  }
+  return true;
+}
+
 let announced = "";
+let lastCalendar = 0;
 for (;;) {
+  try {
+    if (await dispatched()) continue;
+  } catch (e) {
+    log(`  ${e.message}`);
+  }
+  if (Date.now() - lastCalendar < POLL_MS) {
+    await new Promise((r) => setTimeout(r, DISPATCH_MS));
+    continue;
+  }
+  lastCalendar = Date.now();
+
   try {
     const { due, invites, account } = await nextMeeting();
 
@@ -97,5 +126,5 @@ for (;;) {
     // stranger, stop and get her signed back in.
     if (/not signed in/i.test(e.message)) await ensureSignedIn({ log });
   }
-  await new Promise((r) => setTimeout(r, POLL_MS));
+  await new Promise((r) => setTimeout(r, DISPATCH_MS));
 }

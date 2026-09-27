@@ -53,6 +53,9 @@ export const FACE = {
   idleSeconds: Number(process.env.AVA_FACE_IDLE_SECONDS || 45),
 };
 
+/** Her name where she has to type one: joining Teams as a guest. */
+export const DISPLAY_NAME = (process.env.AVA_DISPLAY_NAME || "Ava").trim();
+
 /** Running in the server container rather than on somebody's desktop. */
 export const IN_CONTAINER = process.env.AVA_CONTAINER === "1";
 

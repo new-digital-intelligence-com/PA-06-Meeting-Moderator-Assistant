@@ -6,14 +6,14 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-09-27";
+export const UPDATED = "2026-09-28";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Voice only — she joins with her profile photo", tone: "emerald" },
+  { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Avatar", value: "Paused — Anam's free minutes are used up this month", tone: "amber" },
-  { label: "Runner", value: "Docker container, local for testing — a VPS next", tone: "sky" },
-  { label: "Brain", value: "Live on Vercel", tone: "emerald" },
+  { label: "Runner", value: "Docker on a PC for testing, stopped — a VPS next", tone: "slate" },
 ];
 
 export type Change = {
@@ -26,6 +26,18 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-28",
+    title: "Microsoft Teams, sent from the control room",
+    points: [
+      "Paste a Teams link in the control room and press Send: her container picks it up within about ten seconds, opens it in her Chrome as a guest named Ava, and waits in the lobby to be admitted.",
+      "She listens through Teams' live captions and talks with the same voice; the notes go to the recipients typed in the control room.",
+      "Google Meet is unchanged: invites on her calendar, straight in as herself.",
+      "Not yet tried on a real Teams call — the first one will show whether Teams' buttons and captions are where she expects.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-09-27",
     title: "These docs",

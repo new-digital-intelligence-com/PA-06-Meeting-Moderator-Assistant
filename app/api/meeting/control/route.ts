@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner } from "@/lib/ava";
+import { platformOf } from "@/lib/platform";
+import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -9,7 +11,8 @@ export const maxDuration = 60;
 type Command =
   | "stop"      // she leaves the call and the meeting is closed
   | "rehearse"  // run her with no bot and no call, to hear her before a room does
-  | "attend";   // she is in the room in person, in her own signed-in Chrome
+  | "attend"    // she is in the room in person, in her own signed-in Chrome
+  | "dispatch"; // send her own Chrome to the meeting link from the control room
 
 export async function POST(request: Request) {
   let command: Command;
@@ -48,6 +51,36 @@ export async function POST(request: Request) {
       m.lastDecision = undefined;
       m.summary = undefined;
       m.followUp = undefined;
+    });
+    return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
+  }
+
+  /**
+   * Send her, from the control room, to whatever link the briefing has — how she gets
+   * into a Teams meeting, which never reaches her calendar. Her runner checks for this
+   * every few seconds and takes it once; at the briefing's start time if one is set.
+   *
+   * Only for somebody signed in to the control room: this sends her into a meeting, and
+   * a stranger who found the page should not be able to.
+   */
+  if (command === "dispatch") {
+    if (!isRunner(request) && !(await readSession()).google) {
+      return NextResponse.json({ error: "Sign in with Google in the control room first." }, { status: 401 });
+    }
+    if (!platformOf(before.meetingUrl)) {
+      return NextResponse.json(
+        { error: "That is not a Google Meet or Microsoft Teams link." },
+        { status: 400 },
+      );
+    }
+    const at = before.joinAt && before.joinAt > Date.now() ? before.joinAt : Date.now();
+    const meeting = await updateMeeting((m) => {
+      m.dispatch = { at };
+      m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
+      m.attendedBy = undefined;
+      m.botId = undefined;
+      m.startedAt = undefined;
+      m.endedAt = undefined;
     });
     return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
   }
@@ -102,6 +135,8 @@ export async function POST(request: Request) {
       m.endedAt = Date.now();
     }
     m.botId = undefined;
+    // Not yet picked up by her runner: now it never will be.
+    m.dispatch = undefined;
   });
 
   return NextResponse.json({
