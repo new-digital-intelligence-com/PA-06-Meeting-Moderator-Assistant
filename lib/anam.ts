@@ -93,26 +93,33 @@ export type AnamSession = {
   sessionToken: string;
   /** For the stage's status line, so a misconfigured face is obvious on screen. */
   personaName: string;
+  /** Which face, so her runner can tell whether an idle clip it saved is still hers. */
+  avatarId: string;
 };
 
 /**
  * A short-lived token for one browser to open one stream. The API key never leaves
  * the server — the token is all the page ever sees.
  */
-export async function createSession(): Promise<AnamSession> {
+export async function createSession({ passthrough = false } = {}): Promise<AnamSession> {
   const { avatarId, voiceId, name } = await persona();
 
   const res = await fetch(`${BASE}/auth/session-token`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey()}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      personaConfig: {
-        name,
-        avatarId,
-        voiceId,
-        // Her brain is this application. See the note at the top of the file.
-        llmId: "CUSTOMER_CLIENT_V1",
-      },
+      personaConfig: passthrough
+        ? // Face only: she speaks with her own ElevenLabs voice, and Anam moves the
+          // avatar's lips to that audio. Her voice then never depends on this session,
+          // which Anam cuts after a few minutes on the smaller plans.
+          { name, avatarId, enableAudioPassthrough: true }
+        : {
+            name,
+            avatarId,
+            voiceId,
+            // Her brain is this application. See the note at the top of the file.
+            llmId: "CUSTOMER_CLIENT_V1",
+          },
     }),
     cache: "no-store",
   });
@@ -123,7 +130,7 @@ export async function createSession(): Promise<AnamSession> {
   const { sessionToken } = JSON.parse(text) as { sessionToken?: string };
   if (!sessionToken) throw new AnamError(`Anam returned no session token: ${text.slice(0, 200)}`, 502);
 
-  return { sessionToken, personaName: name };
+  return { sessionToken, personaName: name, avatarId };
 }
 
 export function isConfigured() {

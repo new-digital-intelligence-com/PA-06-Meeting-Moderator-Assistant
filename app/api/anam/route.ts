@@ -17,10 +17,14 @@ export async function GET() {
   });
 }
 
-/** Mints a short-lived session token. The API key never leaves this process. */
-export async function POST() {
+/**
+ * Mints a short-lived session token. The API key never leaves this process.
+ * `{ passthrough: true }` asks for a face that lip-syncs to audio she sends it.
+ */
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as { passthrough?: boolean };
   try {
-    return NextResponse.json(await createSession());
+    return NextResponse.json(await createSession({ passthrough: body.passthrough === true }));
   } catch (e) {
     if (e instanceof AnamError) return NextResponse.json({ error: e.message }, { status: e.status });
     return NextResponse.json(
