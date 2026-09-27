@@ -101,6 +101,8 @@ export async function attend(meeting, { log = console.log } = {}) {
   let pending = null;
   let aloneSince = null;
   let over = false;
+  /** Ended from the control room, which then writes and sends the notes itself. */
+  let endedElsewhere = false;
 
   const finish = async (why) => {
     if (over) return;
@@ -127,6 +129,14 @@ export async function attend(meeting, { log = console.log } = {}) {
           secondsSinceLast: lastHeardAt ? Math.round((Date.now() - lastHeardAt) / 1000) : null,
         },
       });
+
+      // Ended from the control room: leave the call. Without this her Chrome stayed in
+      // the meeting after you had ended it, then sent the notes again when it finally left.
+      if (out.status && out.status !== "live") {
+        endedElsewhere = true;
+        await finish(`the meeting was ended from the control room (${out.status})`);
+        break;
+      }
 
       if (out.say && !speaking) {
         speaking = true;
@@ -181,6 +191,13 @@ export async function attend(meeting, { log = console.log } = {}) {
     .click({ timeout: 3000 })
     .catch(() => {});
   await context.close().catch(() => {});
+
+  // The control room is already writing the notes when it ended the meeting. Writing
+  // them here as well, a second later, would race it and mail the guests twice.
+  if (endedElsewhere) {
+    log("  notes are being sent from the control room");
+    return;
+  }
 
   await app.stop().catch((e) => log(`  could not close the meeting: ${e.message}`));
   try {

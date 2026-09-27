@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { GoogleClient } from "@/lib/google";
 import { getMeeting, updateMeeting } from "@/lib/meeting";
 import { composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
-import { readSession, sessionCookie } from "@/lib/session";
+import { readSession, sessionCookie, type Session } from "@/lib/session";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
 import { createDraft, sendEmail } from "@/lib/workspace";
 
@@ -27,12 +27,31 @@ export async function POST(request: Request) {
   }
 
   const session = await readSession();
-  // From the control room it is whoever is signed in there. From the runner, at the end
-  // of a meeting nobody was watching, it is her own stored account — never anybody's
-  // for a caller that merely knows the URL, since this sends mail.
   const runner = isRunner(request);
-  const sender = session.google?.email ?? (runner ? await avaEmail() : null) ?? "the organiser";
   let meeting = await getMeeting();
+
+  /**
+   * Once per meeting.
+   *
+   * A meeting she attends in person can be ended from two places — the control room's
+   * button, and the runner noticing the call is over — and each used to send the notes.
+   * Guests got them twice. Anything sent since this meeting started counts as sent; a
+   * deliberate resend goes through PUT, which this does not touch.
+   */
+  if (
+    mode === "send" &&
+    meeting.followUp?.sentAt &&
+    meeting.startedAt &&
+    meeting.followUp.sentAt >= meeting.startedAt
+  ) {
+    return NextResponse.json({
+      summary: meeting.summary,
+      followUp: meeting.followUp,
+      delivered: { sent: true, already: true },
+    });
+  }
+
+  const { google, sender } = await mailbox(session, runner, meeting.attendedBy === "self");
 
   if (!meeting.transcript.length) {
     return NextResponse.json({ error: "Nothing was transcribed, so there is nothing to write up." }, { status: 400 });
@@ -73,7 +92,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: null });
   }
 
-  const google = GoogleClient.fromSession(session) ?? (runner ? await avaGoogle() : null);
   if (!google) return NextResponse.json({ error: "Google is not connected." }, { status: 401 });
   if (!to) {
     return NextResponse.json(
@@ -95,7 +113,7 @@ export async function POST(request: Request) {
     }
 
     const response = NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: result });
-    if (google.dirty) response.cookies.set(sessionCookie({ ...session, google: google.current }));
+    if (google.dirty && google.current.email === session.google?.email) response.cookies.set(sessionCookie({ ...session, google: google.current }));
     return response;
   } catch (e) {
     return NextResponse.json(
@@ -115,10 +133,10 @@ export async function PUT(request: Request) {
   }
 
   const session = await readSession();
-  const google = GoogleClient.fromSession(session);
+  const meeting = await getMeeting();
+  const { google } = await mailbox(session, isRunner(request), meeting.attendedBy === "self");
   if (!google) return NextResponse.json({ error: "Google is not connected." }, { status: 401 });
 
-  const meeting = await getMeeting();
   const to = (body.to ?? meeting.followUp?.to ?? "").trim();
   const subject = (body.subject ?? meeting.followUp?.subject ?? "").trim();
   const text = (body.body ?? meeting.followUp?.body ?? "").trim();
@@ -137,9 +155,34 @@ export async function PUT(request: Request) {
     });
 
     const response = NextResponse.json(result);
-    if (google.dirty) response.cookies.set(sessionCookie({ ...session, google: google.current }));
+    if (google.dirty && google.current.email === session.google?.email) response.cookies.set(sessionCookie({ ...session, google: google.current }));
     return response;
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Gmail refused it." }, { status: 502 });
   }
+}
+
+/**
+ * Whose mailbox the notes go out from.
+ *
+ * Her meetings — the ones she attended in person — are always sent as her, whoever
+ * presses the button: the guests met Ava, and the notes should come from Ava rather
+ * than from whoever happened to be watching the control room. Anything else goes from
+ * the person signed in there.
+ *
+ * Sending as her needs either the runner's key or somebody signed in to the control
+ * room; a caller that merely knows the URL gets neither, since this sends mail.
+ */
+async function mailbox(session: Session, runner: boolean, herMeeting: boolean) {
+  const mine = GoogleClient.fromSession(session);
+  if (herMeeting && (runner || mine)) {
+    const hers = await avaGoogle();
+    if (hers) return { google: hers, sender: (await avaEmail()) ?? "Ava" };
+  }
+  if (mine) return { google: mine, sender: session.google?.email ?? "the organiser" };
+  if (runner) {
+    const hers = await avaGoogle();
+    if (hers) return { google: hers, sender: (await avaEmail()) ?? "Ava" };
+  }
+  return { google: null, sender: "the organiser" };
 }
