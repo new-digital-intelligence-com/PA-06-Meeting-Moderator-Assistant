@@ -3,7 +3,8 @@
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { PROFILE, platformArgs, requireChrome, root } from "./config.mjs";
+import { MODE, NAMES, PROFILE, platformArgs, requireChrome, root } from "./config.mjs";
+import { speech } from "./voice.mjs";
 
 /** The heartbeat. Being named cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -18,7 +19,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[] }} meeting
  */
 export async function attend(meeting, { log = console.log } = {}) {
-  const name = /\bava\b/i;
+  // Any of her names — captions often hear "Ava" as "Eva".
+  const escaped = NAMES.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const name = new RegExp(`\\b(${escaped.join("|")})\\b`, "i");
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   await app.brief({
@@ -66,11 +69,17 @@ export async function attend(meeting, { log = console.log } = {}) {
   let wake = () => {};
 
   await context.exposeBinding("__avaLog", (_src, m) => log(`  [meet] ${m}`));
-  await context.exposeBinding("__avaHeard", (_src, speaker, text) => {
+  await context.exposeBinding("__avaHeard", (_src, speaker, text, blockId) => {
     if (!text || /^you$/i.test(speaker)) return;
     heardCount++;
     lastHeardAt = Date.now();
-    heard.push({ id: `m${heardCount}`, speaker, text, at: Date.now() });
+    // Meet rewrites a caption as the sentence goes on. Only the latest version of each
+    // caption block is worth sending; the server replaces the line in place by this id.
+    const id = blockId || `m${heardCount}`;
+    const line = { id, speaker, text, at: Date.now() };
+    const i = heard.findIndex((h) => h.id === id);
+    if (i >= 0) heard[i] = line;
+    else heard.push(line);
 
     // Somebody talked over her: stop, like a person would.
     if (speaking) {
@@ -80,6 +89,7 @@ export async function attend(meeting, { log = console.log } = {}) {
     // Named: answer now rather than on the next heartbeat.
     if (name.test(text)) wake();
   });
+  await context.addInitScript({ content: `window.__AVA_MODE = ${JSON.stringify(MODE)};` });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 
   const page = context.pages()[0] ?? (await context.newPage());
@@ -87,13 +97,14 @@ export async function attend(meeting, { log = console.log } = {}) {
   url.searchParams.set("hl", "en"); // English UI, so the buttons below have names we know
   await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
 
-  // 4 — her face. Meet is already asking for a camera; it waits until this is up.
-  const token = await app.anamToken();
+  // 4 — her voice (and face, in avatar mode). Meet is already asking for devices; it
+  // waits until these are up.
+  const token = MODE === "avatar" ? await app.anamToken() : undefined;
   await page.evaluate((t) => window.__ava.start(t), token);
-  log("  her face and voice are up");
+  log(MODE === "avatar" ? "  her face and voice are up" : "  her voice is up (voice mode, no camera)");
 
   // 5 — walk in.
-  await join(page, log);
+  await join(page, log, MODE);
   await captionsOn(page, log);
   log("  in the meeting");
 
@@ -144,8 +155,11 @@ export async function attend(meeting, { log = console.log } = {}) {
         log(`  ▸ ${say}`);
         // Not awaited: the loop keeps listening while she talks, which is what lets
         // somebody interrupt her.
-        void page
-          .evaluate((t) => window.__ava.talk(t), say)
+        const spoken =
+          MODE === "avatar"
+            ? page.evaluate((t) => window.__ava.talk(t), say)
+            : speech(say).then((audio) => page.evaluate((a) => window.__ava.play(a), audio));
+        void spoken
           .then((ok) => {
             if (ok && key) pending = { key, text: say };
           })
@@ -209,7 +223,7 @@ export async function attend(meeting, { log = console.log } = {}) {
 }
 
 /** Gets from the pre-join screen into the call. */
-async function join(page, log) {
+async function join(page, log, mode = "voice") {
   // A guest name box means she is not signed in, and would arrive as an anonymous
   // stranger knocking at the door. Refuse rather than do that.
   const guest = page.getByRole("textbox", { name: /your name/i });
@@ -223,7 +237,9 @@ async function join(page, log) {
 
   // Make sure camera and microphone are on before walking in — Meet remembers the last
   // choice per account, and she must never arrive muted with her camera off.
-  for (const label of [/turn on microphone/i, /turn on camera/i]) {
+  // In voice mode there is no camera to turn on — she joins with her profile photo.
+  const wanted = mode === "avatar" ? [/turn on microphone/i, /turn on camera/i] : [/turn on microphone/i];
+  for (const label of wanted) {
     const b = page.getByRole("button", { name: label }).first();
     if (await b.isVisible({ timeout: 1500 }).catch(() => false)) await b.click().catch(() => {});
   }
@@ -233,6 +249,8 @@ async function join(page, log) {
   const label = (await button.textContent())?.trim();
   await button.click();
   log(`  pressed "${label}"`);
+  // A confirmation can follow the click in voice mode ("continue without camera?").
+  await dismissPopups(page);
 
   if (/ask to join/i.test(label ?? "")) {
     log("  she is waiting to be let in — this meeting does not recognise her as invited");
@@ -245,7 +263,9 @@ async function join(page, log) {
 async function dismissPopups(page) {
   for (let round = 0; round < 3; round++) {
     let cleared = false;
-    for (const label of [/^got it$/i, /^dismiss$/i, /^no thanks$/i, /^close$/i]) {
+    // "Continue without camera" / "Join anyway": in voice mode she has no camera on
+    // purpose, and Meet can ask to confirm that before letting her in.
+    for (const label of [/^got it$/i, /^dismiss$/i, /^no thanks$/i, /^close$/i, /continue without (camera|video)/i, /^join anyway$/i]) {
       const b = page.getByRole("button", { name: label }).first();
       if (await b.isVisible({ timeout: 800 }).catch(() => false)) {
         await b.click().catch(() => {});

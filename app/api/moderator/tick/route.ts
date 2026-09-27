@@ -78,6 +78,19 @@ function transcriptSignature(transcript: TranscriptLine[]): string {
 }
 
 function fold(transcript: TranscriptLine[], line: TranscriptLine) {
+  // Same caption block as a line we already have: replace its text in place.
+  //
+  // Google Meet does not append to a caption, it rewrites it as the sentence goes on —
+  // punctuation shifts, "EI" becomes "AI", "Ava Ava!" becomes "Ava, Ava." — so none of
+  // the text comparisons below recognise the rewrite, and in a real meeting each one
+  // became its own line: over a hundred fragments of three sentences. Her runner now
+  // sends the id of the caption block itself, which is the only reliable key.
+  const same = transcript.findLast((l) => l.id === line.id);
+  if (same) {
+    same.text = line.text;
+    return;
+  }
+
   // The most recent line by THIS speaker, not simply the last line.
   //
   // If she says something while somebody is still talking, her line lands between a

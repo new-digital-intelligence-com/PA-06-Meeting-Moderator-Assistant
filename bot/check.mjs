@@ -8,7 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import { anamToken } from "./lib/app.mjs";
-import { platformArgs, requireChrome, root } from "./lib/config.mjs";
+import { MODE, platformArgs, requireChrome, root } from "./lib/config.mjs";
+import { speech } from "./lib/voice.mjs";
 
 const url = process.argv[2];
 if (!url?.startsWith("https://meet.google.com/")) {
@@ -38,7 +39,9 @@ const ctx = await chromium.launchPersistentContext(profile, {
 const logs = [];
 await ctx.exposeBinding("__avaLog", (_s, m) => logs.push(m));
 await ctx.exposeBinding("__avaHeard", () => {});
+await ctx.addInitScript({ content: `window.__AVA_MODE = ${JSON.stringify(MODE)};` });
 await ctx.addInitScript({ path: path.join(root, "dist", "ava.js") });
+console.log(`  mode: ${MODE}`);
 
 const page = ctx.pages()[0] ?? (await ctx.newPage());
 const u = new URL(url);
@@ -49,8 +52,17 @@ const hasAva = await page.evaluate(() => typeof window.__ava?.start === "functio
 console.log("  in-page script loaded:", hasAva);
 
 const t0 = Date.now();
-await page.evaluate((t) => window.__ava.start(t), await anamToken());
-console.log(`  anam started in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+await page.evaluate((t) => window.__ava.start(t), MODE === "avatar" ? await anamToken() : undefined);
+console.log(`  ${MODE === "avatar" ? "anam" : "voice"} started in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+// Voice mode: have her actually say something into her microphone, which proves the
+// whole path — ElevenLabs, decoding, playback into the track Meet is sending.
+if (MODE === "voice") {
+  const t1 = Date.now();
+  const audio = await speech("Hi, this is Ava checking my microphone.");
+  const played = await page.evaluate((a) => window.__ava.play(a), audio);
+  console.log(`  spoke into her mic: ${played} (${((Date.now() - t1) / 1000).toFixed(1)}s including voice generation)`);
+}
 
 await page.waitForTimeout(9000);
 

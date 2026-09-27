@@ -36,6 +36,23 @@ export const CHROME =
     "/usr/bin/google-chrome",
   ].find((p) => p && fs.existsSync(p));
 
+/**
+ * voice (default): she joins camera-off with her profile photo and an ElevenLabs voice.
+ * avatar: the Anam face as her camera. Voice first — it has nothing to drop mid-meeting.
+ */
+export const MODE = process.env.AVA_MODE === "avatar" ? "avatar" : "voice";
+
+/**
+ * The names she answers to. Captions routinely hear "Ava" as "Eva", so both count unless
+ * AVA_ALIASES says otherwise.
+ */
+export const NAMES = [
+  (process.env.BOT_NAME || "Ava").split(/[—-]/)[0].trim(),
+  ...(process.env.AVA_ALIASES ?? "Eva").split(","),
+]
+  .map((n) => n.trim())
+  .filter(Boolean);
+
 /** Running in the server container rather than on somebody's desktop. */
 export const IN_CONTAINER = process.env.AVA_CONTAINER === "1";
 

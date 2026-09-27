@@ -33,8 +33,13 @@ export function botName() {
  * involved once this says yes.
  */
 export function isAddressed(text: string): boolean {
-  const name = botName().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b${name}\\b`, "i").test(text);
+  // Captions routinely hear "Ava" as "Eva" — in a real meeting she was asked a direct
+  // question as "Okay, Eva…" and never registered it. AVA_ALIASES overrides the list.
+  const names = [botName(), ...(process.env.AVA_ALIASES ?? "Eva").split(",")]
+    .map((n) => n.trim())
+    .filter(Boolean)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(`\\b(${names.join("|")})\\b`, "i").test(text);
 }
 
 /**
@@ -118,7 +123,8 @@ function replySystem() {
     "",
     "Somebody just said your name. Answer them.",
     "",
-    "- Use the briefing and what has been said so far. If you were asked something neither answers, say plainly that you do not know rather than inventing it.",
+    "- General questions — explain a concept, compare two approaches, what is hard about something, how something usually works — answer them properly from your own knowledge, the way a knowledgeable colleague would. Give a real answer with substance, not a hedge.",
+    "- Specific facts about THIS company, these people, this project — dates, prices, numbers, names, decisions, what was agreed before — come only from the briefing and what has been said. If they are not there, say plainly that you do not know rather than inventing them.",
     "- If asked to note something down, record it with add_actions and confirm in a few words.",
     "- If asked what has been covered, or where things stand, summarise what was actually said — briefly.",
     "- If your name came up in passing and nothing was asked of you, return an empty say. Saying nothing is a valid and often correct answer; interrupting a meeting you were not invited into is the worst thing you can do.",
@@ -219,6 +225,7 @@ export async function considerSpeaking(
           "- A question was asked out loud and nobody answered it.",
           "- Something said contradicts your briefing, or is being got wrong.",
           "- A useful clarifying question would move them on.",
+          "- They are discussing a general topic and you know something genuinely useful about it — a clear explanation, a key distinction, a common pitfall. Share it the way a knowledgeable colleague would. Company-specific facts still come only from the briefing.",
           "- Somebody committed to something and you want to confirm you have it.",
           "- They have drifted and a short, concrete pull back to the point would help.",
           "",
