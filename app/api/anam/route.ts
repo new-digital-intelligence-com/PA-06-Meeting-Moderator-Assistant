@@ -9,9 +9,7 @@ export async function GET() {
   return NextResponse.json({
     configured: isConfigured(),
     hasKey: Boolean(process.env.ANAM_API_KEY),
-    hasPersona: Boolean(
-      process.env.ANAM_PERSONA_ID || (process.env.ANAM_AVATAR_ID && process.env.ANAM_VOICE_ID),
-    ),
+    hasPersona: Boolean(process.env.ANAM_PERSONA_ID || process.env.ANAM_AVATAR_ID),
     // The stage watches captions for this so it can answer the instant it is said.
     botName: (process.env.BOT_NAME || "Ava").split("—")[0].trim(),
   });

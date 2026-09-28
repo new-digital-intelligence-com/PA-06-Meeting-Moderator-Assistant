@@ -11,7 +11,7 @@ export const UPDATED = "2026-09-28";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her ElevenLabs voice", tone: "emerald" },
-  { label: "Anam", value: "Free minutes used up — the face moves again once the plan is upgraded", tone: "amber" },
+  { label: "Anam", value: "New account with fresh minutes — live once its key is on Vercel", tone: "sky" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "Docker on a PC for testing, running — a VPS next", tone: "sky" },
 ];
@@ -26,6 +26,29 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-28",
+    title: "Smarter in group calls, and she leaves when everybody else has",
+    points: [
+      "Everything unanswered waits in a queue, so a question put to her is not lost when somebody else talks straight after it.",
+      "In a group, Claude judges each pause: was any of it meant for her — a misheard name, “the assistant”, “can you note that”, a question to the room she can answer? Then she answers, even on quiet. Otherwise she volunteers as her activity level allows.",
+      "An answer she has to hold back because somebody kept talking comes back at the next pause instead of vanishing.",
+      "Captions mishear: she works out what was meant instead of asking people to repeat, and no longer corrects anyone who calls her “Eva”.",
+      "She leaves 20 seconds after everybody else has (was 3 minutes), and closes her face session on every way out. Alone before anybody has arrived, she waits up to 15 minutes.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-28",
+    title: "New Anam account",
+    points: [
+      "Her face moves to a new Anam account and avatar; tested: connects in about 2.4 s and lip-syncs to her ElevenLabs voice.",
+      "Her face now needs only ANAM_API_KEY and ANAM_AVATAR_ID — no Anam voice, since she speaks with ElevenLabs.",
+    ],
+    commits: [],
+    tone: "violet",
+  },
   {
     date: "2026-09-28",
     title: "Back in avatar mode; face sessions closed on the way out",

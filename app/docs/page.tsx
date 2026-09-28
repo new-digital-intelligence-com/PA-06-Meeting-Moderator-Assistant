@@ -141,7 +141,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, when she has been alone for 3 minutes, or when it is ended from the control room.",
+                    body: "When the meeting ends, when she is removed, 20 seconds after everybody else has left (15 minutes if nobody ever turned up), or when it is ended from the control room. Her face session is closed on the way out.",
                     tone: "violet",
                   },
                   {
@@ -219,24 +219,24 @@ export default function Docs() {
               id="talking"
               eyebrow="Turn-taking"
               title="When she talks"
-              intro="She works in turns, like a person on a call: somebody talks, pauses, and she decides what to do about what they just said — once. Every heartbeat runs down this list."
+              intro="She works in turns, like a person on a call. Everything said that she has not dealt with waits in a queue; at each pause she deals with all of it, once. Every heartbeat runs down this list."
             >
               <div>
                 <Decision ask="Is she already speaking?" yes="Wait. Nothing new until she finishes." tone="slate" />
                 <Decision ask="Has she introduced herself yet?" yes="Say the opening line." tone="emerald" />
                 <Decision
-                  ask="Has she already dealt with the newest thing said?"
-                  note="Meet rewrites captions as a sentence goes on. A turn only counts as new once it grows by more than that."
+                  ask="Is her queue empty?"
+                  note="Meet rewrites captions as a sentence goes on, so a line only counts as new again once it grows by more than that. Anything unanswered for a minute has passed."
                   yes="Keep listening."
                   tone="slate"
                 />
                 <Decision
                   ask="Is somebody still talking?"
-                  note="Less than a second since the last caption."
+                  note="Less than a second since the last caption. The queue keeps: a question put to her while others talk on is answered at the next pause."
                   yes="Wait for the pause."
                   tone="slate"
                 />
-                <Decision ask="Did they say her name — “Ava” or “Eva”?" yes="Answer them." tone="emerald" />
+                <Decision ask="Is her name anywhere in it — “Ava”, “Eva”, “Iva”…?" yes="Answer them." tone="emerald" />
                 <Decision
                   ask="Is it just her and one other person?"
                   note="Counted from the people in the call; if that fails, from who has spoken."
@@ -244,12 +244,12 @@ export default function Docs() {
                   tone="emerald"
                 />
                 <Decision
-                  ask="Is she set to quiet, or still in her cooldown?"
-                  note="Active 8 s · balanced 30 s · quiet never. 3 s after a question to the room, 5 s after her opening."
-                  yes="Stay quiet for now."
-                  tone="amber"
+                  last
+                  ask="A group, and no name: Claude judges it"
+                  note="Was any of it meant for her — a misheard name, “the assistant”, “can you note that”, a question to the room she can answer? Then she answers, whatever the setting. If not, she may volunteer: active after 8 s, balanced after 30 s and only when it matters, quiet never; 3 s after a question to the room."
+                  yes="Answer, add something useful, or stay quiet."
+                  tone="sky"
                 />
-                <Decision last ask="Otherwise" yes="Claude decides if she has something worth adding — and what." tone="sky" />
               </div>
 
               <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -257,13 +257,14 @@ export default function Docs() {
                   Three new words from somebody else while she is talking and she stops, like a person would. Meet correcting an
                   old caption does not count.
                 </Card>
-                <Card title="She does not answer stale questions">
-                  If somebody carries on talking while her reply is being prepared, it is dropped and she answers what they said
-                  instead.
+                <Card title="Held back, never lost">
+                  If somebody carries on talking while her reply is being prepared, she holds it back and answers at the next pause,
+                  with what was said since. An answer to her is held back once at most.
                 </Card>
                 <Card title="What she knows">
                   General questions get a real answer from her own knowledge. Facts about this company, these people or this
-                  project come only from the briefing and what was said — otherwise she says she does not know.
+                  project come only from the briefing and what was said — otherwise she says she does not know. Captions mishear:
+                  she works out what was meant rather than asking people to repeat, and never corrects anyone on her name.
                 </Card>
                 <Card title="Why is she quiet?">
                   Every change of reason is logged by the runner (<C>· listening — nothing new…</C>) and stored with the meeting
@@ -479,9 +480,9 @@ export default function Docs() {
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
-                      [<C key="v">AVA_ALIASES</C>, "Other names she answers to (default Eva)"],
+                      [<C key="v">AVA_ALIASES</C>, "Other spellings of her name (default Eva, Iva, Eeva, Ayva, Avah)"],
                       [<C key="v">BOT_NAME</C>, "Her name"],
-                      [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face"],
+                      [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face (no Anam voice needed)"],
                     ]}
                   />
                 </div>

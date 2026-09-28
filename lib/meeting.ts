@@ -34,6 +34,16 @@ export type TranscriptLine = {
    * so it becomes a new line rather than growing this one.
    */
   sealed?: boolean;
+  /** When the text last changed — the line is still being said until it stops changing. */
+  updatedAt?: number;
+  /**
+   * How long the line was when she dealt with it — answered it, or let it pass. Until
+   * then it waits in her queue; it comes back only if it grows by more than Meet's own
+   * rewriting of it.
+   */
+  dealt?: number;
+  /** Replies to it that had to be dropped, because somebody carried on talking. */
+  tries?: number;
 };
 
 export type ActionItem = {
@@ -139,11 +149,11 @@ export type Meeting = {
    */
   consideredUpTo?: number;
   /**
-   * The last thing somebody said that she has dealt with — answered, or decided to let
-   * pass — and how long it was then. She takes it up again only once it has grown by
-   * more than Meet's rewriting of it, so each turn gets one response, not one per rewrite.
+   * Her reply that is on its way out, and the lines it answers. If her runner has to
+   * drop it — somebody carried on talking — those lines go back in the queue instead of
+   * being lost, which is how named questions in a busy group call went unanswered.
    */
-  handled?: { id: string; len: number };
+  inflight?: { key: string; lines: string[] };
   /** Why she did or did not speak last time, for the control room. */
   lastDecision?: { at: number; reason: string };
   /** What the stage reports about her face and voice — the only window into it. */
@@ -224,7 +234,7 @@ function normalise(raw: unknown): Meeting {
     lastSaid: typeof o.lastSaid === "string" ? o.lastSaid : undefined,
     lastSpokeWasOpening: o.lastSpokeWasOpening === true,
     consideredUpTo: typeof o.consideredUpTo === "number" ? o.consideredUpTo : 0,
-    handled: o.handled && typeof o.handled === "object" ? (o.handled as Meeting["handled"]) : undefined,
+    inflight: o.inflight && typeof o.inflight === "object" ? (o.inflight as Meeting["inflight"]) : undefined,
     lastDecision: o.lastDecision && typeof o.lastDecision === "object" ? (o.lastDecision as Meeting["lastDecision"]) : undefined,
     stage: o.stage && typeof o.stage === "object" ? (o.stage as Meeting["stage"]) : undefined,
     notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,

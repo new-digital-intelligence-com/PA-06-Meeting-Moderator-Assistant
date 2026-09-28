@@ -9,7 +9,7 @@ import {
   type Meeting,
   type TranscriptLine,
 } from "@/lib/meeting";
-import { answerAddressed, botName, considerSpeaking, isAddressed, mergeActions, type Addressed } from "@/lib/moderator";
+import { answerAddressed, botName, groupTurn, isAddressed, mergeActions, type ModeratorReply } from "@/lib/moderator";
 import { dueCue } from "@/lib/script";
 
 export const runtime = "nodejs";
@@ -19,19 +19,22 @@ export const maxDuration = 60;
  * The tick. The stage calls this on a short heartbeat, and as soon as somebody pauses.
  * It hands over whatever was said since last time and gets back the one thing to say now.
  *
- * She works in turns, like a person on a call: somebody talks, pauses, and she decides
- * what to do about what they just said — once. In order of priority:
+ * She works in turns, like a person on a call. Everything said that she has not dealt
+ * with yet waits in a queue; at the next pause she deals with all of it at once:
  *
  *   1. The opening, once, to say who she is.
- *   2. Somebody said her name, or it is just her and one other person — then whatever
- *      they say is said to her. She answers.
- *   3. In a group, unnamed: a model call decides whether she has something worth adding,
- *      and only once the cooldown for the chosen activity level has passed.
+ *   2. Her name is in it, or it is just her and one other person — then it is said to
+ *      her. She answers.
+ *   3. A group, and no name: Claude judges whether any of it was meant for her anyway —
+ *      a misheard name, "the assistant", a question to the room she can answer — and
+ *      whether she has something worth adding. Being spoken to always gets an answer;
+ *      the activity level and the cooldown only govern volunteering.
  *
  * At most one line per tick, and nothing at all while she is mid-sentence.
  *
  * Delivery is confirmed rather than assumed: a line goes out with a key and is only
- * recorded once the stage reports she actually said it.
+ * recorded once the stage reports she actually said it. A reply the stage had to drop —
+ * somebody carried on talking — puts the lines it answered back in the queue.
  */
 
 type TickBody = {
@@ -42,6 +45,8 @@ type TickBody = {
   delivered?: string;
   deliveredText?: string;
   deliveredAt?: number;
+  /** The key of a reply the stage did not say, because somebody carried on talking. */
+  dropped?: string;
   /** What the stage sees of her face and voice — the only window we have into it. */
   face?: string;
   faceDetail?: string;
@@ -54,10 +59,12 @@ type TickBody = {
 const PAUSE_S = 1;
 /**
  * Meet keeps rewriting a caption after it has been said — punctuation, "gonna" into
- * "going to" — so a turn only counts as having more in it once it has grown by more
+ * "going to" — so a line only counts as having more in it once it has grown by more
  * than that.
  */
 const GREW = 12;
+/** Something nobody gave her a pause to answer in this long has passed. */
+const STALE_MS = 60_000;
 
 /**
  * Captions rarely carry punctuation, so a question mark is not enough to go on — this
@@ -93,11 +100,14 @@ function tail(text: string, from: number): string {
  * lands above her reply to it, and she reads her own answer as coming first.
  */
 function fold(transcript: TranscriptLine[], line: TranscriptLine) {
+  const now = Date.now();
   const parts = transcript.filter((l) => (l.block ?? l.id) === line.id);
   const part = parts[parts.length - 1];
   if (part) {
     if (!part.sealed) {
-      part.text = tail(line.text, part.from ?? 0) || part.text;
+      const text = tail(line.text, part.from ?? 0) || part.text;
+      if (text !== part.text) part.updatedAt = now;
+      part.text = text;
       part.full = line.text.length;
       return;
     }
@@ -111,7 +121,8 @@ function fold(transcript: TranscriptLine[], line: TranscriptLine) {
       full: line.text.length,
       speaker: line.speaker,
       text: rest,
-      at: Date.now(),
+      at: now,
+      updatedAt: now,
     });
     return;
   }
@@ -129,11 +140,12 @@ function fold(transcript: TranscriptLine[], line: TranscriptLine) {
     }
   }
 
-  if (last && !last.sealed && Date.now() - last.at < 120_000) {
+  if (last && !last.sealed && now - last.at < 120_000) {
     const a = last.text.toLowerCase();
     const b = line.text.toLowerCase();
     // The same utterance, longer: replace in place.
     if (b.startsWith(a)) {
+      if (b !== a) last.updatedAt = now;
       last.text = line.text;
       return;
     }
@@ -145,7 +157,13 @@ function fold(transcript: TranscriptLine[], line: TranscriptLine) {
   const recent = transcript.slice(-12);
   if (recent.some((l) => l.speaker === line.speaker && l.text === line.text)) return;
 
-  transcript.push({ ...line, full: line.text.length });
+  transcript.push({ ...line, full: line.text.length, updatedAt: now });
+}
+
+/** Her own words coming back as somebody's caption — her name as the speaker, or "You". */
+function isHer(speaker: string): boolean {
+  const me = botName().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^(${me}|you)\\b`, "i").test(speaker.trim());
 }
 
 /** Loose enough to survive a caption mishearing a word or two of what she said. */
@@ -173,6 +191,7 @@ function commit(m: Meeting, key: string, text?: string, startedAt?: number) {
     m.spoken.push(key);
     m.startedAt = Date.now();
   }
+  if (m.inflight?.key === key) m.inflight = undefined;
 
   // Her own words go into the transcript, spoken by her — a participant who cannot hear
   // themselves repeats themselves. It goes in where she started saying it: anything
@@ -191,6 +210,37 @@ function commit(m: Meeting, key: string, text?: string, startedAt?: number) {
   m.lastSpokeWasOpening = key.startsWith("open");
   if (text?.trim() && !m.lastSpokeWasOpening) m.lastSaid = text.trim();
 }
+
+/** The reply was not said: the lines it answered go back in her queue. */
+function requeue(m: Meeting, key: string) {
+  if (m.inflight?.key !== key) return;
+  for (const line of m.transcript) {
+    if (!m.inflight.lines.includes(line.id)) continue;
+    line.dealt = undefined;
+    line.sealed = false;
+    line.tries = (line.tries ?? 0) + 1;
+    line.updatedAt = Date.now();
+  }
+  m.inflight = undefined;
+}
+
+/**
+ * What somebody said that she has not dealt with yet, oldest first: never dealt with,
+ * or grown by more than Meet's rewriting since, and recent enough to still be live.
+ */
+function queue(m: Meeting): TranscriptLine[] {
+  const since = Date.now() - STALE_MS;
+  return m.transcript.filter(
+    (l) =>
+      l.speaker !== botName() &&
+      !l.id.startsWith("said:") &&
+      (l.dealt === undefined || l.text.length - l.dealt >= GREW) &&
+      (l.updatedAt ?? l.at) >= since,
+  );
+}
+
+/** The part of a line she has not heard yet — only that can summon her again. */
+const unheard = (l: TranscriptLine) => (l.dealt === undefined ? l.text : l.text.slice(Math.max(0, l.dealt - 12)));
 
 /**
  * Is it just her and one other person? Her browser counts the people in the call; when
@@ -214,8 +264,6 @@ export async function POST(request: Request) {
   // Needed before the write, to recognise her own words coming back as captions.
   const meetingBefore = await getMeeting();
 
-  const me = botName().toLowerCase();
-
   const incoming = (body.lines ?? [])
     .filter((l) => l.text?.trim())
     .map<TranscriptLine>((l) => ({
@@ -227,11 +275,12 @@ export async function POST(request: Request) {
     // Google captions her too, and those captions are an echo of words we already
     // recorded ourselves the moment she said them. Matching on what she actually just
     // said catches it whatever label Google decides to hang on her.
-    .filter((l) => !l.speaker.toLowerCase().includes(me) && !echoesHer(l.text, meetingBefore));
+    .filter((l) => !isHer(l.speaker) && !echoesHer(l.text, meetingBefore));
 
   let meeting = await updateMeeting((m) => {
     for (const line of incoming) fold(m.transcript, line);
     if (body.delivered) commit(m, body.delivered, body.deliveredText, body.deliveredAt);
+    if (body.dropped) requeue(m, body.dropped);
     if (body.face) {
       m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions, people: body.people };
     }
@@ -256,17 +305,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ say: null, reason, ...view() });
   };
 
-  /** Marks a turn as dealt with; `answered` also seals it, so what follows goes after her. */
-  const handle = (turn: TranscriptLine, answered: boolean, reason: string) =>
-    updateMeeting((m) => {
-      m.handled = { id: turn.id, len: turn.text.length };
-      m.lastDecision = { at: Date.now(), reason };
-      if (answered) {
-        const line = m.transcript.find((l) => l.id === turn.id);
-        if (line) line.sealed = true;
-      }
-    });
-
   if (meeting.status !== "live") return quiet(`meeting is ${meeting.status}`);
   if (body.idle === false) return quiet("she is still speaking");
 
@@ -274,82 +312,87 @@ export async function POST(request: Request) {
   const cue = dueCue(meeting);
   if (cue) return NextResponse.json({ say: cue.text, kind: cue.kind, key: cue.key, ...view() });
 
-  // The turn she would be responding to: the newest thing somebody else said.
-  const turn = [...meeting.transcript].reverse().find((l) => l.speaker !== botName());
-  if (!turn) return quiet("nobody has said anything yet");
+  const waiting = queue(meeting);
+  if (!waiting.length) return quiet("listening — nothing new since she last responded");
 
-  const h = meeting.handled;
-  const sameTurn = h?.id === turn.id;
-  if (sameTurn && turn.text.length - h.len < GREW) return quiet("listening — nothing new since she last responded");
-
-  // Wait for them to finish. Captions stream while somebody is talking; a pause is the
-  // end of their turn, and answering before it cuts across them — and answers half a
-  // question, again for every rewrite of it.
+  // Wait for a pause. Captions stream while somebody is talking; answering before the
+  // pause cuts across them — and answers half a question. What is queued keeps: a
+  // question put to her while somebody else is still talking is answered at the next
+  // pause, not lost.
   const quietFor = body.captions?.secondsSinceLast;
   if (quietFor !== null && quietFor !== undefined && quietFor < PAUSE_S) {
     return quiet("somebody is mid-sentence");
   }
 
-  // Only the part she has not already responded to can summon her again.
-  const fresh = sameTurn ? turn.text.slice(Math.max(0, h.len - 12)) : turn.text;
-  const how: Addressed | null = isAddressed(fresh) ? "named" : oneOnOne(meeting, body.people) ? "one-on-one" : null;
+  const ids = waiting.map((l) => l.id);
+  const attempt = Math.max(0, ...waiting.map((l) => l.tries ?? 0));
+  const recent = meeting.transcript.slice(-30);
+  const secondsSinceSheSpoke = meeting.lastSpokeAt ? (Date.now() - meeting.lastSpokeAt) / 1000 : null;
 
-  /* 2 ─ said to her */
-  if (how) {
+  /** Deals with the whole queue: says `say`, or lets it pass. Either way, once. */
+  const settle = async (say: string | null, reason: string, kind: "reply" | "volunteer", actions?: ModeratorReply["add_actions"]) => {
+    const key = say ? `${kind}:${ids[ids.length - 1]}:${Date.now().toString(36)}` : null;
+    meeting = await updateMeeting((m) => {
+      for (const line of m.transcript) {
+        if (!ids.includes(line.id)) continue;
+        line.dealt = line.text.length;
+        if (say) line.sealed = true;
+      }
+      if (actions?.length) m.actions.push(...mergeActions(m.actions, actions));
+      m.inflight = key ? { key, lines: ids } : m.inflight;
+      m.lastDecision = { at: Date.now(), reason };
+    });
+    return NextResponse.json({ say, kind, key, attempt, reason: say ? undefined : reason, ...view() });
+  };
+
+  /* 2 ─ said to her: her name, or it is just the two of them */
+  const named = [...waiting].reverse().find((l) => isAddressed(unheard(l)));
+  const solo = oneOnOne(meeting, body.people);
+  if (named || solo) {
+    const turn = named ?? waiting[waiting.length - 1];
+    const how = named ? "named" : "one-on-one";
     try {
-      const reply = await answerAddressed(meeting, turn, meeting.transcript.slice(-30), how);
-
-      if (reply.add_actions?.length) {
-        meeting = await updateMeeting((m) => {
-          m.actions.push(...mergeActions(m.actions, reply.add_actions!));
-        });
-      }
-
-      const say = reply.say?.trim();
-      meeting = await handle(turn, Boolean(say), say ? `answered (${how})` : `heard ${turn.speaker}, nothing to say back`);
-      if (say) {
-        return NextResponse.json({ say, kind: "reply", key: `reply:${turn.id}:${turn.text.length}`, ...view() });
-      }
-      return NextResponse.json({ say: null, reason: meeting.lastDecision?.reason, ...view() });
+      const reply = await answerAddressed(meeting, turn, recent, how);
+      const say = reply.say?.trim() || null;
+      return settle(say, say ? `answered (${how})` : `heard ${turn.speaker}, nothing to say back`, "reply", reply.add_actions);
     } catch (e) {
-      // A model failure must not stop the meeting: she stays quiet, and the transcript
-      // is still being recorded for the write-up.
+      // A model failure must not stop the meeting. The queue keeps, so the next pause
+      // tries again; the transcript is still being recorded for the write-up.
       console.warn("[moderator] reply failed:", e instanceof Error ? e.message : e);
       return quiet(`could not answer: ${e instanceof Error ? e.message : "model error"}`);
     }
   }
 
-  /* 3 ─ a group, and nobody asked her: has she got something worth saying? */
+  /* 3 ─ a group, and no name: was it for her anyway, and has she something to add? */
 
-  // "Quiet" means never, and the opening's shorter leash must not smuggle her past it.
+  // "Quiet" never volunteers; the others do once their cooldown has passed. A question
+  // to the room gets a shorter leash — leaving it hanging because she spoke six seconds
+  // ago reads as her having checked out. The opening counts for a short beat only.
   const base = COOLDOWN_MS[meeting.activity];
-  if (!Number.isFinite(base)) return quiet("set to quiet — only answers when asked");
   const cooldown = meeting.lastSpokeWasOpening ? Math.min(base, OPENING_COOLDOWN_MS) : base;
-
-  // A question asked to the room gets a much shorter leash: leaving it hanging because
-  // she spoke six seconds ago is exactly what reads as her having checked out.
-  const effective = looksLikeAQuestion(turn.text) ? Math.min(cooldown, 3_000) : cooldown;
-
+  const effective = waiting.some((l) => looksLikeAQuestion(l.text)) ? Math.min(cooldown, 3_000) : cooldown;
   const since = meeting.lastSpokeAt ? Date.now() - meeting.lastSpokeAt : Number.POSITIVE_INFINITY;
-  if (since < effective) {
-    // Not marked as handled: once the cooldown lifts she weighs it up after all.
-    return quiet(`waiting — ${Math.ceil((effective - since) / 1000)}s of cooldown left`);
-  }
+  const mayVolunteer = Number.isFinite(base) && since >= effective;
 
   try {
-    const { worth_saying, say } = await considerSpeaking(
-      meeting,
-      meeting.transcript.slice(-30),
-      meeting.lastSpokeAt ? since / 1000 : null,
-    );
-
-    meeting = await handle(turn, worth_saying, worth_saying ? "spoke up" : "judged there was nothing worth adding");
-    if (worth_saying) {
-      return NextResponse.json({ say, kind: "volunteer", key: `volunteer:${turn.id}:${turn.text.length}`, ...view() });
+    const t = await groupTurn(meeting, waiting, recent, { mayVolunteer, secondsSinceSheSpoke });
+    if (t.respond && (t.addressed || mayVolunteer)) {
+      return settle(t.say, t.addressed ? "answered (spoken to)" : "spoke up", t.addressed ? "reply" : "volunteer", t.add_actions);
     }
-    return NextResponse.json({ say: null, reason: meeting.lastDecision?.reason, ...view() });
+    return settle(
+      null,
+      t.addressed
+        ? "spoken to, but nothing to say"
+        : !Number.isFinite(base)
+          ? "not spoken to — set to quiet"
+          : mayVolunteer
+            ? "judged there was nothing worth adding"
+            : "not spoken to — and she spoke moments ago",
+      "reply",
+      t.add_actions,
+    );
   } catch (e) {
-    console.warn("[moderator] considerSpeaking failed:", e instanceof Error ? e.message : e);
+    console.warn("[moderator] group turn failed:", e instanceof Error ? e.message : e);
     return quiet(`could not decide: ${e instanceof Error ? e.message : "model error"}`);
   }
 }

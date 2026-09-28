@@ -11,8 +11,10 @@ import { platformOf } from "./platforms.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
-/** How long she stays once she is the only one left. */
-const ALONE_MS = 3 * 60_000;
+/** How long she stays once everybody else has left — a moment, in case somebody is only reconnecting. */
+const ALONE_MS = 20_000;
+/** How long she waits in an empty meeting nobody has turned up to yet. */
+const NOBODY_MS = 15 * 60_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -196,6 +198,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   try {
     await platform.join(page, log, MODE, { ready: ensureStarted });
   } catch (e) {
+    await page.evaluate(() => window.__ava?.end?.()).catch(() => {});
     await context.close().catch(() => {});
     // Nobody let her in, or the page was not what we expected: close the meeting so the
     // control room does not show her as in it.
@@ -207,7 +210,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
   // 6 — the conversation.
   let pending = null;
+  /** A reply she held back because somebody carried on talking; the server re-queues it. */
+  let dropped = null;
   let aloneSince = null;
+  /** Whether anybody else has been in the call — until then, being alone is just early. */
+  let sawOthers = false;
   let over = false;
   let lastReason = null;
   let faceState = MODE === "avatar" ? "down" : "voice";
@@ -235,6 +242,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         delivered: delivered?.key,
         deliveredText: delivered?.text,
         deliveredAt: delivered?.at,
+        dropped,
         face: speaking ? "speaking" : faceState,
         captions: {
           socket: true,
@@ -251,11 +259,18 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       }
       if (out.reason) lastReason = out.reason;
 
-      // They carried on talking while she was deciding: what she was about to say
-      // answers something they have already moved past. The server hears the rest and
-      // she answers that instead.
-      if (out.say && wordsHeard - wordsBefore >= 4) {
-        log(`  (dropped — they kept talking) ${out.say}`);
+      dropped = null;
+
+      // They carried on talking while she was deciding: what she was about to say may
+      // answer something they have already moved past. She holds it back, and the server
+      // puts what it answered back in her queue, for the next pause with what was said
+      // since. Answers to her get more leeway than remarks she volunteers, and are held
+      // back once at most — a question put to her has to get its answer eventually.
+      const newWords = wordsHeard - wordsBefore;
+      const tolerance = out.kind === "volunteer" ? 4 : (out.attempt ?? 0) >= 1 ? Number.POSITIVE_INFINITY : 8;
+      if (out.say && out.key && newWords >= tolerance) {
+        log(`  (held back — they kept talking; she answers at the next pause) ${out.say}`);
+        dropped = out.key;
         out.say = null;
       }
 
@@ -307,10 +322,14 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       await finish("the meeting ended");
       break;
     }
-    if (state.alone) {
+    // Leave once everybody else has: a short grace for somebody reconnecting, and the
+    // face session is closed on the way out. Alone before anybody has arrived is only
+    // being early, and gets a long wait instead.
+    if ((state.people ?? 0) >= 2 || heardCount > 0) sawOthers = true;
+    if (state.alone || state.people === 1) {
       aloneSince ??= Date.now();
-      if (Date.now() - aloneSince > ALONE_MS) {
-        await finish("everybody else left");
+      if (Date.now() - aloneSince > (sawOthers ? ALONE_MS : NOBODY_MS)) {
+        await finish(sawOthers ? "everybody else left" : "nobody came");
         break;
       }
     } else {

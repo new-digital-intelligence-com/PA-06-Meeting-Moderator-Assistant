@@ -33,9 +33,10 @@ export function botName() {
  * involved once this says yes.
  */
 export function isAddressed(text: string): boolean {
-  // Captions routinely hear "Ava" as "Eva" — in a real meeting she was asked a direct
-  // question as "Okay, Eva…" and never registered it. AVA_ALIASES overrides the list.
-  const names = [botName(), ...(process.env.AVA_ALIASES ?? "Eva").split(",")]
+  // Captions routinely mishear "Ava" — "Eva" most of all; in a real meeting she was asked
+  // a direct question as "Okay, Eva…" and never registered it. In a group the model also
+  // recognises mishearings this list misses. AVA_ALIASES overrides the list.
+  const names = [botName(), ...(process.env.AVA_ALIASES ?? "Eva,Iva,Eeva,Ayva,Avah").split(",")]
     .map((n) => n.trim())
     .filter(Boolean)
     .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -61,6 +62,17 @@ const VOICE = [
   "- No markdown, no lists, no URLs, no emoji — every word is read aloud.",
   "- Say numbers and dates the way you would speak them: 'about five working days', 'March', 'forty thousand a year'.",
   "- If you are offering to do something, say so as an offer, not as a thing already done.",
+].join("\n");
+
+/**
+ * What she is actually hearing. Live captions mishear names and words, and she used to
+ * correct people for calling her "Eva" and ask them to repeat anything with a misheard
+ * word in it — both of which read as a machine, not a colleague.
+ */
+const HEARING = [
+  "What you hear is live machine captions, not a clean transcript:",
+  "- Words are often misheard. Your own name may come through as Eva, Iva, Ever or similar — it is still you. Never correct anyone about your name.",
+  "- When a sentence is garbled, work out what they most likely meant from the context and respond to that. Ask them to repeat only if you genuinely cannot tell.",
 ].join("\n");
 
 /** The briefing, plus what has actually happened since. */
@@ -148,6 +160,8 @@ function replySystem(how: Addressed) {
     "- Never invent a decision, a commitment or a deadline that was not said out loud.",
     "- You are a guest here, not the chair. Do not push people along or take sides in their decisions.",
     "",
+    HEARING,
+    "",
     VOICE,
   ].join("\n");
 }
@@ -186,130 +200,141 @@ export async function answerAddressed(
   return block ? (block.input as ModeratorReply) : { say: "" };
 }
 
-/* ----------------------------------------------------- speaking up unasked */
+/* ---------------------------------------------------------- group meetings */
 
-const VOLUNTEER_TOOL: Anthropic.Tool = {
-  name: "contribute",
-  description: "Whether to say something now, and what.",
+const TURN_TOOL: Anthropic.Tool = {
+  name: "turn",
+  description: "Whether what was just said is meant for you, whether to speak now, and what to say.",
   input_schema: {
     type: "object",
     properties: {
-      worth_saying: {
+      addressed: {
         type: "boolean",
-        description:
-          "Whether to speak now. Judge it against the guidance you were given about how forward to be.",
+        description: "True if any of what was just said is meant for you, directly or indirectly — see the guidance.",
       },
+      respond: { type: "boolean", description: "True if you should speak now." },
       say: {
         type: "string",
-        description: "What to say, if worth_saying. One or two short sentences of plain speech. Empty otherwise.",
+        description: "What to say if respond is true: one to three short sentences of plain speech. Empty otherwise.",
+      },
+      add_actions: {
+        type: "array",
+        description: "Anything you were just asked to note down. Usually empty.",
+        items: {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "The action, phrased as a task." },
+            owner: { type: "string", description: "Who owns it, if named." },
+            due: { type: "string", description: "Plain-language due date, if given." },
+          },
+          required: ["text"],
+        },
       },
     },
-    required: ["worth_saying", "say"],
+    required: ["addressed", "respond", "say"],
   },
 };
 
-/**
- * Should she chime in?
- *
- * Called at the end of somebody's utterance — a natural turn boundary — when she has
- * not spoken for a while. The model decides, and the prompt is written to make "no" the
- * easy answer, because the failure mode that gets a bot thrown out of the next meeting
- * is not silence, it is noise.
- *
- * What survives the bar is narrow on purpose: something concrete from the briefing that
- * the room is missing, an open question nobody picked up, a fact being got wrong. Not
- * agreement, not encouragement, not summarising what everyone just heard.
- */
-export async function considerSpeaking(
-  m: Meeting,
-  recent: TranscriptLine[],
-  secondsSinceSheSpoke: number | null,
-): Promise<{ worth_saying: boolean; say: string }> {
-  if (!recent.length) return { worth_saying: false, say: "" };
+export type GroupTurn = ModeratorReply & { addressed: boolean; respond: boolean };
 
-  /**
-   * The dial changes how forward she is, not just how often she may speak.
-   *
-   * Pacing alone was not enough: with one cautious prompt she declined every time and
-   * the setting did nothing but make her silences shorter. On "active" she is told to
-   * behave like somebody who is actually in the room and has a view; on "balanced" she
-   * keeps her counsel unless it matters.
-   */
-  const posture =
-    m.activity === "active"
-      ? [
-          "You are an engaged participant, not a fly on the wall. If you have something substantive, say it — do not wait to be asked.",
-          "",
-          "Speak when:",
-          "- Somebody lays out a topic or asks the room for thoughts. Engage with it: a real thought, a key angle, or a good question.",
-          "- The briefing holds something relevant to what is being discussed right now.",
-          "- A question was asked out loud and nobody answered it.",
-          "- Something said contradicts your briefing, or is being got wrong.",
-          "- A useful clarifying question would move them on.",
-          "- They are discussing a general topic and you know something genuinely useful about it — a clear explanation, a key distinction, a common pitfall. Share it the way a knowledgeable colleague would. Company-specific facts still come only from the briefing.",
-          "- Somebody committed to something and you want to confirm you have it.",
-          "- They have drifted and a short, concrete pull back to the point would help.",
-          "",
-          "Still stay quiet when:",
-          "- You have already made this point. Check your own earlier lines in the transcript — repeating yourself, or dressing the same point up differently, is worse than saying nothing.",
-          "- You would only be agreeing, encouraging, or restating what everyone just heard.",
-          "- Somebody is clearly mid-thought and you would be cutting across them.",
-          "- You are guessing. A confident wrong contribution costs far more than a missed one.",
-        ]
-      : [
-          "You are a quiet participant. Speak only when it clearly matters.",
-          "",
-          "Speak when:",
-          "- The briefing holds something the room plainly does not have and needs.",
-          "- A question was asked out loud and nobody answered it, and you can.",
-          "- Something stated contradicts your briefing in a way that matters.",
-          "",
-          "Stay quiet otherwise — this is the ordinary case. In particular:",
-          "- You have already made this point.",
-          "- You would only be agreeing, encouraging, or summarising what was just heard.",
-          "- The conversation is flowing and does not need you.",
-          "- You are not confident.",
-        ];
+/**
+ * A group call, at a pause: was any of that for her, and should she speak?
+ *
+ * One judgement rather than a name check followed by "should she chime in". Waiting for
+ * her exact name is how she sat silent through a group call: captions mishear it, people
+ * say "what does the assistant think" or ask the room something she can answer, and none
+ * of that contains "Ava". Being spoken to — however it is done — always gets an answer,
+ * whatever the activity level or cooldown; volunteering is what those govern.
+ */
+export async function groupTurn(
+  m: Meeting,
+  pending: TranscriptLine[],
+  recent: TranscriptLine[],
+  { mayVolunteer, secondsSinceSheSpoke }: { mayVolunteer: boolean; secondsSinceSheSpoke: number | null },
+): Promise<GroupTurn> {
+  const volunteering =
+    m.activity === "quiet"
+      ? ["You are set to quiet: never volunteer. Speak only when addressed."]
+      : !mayVolunteer
+        ? ["You spoke only moments ago, so do not volunteer now. Speak only if addressed."]
+        : m.activity === "active"
+          ? [
+              "You are an engaged participant, not a fly on the wall. Volunteer when you have something substantive:",
+              "- somebody lays out a topic or asks for thoughts: a real point, a key angle, or a sharp question;",
+              "- the briefing holds something relevant that the room is missing;",
+              "- something said contradicts the briefing, or is being got wrong;",
+              "- they are discussing a general topic and you know something genuinely useful: a clear explanation, a key distinction, a common pitfall;",
+              "- somebody committed to something and it is worth confirming you have it.",
+              "Not when you would only be agreeing, encouraging or restating what everyone just heard, when somebody is mid-thought, or when you are guessing.",
+            ]
+          : [
+              "Volunteer rarely, only when it clearly matters: the briefing holds something the room needs and does not have, a question to the room went unanswered and you can answer it, or something said contradicts the briefing.",
+            ];
 
   const system = [
-    `You are ${botName()}, a participant in a live video meeting. The others can hear you. You were briefed beforehand and you are taking notes.`,
+    `You are ${botName()}, an AI assistant taking part in a live video meeting with several people. You were briefed beforehand and you are taking notes. Whatever you say is spoken aloud to everyone.`,
     "",
-    "Nobody has addressed you by name. Decide whether to speak anyway.",
+    "At each pause, decide two things about what was just said.",
     "",
-    ...posture,
+    "1. addressed: is any of it meant for you? Yes when:",
+    "- they use your name, or something that is plainly your name misheard;",
+    '- they mean you without naming you: "the assistant", "the AI", "our note-taker", or "what do you think" / "can you…" said straight after you spoke;',
+    "- they ask the room something you can answer well (a fact, a definition, a quick explanation, what was said earlier, the actions so far) and nobody else has answered;",
+    "- they ask for what is your job here: note this down, summarise, recap, remind us.",
+    "The others talking among themselves about their own work is not addressed to you.",
     "",
-    "Never invent a fact, a decision or a deadline.",
-    "Describe things as the briefing describes them. If the briefing says a document is ready to send, it has NOT been sent — do not say it has. Offering to do something and having done it are different, and a room will act on the difference.",
-    "You are a guest, not the chair. Do not manage them or push them along.",
+    "2. respond: should you speak now?",
+    "- Addressed: yes, answer it, unless it was only a passing mention that asks nothing of you.",
+    "- Not addressed:",
+    ...volunteering.map((l) => `  ${l}`),
+    "",
+    "When you answer:",
+    "- General questions get a real answer from your own knowledge, the way a knowledgeable colleague would.",
+    "- Facts about this company, these people or this project come only from the briefing and what has been said. If they are not there, say you do not know.",
+    "- Read your own earlier lines in the transcript. Never say the same thing twice.",
+    "- Never invent a decision, a commitment or a deadline. You are a guest, not the chair.",
+    "",
+    HEARING,
     "",
     VOICE,
     "",
     secondsSinceSheSpoke !== null
-      ? `You last spoke ${Math.round(secondsSinceSheSpoke)} seconds ago. Your own lines appear in the transcript under your name — read them before deciding.`
+      ? `You last spoke ${Math.round(secondsSinceSheSpoke)} seconds ago.`
       : "You have not spoken yet beyond introducing yourself.",
   ].join("\n");
 
   const response = await client().messages.create({
     model: FAST,
-    max_tokens: 400,
+    max_tokens: 500,
     system: [
       { type: "text", text: system, cache_control: { type: "ephemeral" } },
       { type: "text", text: brief(m) },
     ],
-    tools: [VOLUNTEER_TOOL],
-    tool_choice: { type: "tool", name: "contribute" },
+    tools: [TURN_TOOL],
+    tool_choice: { type: "tool", name: "turn" },
     messages: [
-      { role: "user", content: `The last few minutes:
-${transcriptText(recent)}
-
-Say something, or stay quiet?` },
+      {
+        role: "user",
+        content: [
+          "The last few minutes of the meeting:",
+          transcriptText(recent),
+          "",
+          "Said since you last responded (newest last):",
+          transcriptText(pending),
+        ].join("\n"),
+      },
     ],
   });
 
   const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  if (!block) return { worth_saying: false, say: "" };
-  const out = block.input as { worth_saying?: boolean; say?: string };
-  return { worth_saying: Boolean(out.worth_saying) && Boolean(out.say?.trim()), say: out.say?.trim() ?? "" };
+  const out = (block?.input ?? {}) as Partial<GroupTurn>;
+  const say = out.say?.trim() ?? "";
+  return {
+    addressed: Boolean(out.addressed),
+    respond: Boolean(out.respond) && Boolean(say),
+    say,
+    add_actions: out.add_actions,
+  };
 }
 
 /* ------------------------------------------------------------- note-taking */

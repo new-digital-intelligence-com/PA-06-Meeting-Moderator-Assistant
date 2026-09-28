@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       m.lastSpokeAt = undefined;
       m.lastSaid = undefined;
       m.lastSpokeWasOpening = undefined;
-      m.handled = undefined;
+      m.inflight = undefined;
       m.lastDecision = undefined;
       m.summary = undefined;
       m.followUp = undefined;
