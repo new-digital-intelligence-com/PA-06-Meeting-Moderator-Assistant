@@ -13,7 +13,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her ElevenLabs voice", tone: "emerald" },
   { label: "Anam", value: "New account, fresh minutes — face live, tested in her container", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
-  { label: "Runner", value: "Docker on a PC for testing, running — a VPS next", tone: "sky" },
+  { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
 ];
 
 export type Change = {
@@ -26,6 +26,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-28",
+    title: "She runs on a server now",
+    points: [
+      "Her container moved from a PC to an AWS EC2 server (Ubuntu 24.04, 2 vCPU, 4 GB), with her Google sign-in carried over — no new sign-in needed. Docker starts at boot and she restarts by herself.",
+      "Her screen is reached through an SSH tunnel; nothing on the server is open to the internet but SSH.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-09-28",
     title: "Teams: the notes go to the people in the meeting",
