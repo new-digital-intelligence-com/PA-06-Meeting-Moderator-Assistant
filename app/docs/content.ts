@@ -28,6 +28,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "Teams: the notes go to the people in the meeting",
+    points: [
+      "The notes of a Teams call went only to whoever sent her from the control room — not to the people in it. That fallback is gone.",
+      "Teams shows her nobody's email, so she asks in the meeting chat (and in her hello) and adds every address typed there to who gets the notes. Guests and Outlook users alike.",
+      "Tested on the page saved from a real Teams call: she types into the chat box and picks up the addresses people type.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-09-28",
     title: "She keeps the thread, and stops confirming every fragment",
     points: [
       "Working notes: she keeps a short running note of any role or task she is given and where it stands, and reads it every turn. In a replay of the interview she lost, she now tracks the plan and answers “where are we?” from it.",

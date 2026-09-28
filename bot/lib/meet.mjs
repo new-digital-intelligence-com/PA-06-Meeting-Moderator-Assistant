@@ -238,6 +238,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let sawOthers = false;
   /** Nobody else ever arrived: there is nothing to write up. */
   let nobodyCame = false;
+  /** Email addresses typed in the meeting chat — every one seen, and those not yet sent on. */
+  const chatEmails = new Set();
+  const newEmails = [];
   const seenBots = new Set();
   /** Whether she is the only one in the call right now, and for how many checks in a row. */
   let alone = false;
@@ -284,6 +287,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         // Nobody else here yet: she holds her hello until somebody is.
         // Nobody else here — yet, or any more: nothing to say to an empty room.
         waiting: !sawOthers || alone,
+        // Addresses given in the meeting chat since the last tick.
+        emails: newEmails.splice(0),
       });
 
       // Why she is quiet, whenever that changes — "she stopped talking" should be
@@ -376,7 +381,25 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       sawOthers = true;
       log("  somebody is here");
       if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+      if (platform.askForEmails) {
+        await platform.askForEmails(
+          page,
+          log,
+          `Hi, I'm ${DISPLAY_NAME}, NDI's meeting assistant. I'll email a summary with the actions after the meeting — type your email address here if you'd like it.`,
+        );
+      }
       wake();
+    }
+
+    // Email addresses people typed in the meeting chat: they get the notes too.
+    if (platform.chatEmails) {
+      const found = await page.evaluate(platform.chatEmails).catch(() => []);
+      for (const email of found) {
+        if (chatEmails.has(email)) continue;
+        chatEmails.add(email);
+        newEmails.push(email);
+        log(`  the notes will also go to ${email}`);
+      }
     }
 
     // How she knows she is alone: the page's own count of people in the call is one —

@@ -190,6 +190,10 @@ export const meet = {
     };
   },
 
+  // Meet's guests come from the calendar invite: nothing to ask for in the chat.
+  askForEmails: null,
+  chatEmails: null,
+
   async leave(page) {
     await page.getByRole("button", { name: /leave call/i }).first().click({ timeout: 3000 });
   },
@@ -374,6 +378,37 @@ export const teams = {
       bots,
       face: window.__ava?.face?.() ?? null,
     };
+  },
+
+  /**
+   * Teams shows her nobody's email — guests have none there, and a signed-in person's is
+   * not visible to a guest — so she asks in the meeting chat, which everybody can type in.
+   */
+  async askForEmails(page, log, message) {
+    const box = page.locator('[data-tid="ckeditor"][role="textbox"], [role="textbox"][aria-label="Type a message"]').first();
+    if (!(await box.isVisible({ timeout: 1500 }).catch(() => false))) {
+      await page.locator('#chat-button, button[aria-label="Chat"]').first().click().catch(() => {});
+      await sleep(800);
+    }
+    if (!(await box.isVisible({ timeout: 5000 }).catch(() => false))) {
+      await keepEvidence(page, "teams-chat", log);
+      log("  could not open the meeting chat to ask for emails");
+      return false;
+    }
+    await box.click();
+    await page.keyboard.type(message, { delay: 5 });
+    await page.keyboard.press("Enter");
+    log("  asked in the chat for emails to send the notes to");
+    return true;
+  },
+
+  /** Runs inside the page: every email address typed in the meeting chat. */
+  chatEmails: () => {
+    const pane =
+      document.querySelector('[data-tid="message-pane-list-viewport"]') ??
+      document.querySelector('[data-tid="message-pane-body"]');
+    const text = pane?.innerText ?? "";
+    return [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []).map((e) => e.toLowerCase()))];
   },
 
   async leave(page) {

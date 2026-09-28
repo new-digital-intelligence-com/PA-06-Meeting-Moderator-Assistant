@@ -55,6 +55,8 @@ type TickBody = {
   people?: number | null;
   /** Nobody else has arrived yet: no hello to an empty room. */
   waiting?: boolean;
+  /** Email addresses people gave her in the meeting chat: they get the notes. */
+  emails?: string[];
 };
 
 /**
@@ -305,6 +307,10 @@ export async function POST(request: Request) {
     for (const line of incoming) fold(m.transcript, line);
     if (body.delivered) commit(m, body.delivered, body.deliveredText, body.deliveredAt);
     if (body.dropped) requeue(m, body.dropped);
+    for (const email of body.emails ?? []) {
+      const e = String(email).trim().toLowerCase();
+      if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(e) && !m.recipients.includes(e)) m.recipients.push(e);
+    }
     if (body.face) {
       m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions, people: body.people };
     }

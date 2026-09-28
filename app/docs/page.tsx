@@ -334,7 +334,7 @@ export default function Docs() {
                 items={[
                   {
                     title: "Paste the Teams link in the control room",
-                    body: "With the briefing and who gets the notes — nobody listed and they go to you — then press Send (or set a time to book her for later).",
+                    body: "With the briefing and anybody you already know should get the notes, then press Send (or set a time to book her for later).",
                     tone: "sky",
                   },
                   {
@@ -351,6 +351,11 @@ export default function Docs() {
                     title: "Somebody admits her from the lobby",
                     body: "She waits up to 20 minutes. Teams shows her as a guest.",
                     tone: "amber",
+                  },
+                  {
+                    title: "She asks for emails in the chat",
+                    body: "Teams shows her nobody’s email address, so once somebody is there she posts in the meeting chat — and says in her hello — that anyone who wants the notes can type their email there. Every address typed in the chat is added to who gets the notes.",
+                    tone: "sky",
                   },
                   {
                     title: "Live captions on, and she is in",

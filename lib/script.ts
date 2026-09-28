@@ -24,8 +24,10 @@ export type Cue = {
  * She announces the note-taking on purpose. She is a participant that records and
  * transcribes, and a room is entitled to hear that from her rather than work it out.
  */
-export function openingLine(): string {
+export function openingLine(m?: Meeting): string {
   const name = (process.env.BOT_NAME || "Ava").split("—")[0].trim();
+  // Teams shows her nobody's email, so she asks for them in the chat, and says so.
+  const teams = /teams\.(microsoft\.com|live\.com|cloud\.microsoft)/i.test(m?.meetingUrl ?? "");
   // The title is whatever was typed into a form — "Acme — enterprise tier", "Q3 sync
   // FINAL v2". Reading it out loud lands somewhere between stilted and absurd, and it
   // tells the room nothing it does not already know. Better to skip it.
@@ -33,6 +35,7 @@ export function openingLine(): string {
     `Hi everyone, I'm ${name}.`,
     `I'll be following along and taking notes, and I'll send round a summary with the actions afterwards.`,
     `Just say my name if you want me for anything.`,
+    ...(teams ? ["If you'd like the notes, type your email in the chat."] : []),
   ].join(" ");
 }
 
@@ -52,7 +55,7 @@ export function closingLine(m: Meeting): string {
 export function dueCue(m: Meeting): Cue | null {
   if (m.status !== "live") return null;
   if (!m.spoken.includes("open")) {
-    return { key: "open", kind: "open", text: openingLine() };
+    return { key: "open", kind: "open", text: openingLine(m) };
   }
   return null;
 }
