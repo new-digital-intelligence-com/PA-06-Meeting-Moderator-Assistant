@@ -156,6 +156,11 @@ export type Meeting = {
   inflight?: { key: string; lines: string[] };
   /** Why she did or did not speak last time, for the control room. */
   lastDecision?: { at: number; reason: string };
+  /**
+   * Her own working notes for this meeting — a role she was given, the plan, where it
+   * stands — kept by the model and handed back to it every turn.
+   */
+  memory?: string;
   /** What the stage reports about her face and voice — the only window into it. */
   stage?: {
     face: string;
@@ -235,6 +240,7 @@ function normalise(raw: unknown): Meeting {
     lastSpokeWasOpening: o.lastSpokeWasOpening === true,
     consideredUpTo: typeof o.consideredUpTo === "number" ? o.consideredUpTo : 0,
     inflight: o.inflight && typeof o.inflight === "object" ? (o.inflight as Meeting["inflight"]) : undefined,
+    memory: typeof o.memory === "string" ? o.memory : undefined,
     lastDecision: o.lastDecision && typeof o.lastDecision === "object" ? (o.lastDecision as Meeting["lastDecision"]) : undefined,
     stage: o.stage && typeof o.stage === "object" ? (o.stage as Meeting["stage"]) : undefined,
     notedUpTo: typeof o.notedUpTo === "number" ? o.notedUpTo : 0,

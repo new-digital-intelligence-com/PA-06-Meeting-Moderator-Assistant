@@ -57,8 +57,15 @@ type TickBody = {
   waiting?: boolean;
 };
 
-/** A second of silence in the captions: the moment a person would take their turn. */
+/**
+ * Silence in the captions long enough to be the end of somebody's turn: a second after a
+ * finished sentence, two when it trails off — people pause mid-thought, and answering
+ * every such pause is how she confirmed one set of instructions four times in a minute.
+ */
 const PAUSE_S = 1;
+const PAUSE_UNFINISHED_S = 2;
+/** How much of the conversation she sees each turn: far more than the last few lines. */
+const CONTEXT_CHARS = 24_000;
 /**
  * Meet keeps rewriting a caption after it has been said — punctuation, "gonna" into
  * "going to" — so a line only counts as having more in it once it has grown by more
@@ -245,14 +252,29 @@ function queue(m: Meeting): TranscriptLine[] {
 const unheard = (l: TranscriptLine) => (l.dealt === undefined ? l.text : l.text.slice(Math.max(0, l.dealt - 12)));
 
 /**
- * Is it just her and one other person? Her browser counts the people in the call; when
- * it cannot, the fallback is how many people have spoken in the last ten minutes.
+ * Is it just her and one other person? Two different people talking settles it — it is a
+ * group, whatever the page's count says: in a real Teams call the third person had no
+ * tile yet, the count said two, and she answered everything everybody said. Otherwise
+ * her browser's count, and failing that, it is one-on-one.
  */
 function oneOnOne(m: Meeting, people: number | null | undefined): boolean {
-  if (typeof people === "number" && people > 0) return people <= 2;
   const since = Date.now() - 10 * 60_000;
   const voices = new Set(m.transcript.filter((l) => l.at >= since && l.speaker !== botName()).map((l) => l.speaker));
-  return voices.size <= 1;
+  if (voices.size >= 2) return false;
+  if (typeof people === "number" && people > 0) return people <= 2;
+  return true;
+}
+
+/** The conversation she sees: as much of the end of it as fits the budget, in order. */
+function recentLines(m: Meeting): TranscriptLine[] {
+  const out: TranscriptLine[] = [];
+  let size = 0;
+  for (let i = m.transcript.length - 1; i >= 0; i--) {
+    size += m.transcript[i].speaker.length + m.transcript[i].text.length + 3;
+    if (size > CONTEXT_CHARS) break;
+    out.push(m.transcript[i]);
+  }
+  return out.reverse();
 }
 
 export async function POST(request: Request) {
@@ -323,17 +345,24 @@ export async function POST(request: Request) {
   // question put to her while somebody else is still talking is answered at the next
   // pause, not lost.
   const quietFor = body.captions?.secondsSinceLast;
-  if (quietFor !== null && quietFor !== undefined && quietFor < PAUSE_S) {
+  const finished = /[.?!…]["')\]]?\s*$/.test(waiting[waiting.length - 1].text);
+  if (quietFor !== null && quietFor !== undefined && quietFor < (finished ? PAUSE_S : PAUSE_UNFINISHED_S)) {
     return quiet("somebody is mid-sentence");
   }
 
   const ids = waiting.map((l) => l.id);
   const attempt = Math.max(0, ...waiting.map((l) => l.tries ?? 0));
-  const recent = meeting.transcript.slice(-30);
+  const recent = recentLines(meeting);
   const secondsSinceSheSpoke = meeting.lastSpokeAt ? (Date.now() - meeting.lastSpokeAt) / 1000 : null;
 
   /** Deals with the whole queue: says `say`, or lets it pass. Either way, once. */
-  const settle = async (say: string | null, reason: string, kind: "reply" | "volunteer", actions?: ModeratorReply["add_actions"]) => {
+  const settle = async (
+    say: string | null,
+    reason: string,
+    kind: "reply" | "volunteer",
+    actions?: ModeratorReply["add_actions"],
+    memory?: string,
+  ) => {
     const key = say ? `${kind}:${ids[ids.length - 1]}:${Date.now().toString(36)}` : null;
     meeting = await updateMeeting((m) => {
       for (const line of m.transcript) {
@@ -342,6 +371,7 @@ export async function POST(request: Request) {
         if (say) line.sealed = true;
       }
       if (actions?.length) m.actions.push(...mergeActions(m.actions, actions));
+      if (memory?.trim()) m.memory = memory.trim().slice(0, 1200);
       m.inflight = key ? { key, lines: ids } : m.inflight;
       m.lastDecision = { at: Date.now(), reason };
     });
@@ -357,7 +387,7 @@ export async function POST(request: Request) {
     try {
       const reply = await answerAddressed(meeting, turn, recent, how);
       const say = reply.say?.trim() || null;
-      return settle(say, say ? `answered (${how})` : `heard ${turn.speaker}, nothing to say back`, "reply", reply.add_actions);
+      return settle(say, say ? `answered (${how})` : `heard ${turn.speaker}, nothing to say back`, "reply", reply.add_actions, reply.memory);
     } catch (e) {
       // A model failure must not stop the meeting. The queue keeps, so the next pause
       // tries again; the transcript is still being recorded for the write-up.
@@ -380,7 +410,7 @@ export async function POST(request: Request) {
   try {
     const t = await groupTurn(meeting, waiting, recent, { mayVolunteer, secondsSinceSheSpoke });
     if (t.respond && (t.addressed || mayVolunteer)) {
-      return settle(t.say, t.addressed ? "answered (spoken to)" : "spoke up", t.addressed ? "reply" : "volunteer", t.add_actions);
+      return settle(t.say, t.addressed ? "answered (spoken to)" : "spoke up", t.addressed ? "reply" : "volunteer", t.add_actions, t.memory);
     }
     return settle(
       null,
@@ -393,6 +423,7 @@ export async function POST(request: Request) {
             : "not spoken to — and she spoke moments ago",
       "reply",
       t.add_actions,
+      t.memory,
     );
   } catch (e) {
     console.warn("[moderator] group turn failed:", e instanceof Error ? e.message : e);

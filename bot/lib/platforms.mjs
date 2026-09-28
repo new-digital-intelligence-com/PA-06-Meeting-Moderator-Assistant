@@ -339,8 +339,10 @@ export const teams = {
     const bot = new RegExp(who.bots, "i");
     const me = new RegExp(who.self, "i");
     const text = document.body?.innerText?.slice(0, 6000) ?? "";
-    // The People button's number counts everybody, bots too.
-    let roster = 0;
+    // The People button's number counts everybody, bots too. Read by its id first: its
+    // "People" label is not on the button itself, and a real call showed "3 People"
+    // while she counted two.
+    let roster = Number((document.querySelector("#roster-button")?.textContent ?? "").match(/\d{1,3}/)?.[0] ?? 0);
     for (const b of document.querySelectorAll('button[aria-label], [role="button"][aria-label]')) {
       const label = b.getAttribute("aria-label") ?? "";
       if (!/people|participants|roster/i.test(label)) continue;

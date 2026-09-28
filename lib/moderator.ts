@@ -75,6 +75,15 @@ const HEARING = [
   "- When a sentence is garbled, work out what they most likely meant from the context and respond to that. Ask them to repeat only if you genuinely cannot tell.",
 ].join("\n");
 
+const LISTENER = [
+  "How to take part:",
+  "- You do not have to answer everything. Say nothing (empty say) when they are setting something up in several parts and have not finished, when they are talking to somebody else, when it is only 'ok' or 'yeah' after you spoke, or when there is nothing worth adding.",
+  "- Confirm an instruction once, briefly, then act on it. Never restate the same plan again in different words.",
+  "- Greet people once. Do not thank or welcome them again.",
+  "- If they give you a role — interviewer, facilitator, devil's advocate, timekeeper — play it fully and see it through: keep track of where it stands in your working notes, and move it on yourself.",
+  "- Asked where things stand or what comes next, answer from your working notes — say where you are and take the next step (ask the next question, repeat the one still open).",
+].join("\n");
+
 /** The briefing, plus what has actually happened since. */
 function brief(m: Meeting): string {
   const who = speakers(m);
@@ -90,6 +99,12 @@ function brief(m: Meeting): string {
     who.length ? `People who have spoken so far: ${who.join(", ")}.` : "Nobody has spoken yet.",
     "",
     `Actions you have noted:\n${actions}`,
+    "",
+    // Her own running notes: a role she was given, a plan, where it stands. Without them
+    // she lost an interview she was running once the instructions scrolled out of view.
+    m.memory?.trim()
+      ? `Your working notes for this meeting (you wrote these; keep them up to date):\n${m.memory.trim()}`
+      : "Your working notes for this meeting: (none yet)",
   ].join("\n");
 }
 
@@ -119,6 +134,11 @@ const REPLY_TOOL: Anthropic.Tool = {
           required: ["text"],
         },
       },
+      memory: {
+        type: "string",
+        description:
+          "Only when something changed: your working notes for this meeting, rewritten in full — any role or task you have been given, how it is meant to go, what is done, what comes next (e.g. 'Interviewer: 3 questions each to Helmi and Sami, different questions of equal difficulty, then evaluate both. Done: Q1 Helmi, Q1 Sami. Next: Q2 Helmi.'). Under 80 words. Empty if nothing changed.",
+      },
     },
     required: ["say"],
   },
@@ -127,6 +147,8 @@ const REPLY_TOOL: Anthropic.Tool = {
 export type ModeratorReply = {
   say: string;
   add_actions?: { text: string; owner?: string; due?: string }[];
+  /** Her working notes, rewritten, when they changed. */
+  memory?: string;
 };
 
 /**
@@ -144,7 +166,7 @@ function replySystem(how: Addressed) {
       ? "Somebody just said your name. Answer them."
       : [
           "It is just you and one other person on this call, so whatever they say is said to you. Respond the way a person on a call would: answer what they ask, react to what they tell you, and when they lay out a topic, engage with it — a real thought, a key angle, or a good question that moves it on.",
-          "Return an empty say only for filler that needs no answer ('hmm', 'one sec', 'let me share my screen'), or when they have plainly stopped mid-sentence.",
+          "Return an empty say for filler that needs no answer ('hmm', 'one sec', 'let me share my screen'), when they have plainly stopped mid-sentence, or when they are still setting something up and have not finished.",
         ].join("\n"),
     "",
     "- General questions — explain a concept, compare two approaches, what is hard about something, how something usually works — answer them properly from your own knowledge, the way a knowledgeable colleague would. Give a real answer with substance, not a hedge.",
@@ -158,7 +180,9 @@ function replySystem(how: Addressed) {
       : []),
     "- Read your own earlier lines in the transcript. Never say the same thing twice.",
     "- Never invent a decision, a commitment or a deadline that was not said out loud.",
-    "- You are a guest here, not the chair. Do not push people along or take sides in their decisions.",
+    "- Unless they have given you a role, you are a guest here, not the chair: do not push people along or take sides in their decisions.",
+    "",
+    LISTENER,
     "",
     HEARING,
     "",
@@ -230,6 +254,11 @@ const TURN_TOOL: Anthropic.Tool = {
           required: ["text"],
         },
       },
+      memory: {
+        type: "string",
+        description:
+          "Only when something changed: your working notes for this meeting, rewritten in full — any role or task you have been given, how it is meant to go, what is done, what comes next (e.g. 'Interviewer: 3 questions each to Helmi and Sami, different questions of equal difficulty, then evaluate both. Done: Q1 Helmi, Q1 Sami. Next: Q2 Helmi.'). Under 80 words. Empty if nothing changed.",
+      },
     },
     required: ["addressed", "respond", "say"],
   },
@@ -292,7 +321,9 @@ export async function groupTurn(
     "- General questions get a real answer from your own knowledge, the way a knowledgeable colleague would.",
     "- Facts about this company, these people or this project come only from the briefing and what has been said. If they are not there, say you do not know.",
     "- Read your own earlier lines in the transcript. Never say the same thing twice.",
-    "- Never invent a decision, a commitment or a deadline. You are a guest, not the chair.",
+    "- Never invent a decision, a commitment or a deadline. Unless they have given you a role, you are a guest, not the chair.",
+    "",
+    LISTENER,
     "",
     HEARING,
     "",
@@ -334,6 +365,7 @@ export async function groupTurn(
     respond: Boolean(out.respond) && Boolean(say),
     say,
     add_actions: out.add_actions,
+    memory: out.memory,
   };
 }
 
