@@ -141,7 +141,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, five minutes after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the meeting's own count of people (and its “you're the only one here”). Her face session is closed on the way out.",
+                    body: "When the meeting ends, when she is removed, five minutes after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the names on the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people — and from its “you're the only one here”. Her face session is closed on the way out.",
                     tone: "violet",
                   },
                   {
@@ -512,6 +512,7 @@ export default function Docs() {
                       [<C key="v">AVA_FACE_IDLE_SECONDS</C>, "Quiet seconds before the face rests (45)"],
                       [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face — she asks Anam herself (else the app does)"],
                       [<C key="v">AVA_SCREEN_PORT</C>, "Port for the web view (8080)"],
+                      [<C key="v">AVA_IGNORE_PARTICIPANTS</C>, "More bot names not to count as people, comma-separated"],
                     ]}
                   />
                 </div>

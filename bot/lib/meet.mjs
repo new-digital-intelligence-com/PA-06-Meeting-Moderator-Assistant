@@ -7,7 +7,7 @@ import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
 import { DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
 import { speech } from "./voice.mjs";
-import { keepEvidence, platformOf } from "./platforms.mjs";
+import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -238,6 +238,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let sawOthers = false;
   /** Nobody else ever arrived: there is nothing to write up. */
   let nobodyCame = false;
+  const seenBots = new Set();
   /** Whether she is the only one in the call right now, and for how many checks in a row. */
   let alone = false;
   let aloneChecks = 0;
@@ -345,9 +346,15 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
     // Has the meeting ended, or has everybody gone?
     const state = await page
-      .evaluate(platform.state)
+      .evaluate(platform.state, PEOPLE)
       .catch(() => ({ inCall: false, ended: false, alone: false, people: null, face: null }));
     if (state.face) faceState = state.face;
+    // Other notetakers in the call are not people: say once which ones she is not counting.
+    for (const b of state.bots ?? []) {
+      if (seenBots.has(b)) continue;
+      seenBots.add(b);
+      log(`  not counting ${b} — a notetaker, not a person`);
+    }
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
 

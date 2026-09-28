@@ -28,6 +28,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "Other notetakers do not count as people",
+    points: [
+      "When counting who is in the call she reads each participant's name and skips notetaker bots — Fireflies, Otter, Read.ai, Fathom, tl;dv and the like — so a bot left behind no longer keeps her, face on, in an empty meeting.",
+      "Tested on the page saved from a real Teams call, and on a Meet page: with Fireflies present and everybody else gone, she counts herself alone. AVA_IGNORE_PARTICIPANTS adds more names.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-09-28",
     title: "A designed notes email; she leaves empty rooms",
     points: [
       "The notes now arrive as an NDI-branded email: actions first with owners and due dates, then the summary and files, with the plain text alongside.",

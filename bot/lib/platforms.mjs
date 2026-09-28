@@ -7,6 +7,57 @@ import { DISPLAY_NAME, STATE_DIR } from "./config.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Other notetaker bots in the call — Fireflies, Otter, Read.ai… They are participants to
+ * the meeting, but not people: counting them, she would never find the room empty, and
+ * would sit in a finished meeting with one of them, face on, for as long as it stayed.
+ * Matched on the name each shows. AVA_IGNORE_PARTICIPANTS adds more, comma-separated.
+ */
+const BOTS = [
+  "fireflies",
+  "otter\\.ai",
+  "read\\.ai",
+  "fathom",
+  "tl;?dv",
+  "meetgeek",
+  "avoma",
+  "sembly",
+  "bluedot",
+  "airgram",
+  "supernormal",
+  "circleback",
+  "tactiq",
+  "leexi",
+  "noota",
+  "claap",
+  "notta",
+  "krisp",
+  "gong\\.io",
+  "grain\\.com",
+  "recall\\.ai",
+  "note ?-?taker",
+  "\\bbot\\b",
+  "\\brecorder\\b",
+  "\\bai notes\\b",
+  "meeting notes",
+  "\\bai assistant\\b",
+  "meeting assistant",
+  "\\(ai\\)",
+  ...(process.env.AVA_IGNORE_PARTICIPANTS ?? "")
+    .split(",")
+    .map((s) => s.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .filter(Boolean),
+];
+
+/**
+ * What the in-page `state` checks need to tell people from bots, and her from everybody:
+ * her own tile says "You" (Meet) or her name (Teams), and is never a bot.
+ */
+export const PEOPLE = {
+  bots: BOTS.join("|"),
+  self: `^(you|${DISPLAY_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b|\\(you\\)`,
+};
+
 /** Which product a link belongs to, or null. Mirrors lib/platform.ts in the app. */
 export function platformOf(url) {
   let host;
@@ -101,12 +152,27 @@ export const meet = {
   },
 
   /** Runs inside the page, so it must be self-contained (and an arrow function: Playwright sends its source). */
-  state: () => {
-    // Everyone in the call, her included: one tile per person, and the People button's
-    // badge once there are more people than tiles.
-    const tiles = new Set(
-      [...document.querySelectorAll("[data-participant-id]")].map((e) => e.getAttribute("data-participant-id")),
-    ).size;
+  state: (who) => {
+    const bot = new RegExp(who.bots, "i");
+    const me = new RegExp(who.self, "i");
+    // One tile per person, her included, each showing their name. Nested elements repeat
+    // the id, so the fullest text for each id is the one to read.
+    const tiles = new Map();
+    for (const el of document.querySelectorAll("[data-participant-id]")) {
+      const id = el.getAttribute("data-participant-id");
+      const text = (el.innerText ?? "").trim();
+      if (!tiles.has(id) || text.length > tiles.get(id).length) tiles.set(id, text);
+    }
+    let humans = 0;
+    const bots = [];
+    for (const text of tiles.values()) {
+      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+      const name = lines.find((l) => bot.test(l));
+      if (name && !lines.some((l) => me.test(l))) bots.push(name);
+      else humans++;
+    }
+    // The People button's number counts everybody, bots too; it only matters when there
+    // are more people than tiles on screen, and then she is plainly not alone.
     let badge = 0;
     for (const b of document.querySelectorAll("button[aria-label]")) {
       if (!/people|everyone|participants/i.test(b.getAttribute("aria-label") ?? "")) continue;
@@ -118,7 +184,8 @@ export const meet = {
       inCall: Boolean(document.querySelector('[aria-label*="Leave call" i]')),
       ended: /you left the meeting|meeting has ended|you've been removed|return to home screen/i.test(text),
       alone: /you're the only one here|only one here/i.test(text),
-      people: Math.max(tiles, badge) || null,
+      people: (badge > tiles.size ? badge - bots.length : humans) || null,
+      bots,
       face: window.__ava?.face?.() ?? null,
     };
   },
@@ -268,21 +335,31 @@ export const teams = {
   },
 
   /** Runs inside the page, so it must be self-contained (and an arrow function: Playwright sends its source). */
-  state: () => {
+  state: (who) => {
+    const bot = new RegExp(who.bots, "i");
+    const me = new RegExp(who.self, "i");
     const text = document.body?.innerText?.slice(0, 6000) ?? "";
-    // The People button carries the count, in its label or as a badge.
-    let people = 0;
+    // The People button's number counts everybody, bots too.
+    let roster = 0;
     for (const b of document.querySelectorAll('button[aria-label], [role="button"][aria-label]')) {
       const label = b.getAttribute("aria-label") ?? "";
       if (!/people|participants|roster/i.test(label)) continue;
       const n = `${label} ${b.textContent ?? ""}`.match(/\b(\d{1,3})\b/);
-      if (n) people = Math.max(people, Number(n[1]));
+      if (n) roster = Math.max(roster, Number(n[1]));
     }
-    // One tile per person, her included: data-tid="video-item-container-<name>".
-    const tiles = new Set(
-      [...document.querySelectorAll('[data-tid^="video-item-container-"]')].map((e) => e.getAttribute("data-tid")),
-    ).size;
-    people = Math.max(people, tiles);
+    // One tile per person, her included, named in its data-tid:
+    // data-tid="video-item-container-<name>".
+    const names = [
+      ...new Set(
+        [...document.querySelectorAll('[data-tid^="video-item-container-"]')].map((e) =>
+          (e.getAttribute("data-tid") ?? "").slice("video-item-container-".length),
+        ),
+      ),
+    ];
+    const bots = names.filter((n) => bot.test(n) && !me.test(n));
+    const humans = names.length - bots.length;
+    // More people than tiles on screen: some are off it, and she is plainly not alone.
+    const people = names.length ? (roster > names.length ? roster - bots.length : humans) : roster;
     return {
       inCall: Boolean(
         document.querySelector(
@@ -292,6 +369,7 @@ export const teams = {
       ended: /you left the meeting|the meeting has ended|this meeting has ended|you've been removed|you have been removed|call ended/i.test(text),
       alone: /waiting for others to join|you're the only one here|no one else is here/i.test(text),
       people: people || null,
+      bots,
       face: window.__ava?.face?.() ?? null,
     };
   },
