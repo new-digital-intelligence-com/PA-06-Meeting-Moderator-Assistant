@@ -434,7 +434,9 @@ export default function Docs() {
                 </FileRow>
                 <FileRow path="lib/voice.mjs">ElevenLabs text-to-speech: mp3 for voice mode, raw audio for the face to lip-sync to.</FileRow>
                 <FileRow path="lib/account.mjs">Is she signed in to Google? If not, opens a sign-in window instead of joining as a stranger.</FileRow>
-                <FileRow path="lib/app.mjs">Every call to the brain, with her runner key.</FileRow>
+                <FileRow path="lib/app.mjs">
+                  Every call to the brain, with her runner key — and her face sessions, straight from Anam when the key is set here.
+                </FileRow>
                 <FileRow path="lib/config.mjs">Settings: app address, mode, face limits, Chrome profile, where state is kept.</FileRow>
                 <FileRow path="check.mjs · login.mjs · join.mjs">
                   Tools: test her voice and face on a pre-join screen without joining, sign her in, join one link by hand.
@@ -501,6 +503,7 @@ export default function Docs() {
                       [<C key="v">AVA_JOIN_EARLY_SECONDS</C>, "How early she opens a meeting (60)"],
                       [<C key="v">ANAM_SESSION_SECONDS</C>, "Your Anam plan’s session limit (180)"],
                       [<C key="v">AVA_FACE_IDLE_SECONDS</C>, "Quiet seconds before the face rests (45)"],
+                      [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face — she asks Anam herself (else the app does)"],
                       [<C key="v">AVA_SCREEN_PORT</C>, "Port for the web view (8080)"],
                     ]}
                   />

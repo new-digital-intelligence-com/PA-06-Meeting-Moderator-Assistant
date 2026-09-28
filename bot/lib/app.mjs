@@ -33,8 +33,29 @@ export const attend = () => call("POST", "/api/meeting/control", { command: "att
 /**
  * A short-lived session for her face: `{ sessionToken, avatarId }`. The face lip-syncs to
  * her own voice, which is sent to it, so it has no voice of its own.
+ *
+ * With ANAM_API_KEY and ANAM_AVATAR_ID in bot/.env she asks Anam herself, next to where
+ * her ElevenLabs key already lives; otherwise the app asks for her. Her first Teams call
+ * showed a black tile because the key on the app's side was wrong — this way her face
+ * depends on one file on her own server.
  */
-export const anamSession = () => call("POST", "/api/anam", { passthrough: true });
+export async function anamSession() {
+  const key = process.env.ANAM_API_KEY?.trim();
+  const avatarId = process.env.ANAM_AVATAR_ID?.trim();
+  if (!key || !avatarId) return call("POST", "/api/anam", { passthrough: true });
+
+  const res = await fetch("https://api.anam.ai/v1/auth/session-token", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ personaConfig: { name: "Ava", avatarId, enableAudioPassthrough: true } }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Anam refused the session: ${text.slice(0, 200)}`);
+  const { sessionToken } = JSON.parse(text);
+  if (!sessionToken) throw new Error("Anam returned no session token");
+  return { sessionToken, avatarId };
+}
 
 /**
  * Has the control room sent her somewhere? Takes it if so — once — and returns the

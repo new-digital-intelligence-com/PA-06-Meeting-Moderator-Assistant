@@ -11,7 +11,7 @@ export const UPDATED = "2026-09-28";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her ElevenLabs voice", tone: "emerald" },
-  { label: "Anam", value: "New account with fresh minutes — live once its key is on Vercel", tone: "sky" },
+  { label: "Anam", value: "New account, fresh minutes — face live, tested in her container", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "Docker on a PC for testing, running — a VPS next", tone: "sky" },
 ];
@@ -35,6 +35,7 @@ export const CHANGELOG: Change[] = [
       "The end of a call must be seen three checks in a row, so Teams hiding its toolbar cannot make her leave.",
       "She keeps a snapshot of the Teams page 20 seconds in and when she leaves, to check her captions and people count against it.",
       "Sent with nobody listed for the notes, they now go to whoever sent her.",
+      "Her container now asks Anam for face sessions itself (ANAM_API_KEY and ANAM_AVATAR_ID in bot/.env), so her face no longer depends on a key in the app's settings.",
     ],
     commits: [],
     tone: "sky",
