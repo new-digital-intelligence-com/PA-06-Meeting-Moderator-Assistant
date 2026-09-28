@@ -28,6 +28,19 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "She keeps the thread, and stops confirming every fragment",
+    points: [
+      "Working notes: she keeps a short running note of any role or task she is given and where it stands, and reads it every turn. In a replay of the interview she lost, she now tracks the plan and answers “where are we?” from it.",
+      "She sees about the last twenty minutes of the conversation instead of the last thirty caption lines — in Teams, barely a minute.",
+      "Two different people speaking makes a call a group, whatever the page's count says (Teams had not shown the third person's tile, so she answered everything everybody said).",
+      "She waits two seconds when a sentence trails off unfinished, confirms instructions once, greets once, and says nothing to “ok” or “yeah”.",
+      "Teams: the People number is read from its button directly.",
+    ],
+    commits: ["08b8c32"],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-28",
     title: "Other notetakers do not count as people",
     points: [
       "When counting who is in the call she reads each participant's name and skips notetaker bots — Fireflies, Otter, Read.ai, Fathom, tl;dv and the like — so a bot left behind no longer keeps her, face on, in an empty meeting.",

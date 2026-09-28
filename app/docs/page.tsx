@@ -232,14 +232,14 @@ export default function Docs() {
                 />
                 <Decision
                   ask="Is somebody still talking?"
-                  note="Less than a second since the last caption. The queue keeps: a question put to her while others talk on is answered at the next pause."
+                  note="Less than a second since the last caption — two if the sentence trails off unfinished. The queue keeps: a question put to her while others talk on is answered at the next pause."
                   yes="Wait for the pause."
                   tone="slate"
                 />
                 <Decision ask="Is her name anywhere in it — “Ava”, “Eva”, “Iva”…?" yes="Answer them." tone="emerald" />
                 <Decision
                   ask="Is it just her and one other person?"
-                  note="Counted from the people in the call; if that fails, from who has spoken."
+                  note="Two different people speaking makes it a group, whatever the page shows. Otherwise the people in the call."
                   yes="Answer — everything is said to her."
                   tone="emerald"
                 />
@@ -265,6 +265,11 @@ export default function Docs() {
                   General questions get a real answer from her own knowledge. Facts about this company, these people or this
                   project come only from the briefing and what was said — otherwise she says she does not know. Captions mishear:
                   she works out what was meant rather than asking people to repeat, and never corrects anyone on her name.
+                </Card>
+                <Card title="Her working notes">
+                  She keeps a short note of any role or task she has been given — “interviewer: three questions each, then
+                  evaluate; done Q1 Helmi, next Q1 Sami” — updates it as the meeting goes, and reads it every turn, with the last
+                  twenty-odd minutes of the conversation. That is how she keeps the thread.
                 </Card>
                 <Card title="Why is she quiet?">
                   Every change of reason is logged by the runner (<C>· listening — nothing new…</C>) and stored with the meeting
