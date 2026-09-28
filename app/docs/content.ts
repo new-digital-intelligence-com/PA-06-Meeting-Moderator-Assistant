@@ -31,7 +31,8 @@ export const CHANGELOG: Change[] = [
     title: "A designed notes email; she leaves empty rooms",
     points: [
       "The notes now arrive as an NDI-branded email: actions first with owners and due dates, then the summary and files, with the plain text alongside.",
-      "Nobody turns up: she leaves one minute after the start time, and sends no notes. Everybody leaves: she waits 30 seconds, then goes.",
+      "Nobody turns up: she leaves five minutes after the start time, and sends no notes. Everybody leaves: she waits five minutes in case they come back, then goes.",
+      "Her face session closes within seconds of the room emptying, and comes back when somebody returns.",
       "She says hello, and connects her face, only once somebody else is there — waiting in an empty room costs no Anam minutes.",
       "Teams: people are counted from their tiles, as her snapshot of a real call showed.",
     ],

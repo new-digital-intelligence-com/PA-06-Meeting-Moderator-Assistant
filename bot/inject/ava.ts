@@ -64,6 +64,8 @@ type AvaApi = {
   play(base64: string): Promise<boolean>;
   /** Somebody is talking to her: have the face ready for when she answers. */
   warm(): void;
+  /** Nobody else is in the meeting: close the face session now; `warm` brings it back. */
+  rest(): void;
   interrupt(): void;
   speaking(): boolean;
   /** "live", "connecting" or "down" — and "voice" in voice mode. */
@@ -667,6 +669,11 @@ if (window.top === window && platform && !window.__ava) {
       if (mode !== "avatar") return;
       lastActive = Date.now();
       if (face === "down") void openFace();
+    },
+
+    rest() {
+      if (mode !== "avatar" || face === "down") return;
+      dropFace("nobody else is in the meeting");
     },
 
     interrupt() {

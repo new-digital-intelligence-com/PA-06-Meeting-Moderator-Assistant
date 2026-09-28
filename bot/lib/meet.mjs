@@ -11,12 +11,14 @@ import { keepEvidence, platformOf } from "./platforms.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
-/** How long she stays once everybody else has left — a moment, in case somebody is only reconnecting. */
-const ALONE_MS = 30_000;
+/** How long she stays once everybody else has left, in case they are coming back. */
+const ALONE_MS = 5 * 60_000;
 /** How long after the start time she waits for anybody to turn up. */
-const NOBODY_MS = 60_000;
+const NOBODY_MS = 5 * 60_000;
 /** The same, when the page cannot tell whether she is alone: never longer than this. */
-const NOBODY_CAP_MS = 10 * 60_000;
+const NOBODY_CAP_MS = 15 * 60_000;
+/** Checks in a row (about 2.5 s) that find her alone before her face is put to rest. */
+const ALONE_CHECKS = 2;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -236,6 +238,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let sawOthers = false;
   /** Nobody else ever arrived: there is nothing to write up. */
   let nobodyCame = false;
+  /** Whether she is the only one in the call right now, and for how many checks in a row. */
+  let alone = false;
+  let aloneChecks = 0;
   /** Checks in a row that found no hang-up button: one alone is Teams hiding its toolbar. */
   let outOfCall = 0;
   const inCallAt = Date.now();
@@ -276,7 +281,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         },
         people,
         // Nobody else here yet: she holds her hello until somebody is.
-        waiting: !sawOthers,
+        // Nobody else here — yet, or any more: nothing to say to an empty room.
+        waiting: !sawOthers || alone,
       });
 
       // Why she is quiet, whenever that changes — "she stopped talking" should be
@@ -366,10 +372,28 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       wake();
     }
 
-    // Leaving an empty room. Nobody turned up: one minute after the start time (she may
-    // have come early). Everybody has gone: thirty seconds, in case somebody is only
-    // reconnecting. Either way her face session is closed on the way out.
+    // How she knows she is alone: the page's own count of people in the call is one —
+    // her — or it says so in words ("You're the only one here", "Waiting for others to
+    // join"). See `state` in platforms.mjs for each product.
     const aloneNow = state.alone || state.people === 1;
+    aloneChecks = aloneNow ? aloneChecks + 1 : 0;
+
+    // Her face is billed by the minute: put it to rest as soon as the room is empty, and
+    // bring it back the moment somebody returns.
+    if (MODE === "avatar" && sawOthers) {
+      if (aloneChecks === ALONE_CHECKS) {
+        log("  nobody else here — her face rests");
+        void page.evaluate(() => window.__ava?.rest?.()).catch(() => {});
+      } else if (!aloneNow && alone) {
+        log("  somebody is back");
+        void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+      }
+    }
+    alone = aloneNow;
+
+    // Leaving an empty room: five minutes, whether nobody turned up (counted from the
+    // start time — she may have come early) or everybody has gone (in case they come
+    // back). Her face session is closed on the way out either way.
     if (!sawOthers) {
       const deadline = Math.max(inCallAt, meeting.startsAt ?? 0) + NOBODY_MS;
       if ((aloneNow && Date.now() > deadline) || Date.now() - inCallAt > NOBODY_CAP_MS) {

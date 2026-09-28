@@ -141,7 +141,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, 30 seconds after everybody else has left, one minute after the start time if nobody turned up at all, or when it is ended from the control room. Her face session is closed on the way out.",
+                    body: "When the meeting ends, when she is removed, five minutes after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the meeting's own count of people (and its “you're the only one here”). Her face session is closed on the way out.",
                     tone: "violet",
                   },
                   {
@@ -311,7 +311,7 @@ export default function Docs() {
                     ["Lost mid-sentence", "She finishes the sentence without the face, from where it was cut."],
                     ["Out of minutes", "Anam refuses; she stops retrying for that meeting and carries on with her voice."],
                     ["No face at all", "Her last resting clip — or, before one exists, a card with her name. Never a black tile."],
-                    ["Empty room", "The face connects only once somebody else is in the meeting; until then the camera shows her at rest, at no cost."],
+                    ["Empty room", "The face connects only once somebody else is in the meeting, and is closed within seconds when everybody leaves; the camera shows her at rest, at no cost. It comes back the moment somebody returns."],
                     ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
                   ]}
                 />
