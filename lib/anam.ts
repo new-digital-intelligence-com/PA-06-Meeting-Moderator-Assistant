@@ -39,7 +39,7 @@ type PersonaDetail = {
 };
 
 /** Personas rarely change; resolving one per session would add a round trip to every join. */
-let resolved: { avatarId: string; voiceId: string; name: string } | null = null;
+let resolved: { avatarId: string; voiceId?: string; name: string } | null = null;
 
 /**
  * Works out which face and voice to use.
@@ -48,12 +48,14 @@ let resolved: { avatarId: string; voiceId: string; name: string } | null = null;
  * build a persona there, and we read the avatar and voice off it. Setting the avatar
  * and voice ids directly also works and skips the lookup.
  */
-async function persona(): Promise<{ avatarId: string; voiceId: string; name: string }> {
+async function persona(): Promise<{ avatarId: string; voiceId?: string; name: string }> {
   if (resolved) return resolved;
 
+  // An avatar id is enough for her face, which lip-syncs to her ElevenLabs voice and has
+  // no voice of its own; the Anam voice id only matters for the older full persona.
   const avatarId = process.env.ANAM_AVATAR_ID;
-  const voiceId = process.env.ANAM_VOICE_ID;
-  if (avatarId && voiceId) {
+  const voiceId = process.env.ANAM_VOICE_ID || undefined;
+  if (avatarId && (voiceId || !process.env.ANAM_PERSONA_ID)) {
     resolved = { avatarId, voiceId, name: process.env.BOT_NAME?.split("—")[0].trim() || "Ava" };
     return resolved;
   }
@@ -103,6 +105,9 @@ export type AnamSession = {
  */
 export async function createSession({ passthrough = false } = {}): Promise<AnamSession> {
   const { avatarId, voiceId, name } = await persona();
+  if (!passthrough && !voiceId) {
+    throw new AnamError("ANAM_VOICE_ID is not set — needed for Anam's own voice (the Recall stage).", 501);
+  }
 
   const res = await fetch(`${BASE}/auth/session-token`, {
     method: "POST",
@@ -135,7 +140,6 @@ export async function createSession({ passthrough = false } = {}): Promise<AnamS
 
 export function isConfigured() {
   return Boolean(
-    process.env.ANAM_API_KEY &&
-      (process.env.ANAM_PERSONA_ID || (process.env.ANAM_AVATAR_ID && process.env.ANAM_VOICE_ID)),
+    process.env.ANAM_API_KEY && (process.env.ANAM_PERSONA_ID || process.env.ANAM_AVATAR_ID),
   );
 }
