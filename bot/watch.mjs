@@ -51,9 +51,28 @@ function briefingFrom(invite) {
     .trim();
 }
 
+/**
+ * Meeting links she was sent to from the control room, and when. A meeting on her
+ * calendar that she was also sent to is the same meeting: without this she would walk
+ * back into it from the calendar the moment the first visit ended.
+ */
+const sent = new Map();
+const linkKey = (url) => {
+  try {
+    const u = new URL(url);
+    return `${u.hostname}${u.pathname}`.toLowerCase().replace(/\/+$/, "");
+  } catch {
+    return String(url);
+  }
+};
+
 async function nextMeeting() {
   const { invites, account } = await app.upcoming(12);
   const now = Date.now();
+  for (const i of invites) {
+    const at = sent.get(linkKey(i.meetingUrl));
+    if (at && at > i.start - 12 * 60 * 60_000 && !done.has(i.id)) remember(i.id);
+  }
   const due = invites.filter((i) => !done.has(i.id) && i.start - EARLY_MS <= now && i.end > now);
   return { due: due[0], invites, account };
 }
@@ -67,6 +86,7 @@ await ensureSignedIn({ log });
 async function dispatched() {
   const meeting = await app.claimDispatch(EARLY_MS / 1000);
   if (!meeting) return false;
+  sent.set(linkKey(meeting.meetingUrl), Date.now());
   log(`  → sent from the control room: ${meeting.title || meeting.meetingUrl}`);
   try {
     await attend(meeting, { log, briefed: true });

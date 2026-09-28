@@ -232,35 +232,29 @@ export default function ControlRoom({
       }),
     );
 
+  /**
+   * Sends her own Chrome — on her server — to the link: Google Meet as her own account,
+   * Teams as a guest. (It used to send a Recall bot for Meet links, which needed Recall,
+   * an Anam face on this app and a public URL, none of which her own Chrome uses.)
+   */
   const sendAva = async () => {
     await savePlan();
-    // Teams goes to her own Chrome, in her container: it never reaches her calendar, so
-    // this is the only way in. She joins as a guest and waits in the lobby.
-    if (platformOf(draft.meetingUrl) === "teams") {
-      const sent = await call("start", () =>
-        fetch("/api/meeting/control", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "dispatch" }),
-        }),
-      );
-      if (!sent) return;
-      say(
-        sent.meeting?.status === "scheduled"
-          ? `Booked. She will open the Teams link by herself at ${clock(sent.meeting.joinAt)}.`
-          : "Sent. She opens the Teams link within a few seconds — admit her from the lobby.",
-      );
-      return;
-    }
-    const data = await call("start", () => fetch("/api/meeting/start", { method: "POST" }));
-    if (!data) return;
-    if (data.meeting?.status === "scheduled") {
-      say(`Booked. She will join by herself at ${clock(data.meeting.joinAt)}.`);
-    } else if (config.signedIn) {
-      say("She is on her way in.");
-    } else {
-      say("She is knocking — let her in from the Meet window.");
-    }
+    const product = platformOf(draft.meetingUrl) === "teams" ? "Teams" : "Meet";
+    const sent = await call("start", () =>
+      fetch("/api/meeting/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "dispatch" }),
+      }),
+    );
+    if (!sent) return;
+    say(
+      sent.meeting?.status === "scheduled"
+        ? `Booked. She will open the ${product} link by herself at ${clock(sent.meeting.joinAt)}.`
+        : product === "Teams"
+          ? "Sent. She opens the Teams link within a few seconds — admit her from the lobby."
+          : "Sent. She opens the Meet link within a few seconds — straight in if she is on the invite, otherwise admit her.",
+    );
   };
 
   /**
@@ -297,18 +291,6 @@ export default function ControlRoom({
     if (written?.followUp) setFollowUp(written.followUp);
     if (written?.delivered?.sent) say(`Notes sent to ${written.followUp.to}.`);
     else if (written) say("Notes written — but there were no recipients. Add addresses below and send.");
-  };
-
-  const rehearse = async () => {
-    await savePlan();
-    await call("rehearse", () =>
-      fetch("/api/meeting/control", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "rehearse" }),
-      }),
-    );
-    window.open("/bot", "_blank");
   };
 
   const deliver = async (mode: "draft" | "send") => {
@@ -353,9 +335,10 @@ export default function ControlRoom({
   const planning = status === "draft";
   // No Recall bot and not her own Chrome either: nobody is in a call.
   const rehearsing = status === "live" && !meeting.botId && meeting.attendedBy !== "self";
-  const ready = config.googleConnected && config.recall && config.anam && config.publicUrlReachable;
-  // Teams links go to her own Chrome, which needs none of Recall, Anam or a public URL.
+  // Her own Chrome, on her server, does the joining: it only needs the runner key.
+  const ready = config.runnerKey;
   const teams = platformOf(draft.meetingUrl) === "teams";
+  const validLink = Boolean(platformOf(draft.meetingUrl));
   const name = config.botName.split("—")[0].trim();
 
   return (
@@ -384,7 +367,6 @@ export default function ControlRoom({
                     : `Not signed in. Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
             }
           />
-          <Pill ok={config.recall} label="Recall" hint="RECALL_API_KEY + RECALL_REGION" />
           {config.avaAccount ? (
             <Pill
               ok
@@ -401,22 +383,11 @@ export default function ControlRoom({
               Connect Ava&apos;s Google
             </a>
           )}
-          {/* Not a fault when off — she still works as a guest. Amber, not red. */}
-          <span
-            title={
-              config.signedIn
-                ? "She joins as her own Google account, with its name and photo."
-                : "She joins as a guest and has to be let in. Set RECALL_GOOGLE_LOGIN_GROUP_ID to give her an account — see the README."
-            }
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-              config.signedIn ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"
-            }`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${config.signedIn ? "bg-emerald-400" : "bg-amber-400"}`} />
-            {config.signedIn ? "Own account" : "Guest"}
-          </span>
-          <Pill ok={config.anam} label="Face & voice" hint="ANAM_API_KEY + ANAM_PERSONA_ID" />
-          <Pill ok={config.publicUrlReachable} label="Public URL" hint={config.publicUrl || "PUBLIC_URL is not set"} />
+          <Pill
+            ok={config.runnerKey}
+            label="Her server"
+            hint={config.runnerKey ? "AVA_RUNNER_KEY is set: her server can take meetings from here." : "AVA_RUNNER_KEY is not set — her server cannot reach this app."}
+          />
           <Pill
             ok={config.store !== "file" || !config.publicUrl.includes("vercel.app")}
             label={{ redis: "Redis", mongo: "Mongo", file: "File store" }[config.store]}
@@ -434,13 +405,6 @@ export default function ControlRoom({
         </div>
       </header>
 
-      {!config.publicUrlReachable && (
-        <p className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-amber-200">
-          <strong className="font-semibold">PUBLIC_URL is not reachable.</strong> Recall&apos;s browser loads{" "}
-          <code className="text-amber-100">/bot</code> over the internet, so localhost gives you a bot with a blank
-          tile.
-        </p>
-      )}
       {error && <p className="rounded-xl border border-rose-400/30 bg-rose-400/5 p-4 text-sm text-rose-200">{error}</p>}
       {note && <p className="rounded-xl border border-sky-400/30 bg-sky-400/5 p-4 text-sm text-sky-200">{note}</p>}
 
@@ -567,8 +531,8 @@ export default function ControlRoom({
             <span className="text-xs text-white/40">
               When does she join?{" "}
               <span className="text-white/25">
-                Pick the meeting from your calendar and this fills itself in. Anything less than ten
-                minutes away and she goes straight in.
+                Now, or a time to book her: she opens the link a minute before. Meetings she is
+                invited to on her calendar she joins by herself, without being sent.
               </span>
             </span>
             <div className="flex flex-wrap items-center gap-2">
@@ -593,23 +557,31 @@ export default function ControlRoom({
             </div>
           </div>
 
-          {teams ? (
+          {validLink && (
             <p className="mt-4 rounded-lg bg-sky-400/5 px-3 py-2 text-xs text-sky-200/80">
-              <strong>Teams:</strong> she opens the link in her own Chrome as a guest named {name} and waits in the lobby —
-              somebody in the meeting has to admit her.
-              {!config.runnerKey ? " AVA_RUNNER_KEY is not set, so her container cannot be reached." : ""}
+              {teams ? (
+                <>
+                  <strong>Teams:</strong> she opens the link in her own Chrome as a guest named {name} and waits in the
+                  lobby — somebody in the meeting has to admit her. She asks for emails for the notes in the chat.
+                </>
+              ) : (
+                <>
+                  <strong>Google Meet:</strong> she joins as {config.avaAccount ?? "her own Google account"} — straight in
+                  if she is on the invite, otherwise somebody admits her.
+                </>
+              )}
             </p>
-          ) : !config.signedIn && (
+          )}
+          {draft.meetingUrl && !validLink && (
             <p className="mt-4 rounded-lg bg-amber-400/5 px-3 py-2 text-xs text-amber-200/80">
-              She will join as a <strong>guest</strong> and somebody in the meeting will have to let her in.
-              {draft.joinAt ? " For a booked meeting, keep an eye on the Meet window at the start time." : ""}
+              That is not a Google Meet or Microsoft Teams link.
             </p>
           )}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
               className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
-              disabled={!(teams ? config.runnerKey : ready) || !draft.meetingUrl || busy !== null}
+              disabled={!ready || !validLink || busy !== null}
               onClick={sendAva}
             >
               {busy === "start"
@@ -621,15 +593,7 @@ export default function ControlRoom({
             <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
               Save
             </button>
-            <button
-              className={`${button} bg-white/5 text-white/70 hover:bg-white/10`}
-              title="Run her with no bot and no call — check her face and voice work before a room does."
-              onClick={rehearse}
-              disabled={busy !== null}
-            >
-              Rehearse
-            </button>
-            {!ready && !teams && <span className="text-xs text-white/30">Fix the red pills above first.</span>}
+            {!ready && <span className="text-xs text-white/30">AVA_RUNNER_KEY is not set on this app.</span>}
           </div>
         </Section>
       ) : (
@@ -643,8 +607,10 @@ export default function ControlRoom({
               : status === "joining"
                 ? meeting.dispatch
                   ? meeting.dispatch.takenAt
-                    ? "On her way in — admit her from the Teams lobby"
-                    : "Sent — waiting for her container to pick it up"
+                    ? platformOf(meeting.meetingUrl) === "teams"
+                      ? "On her way in — admit her from the Teams lobby"
+                      : "On her way in"
+                    : "Sent — waiting for her server to pick it up"
                   : config.signedIn
                     ? "On her way in"
                     : "Knocking — admit her in Google Meet"
@@ -688,7 +654,9 @@ export default function ControlRoom({
               </a>{" "}
               by herself at <strong>{clock(meeting.joinAt)}</strong>
               {meeting.dispatch
-                ? " from her container — somebody will need to admit her from the lobby."
+                ? platformOf(meeting.meetingUrl) === "teams"
+                  ? " from her server — somebody will need to admit her from the lobby."
+                  : " from her server, as herself."
                 : config.signedIn
                   ? " as her own account."
                   : " — somebody will need to let her in."}{" "}

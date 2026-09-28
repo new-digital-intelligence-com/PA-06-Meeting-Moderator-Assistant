@@ -94,7 +94,7 @@ export default function Docs() {
               id="flow"
               eyebrow="The flow"
               title="A meeting, start to finish"
-              intro="Nothing to click during a meeting. The whole thing starts from a calendar invite."
+              intro="Nothing to click during a meeting. It starts from a calendar invite — or from the control room, where you paste any Meet or Teams link and press Send."
             >
               <Steps
                 items={[
@@ -422,7 +422,8 @@ export default function Docs() {
                   Where her runner asks “have I been sent anywhere?” — each meeting sent from the control room is taken once.
                 </FileRow>
                 <FileRow path="components/ControlRoom.tsx">
-                  The page at <C>/</C>: connect accounts, see the transcript and actions live, end a meeting, edit and resend notes.
+                  The page at <C>/</C>: brief her, send her to any Meet or Teams link (or book her for later), see the transcript
+                  and actions live, end a meeting, edit and resend notes.
                 </FileRow>
                 <FileRow path="lib/recall.ts · app/bot · components/Stage.tsx" tag={<Chip>older path</Chip>}>
                   The Recall bot she used before she had her own Chrome. Still works; not the recommended way.

@@ -28,6 +28,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "Send her to a Google Meet from the control room",
+    points: [
+      "Send now puts her own Chrome in the meeting for Google Meet links too — as her own account, straight in if she is on the invite — instead of the old Recall bot, which needed Recall, an Anam face on the app and a public URL.",
+      "The control room drops the Recall-era checks and shows what matters: your Google, hers, her server and the store.",
+      "Sent to a meeting that is also on her calendar, she does not walk back into it from the calendar afterwards.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-09-28",
     title: "She runs on a server now",
     points: [
       "Her container moved from a PC to an AWS EC2 server (Ubuntu 24.04, 2 vCPU, 4 GB), with her Google sign-in carried over — no new sign-in needed. Docker starts at boot and she restarts by herself.",
