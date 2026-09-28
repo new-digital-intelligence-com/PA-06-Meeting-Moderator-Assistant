@@ -74,8 +74,11 @@ export async function POST(request: Request) {
       );
     }
     const at = before.joinAt && before.joinAt > Date.now() ? before.joinAt : Date.now();
+    // Nobody listed for the notes: they go to whoever sent her, rather than nowhere.
+    const sender = (await readSession()).google?.email;
     const meeting = await updateMeeting((m) => {
       m.dispatch = { at };
+      if (!m.recipients.length && sender) m.recipients = [sender.toLowerCase()];
       m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
       m.attendedBy = undefined;
       m.botId = undefined;

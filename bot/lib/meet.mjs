@@ -5,9 +5,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
+import { DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
 import { speech } from "./voice.mjs";
-import { platformOf } from "./platforms.mjs";
+import { keepEvidence, platformOf } from "./platforms.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -20,17 +20,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * A few seconds of her face at rest, filmed from the live avatar the first time, and
- * shown whenever the live face is not connected. Kept per avatar: a clip of a different
- * face would be worse than none.
+ * shown whenever the live face is not connected. Kept per avatar, and this avatar's is
+ * used when there is one; otherwise the newest kept — when Anam cannot be reached at all
+ * the avatar is not even known, and a black tile is what the room saw instead.
  */
 const idleClipFile = (avatarId) => path.join(STATE_DIR, `idle-${String(avatarId).replace(/[^\w-]/g, "")}.json`);
 function readIdleClip(avatarId) {
+  const files = avatarId ? [idleClipFile(avatarId)] : [];
   try {
-    const frames = JSON.parse(fs.readFileSync(idleClipFile(avatarId), "utf8"));
-    return Array.isArray(frames) && frames.length ? frames : undefined;
+    files.push(
+      ...fs
+        .readdirSync(STATE_DIR)
+        .filter((f) => /^idle-.+\.json$/.test(f))
+        .map((f) => path.join(STATE_DIR, f))
+        .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs),
+    );
   } catch {
-    return undefined;
+    /* no state folder yet */
   }
+  for (const file of files) {
+    try {
+      const frames = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (Array.isArray(frames) && frames.length) return frames;
+    } catch {
+      /* missing or unreadable: try the next */
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -155,7 +171,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     }
   });
   await context.addInitScript({
-    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify(FACE)};`,
+    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME })};`,
   });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 
@@ -170,10 +186,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       log(`  no face to start with (${e.message}) — she will speak without it`);
       return null;
     });
-    if (s) {
-      avatarId = s.avatarId;
-      startWith = { token: s.sessionToken, idleClip: readIdleClip(s.avatarId) };
-    }
+    if (s) avatarId = s.avatarId;
+    startWith = { token: s?.sessionToken, idleClip: readIdleClip(s?.avatarId) };
   }
   // Started on whichever page she is on, and again if it navigates: Teams' launcher loads
   // a new page, whose fresh copy of her script would otherwise leave Teams waiting for a
@@ -215,6 +229,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let aloneSince = null;
   /** Whether anybody else has been in the call — until then, being alone is just early. */
   let sawOthers = false;
+  /** Checks in a row that found no hang-up button: one alone is Teams hiding its toolbar. */
+  let outOfCall = 0;
+  const inCallAt = Date.now();
+  let snapshotTaken = false;
   let over = false;
   let lastReason = null;
   let faceState = MODE === "avatar" ? "down" : "voice";
@@ -318,8 +336,17 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
 
-    if (!state.inCall || state.ended) {
-      await finish("the meeting ended");
+    // Teams is new to her: a snapshot of the page once she is settled in, to check what
+    // she can see — captions, the people count — against what she reads from it.
+    if (platform.id === "teams" && !snapshotTaken && Date.now() - inCallAt > 20_000) {
+      snapshotTaken = true;
+      await keepEvidence(page, "teams-in-call", log);
+    }
+
+    outOfCall = state.inCall ? 0 : outOfCall + 1;
+    if (state.ended || outOfCall >= 3) {
+      if (platform.id === "teams") await keepEvidence(page, "teams-ended", log);
+      await finish(state.ended ? "the meeting ended" : "she is no longer in the call");
       break;
     }
     // Leave once everybody else has: a short grace for somebody reconnecting, and the

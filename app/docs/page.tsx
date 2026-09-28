@@ -310,6 +310,7 @@ export default function Docs() {
                     ["Saving minutes", "The face rests after 45 quiet seconds (AVA_FACE_IDLE_SECONDS) and reconnects as soon as somebody talks to her."],
                     ["Lost mid-sentence", "She finishes the sentence without the face, from where it was cut."],
                     ["Out of minutes", "Anam refuses; she stops retrying for that meeting and carries on with her voice."],
+                    ["No face at all", "Her last resting clip — or, before one exists, a card with her name. Never a black tile."],
                     ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
                   ]}
                 />
@@ -327,7 +328,7 @@ export default function Docs() {
                 items={[
                   {
                     title: "Paste the Teams link in the control room",
-                    body: "With the briefing and who gets the notes, then press Send (or set a time to book her for later).",
+                    body: "With the briefing and who gets the notes — nobody listed and they go to you — then press Send (or set a time to book her for later).",
                     tone: "sky",
                   },
                   {
@@ -356,9 +357,9 @@ export default function Docs() {
                 <Callout tone="amber" title="Depends on the other company’s Teams settings">
                   Their IT can turn off guest joining or live captions. If they have, she cannot get in, or cannot hear.
                 </Callout>
-                <Callout tone="sky" title="When something goes wrong">
-                  If a step fails she saves a screenshot and the page to her disk (<C>/data/debug-teams-*.png</C>) and says so in
-                  the log.
+                <Callout tone="sky" title="What she saw">
+                  She saves a screenshot and the page to her disk (<C>/data/debug-teams-*.png</C>) when a step fails, 20 seconds
+                  into each call, and when she decides the call is over — Teams changes its pages without notice.
                 </Callout>
               </div>
             </Section>

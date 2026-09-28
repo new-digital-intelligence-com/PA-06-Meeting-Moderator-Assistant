@@ -29,6 +29,8 @@ import { AnamEvent, createClient } from "@anam-ai/js-sdk";
 import type { AgentAudioInputStream, AnamClient } from "@anam-ai/js-sdk";
 
 type FaceOptions = {
+  /** Her name, for the card shown when there is no picture of her at all. */
+  name?: string;
   /** Anam's cut-off for one session on this plan. */
   sessionSeconds: number;
   /** How long the face stays connected after the conversation goes quiet. */
@@ -349,8 +351,25 @@ if (window.top === window && platform && !window.__ava) {
     else if (source === "idle") g.drawImage(idleFrame(), 0, 0, W, H);
     else if (source === "still") g.drawImage(still, 0, 0);
     else {
-      g.fillStyle = "#1f1f1f";
+      // No face and no clip of her yet: a card with her name, never a black tile.
+      const name = options.name || "Ava";
+      const bg = g.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, "#1e293b");
+      bg.addColorStop(1, "#0f172a");
+      g.fillStyle = bg;
       g.fillRect(0, 0, W, H);
+      g.fillStyle = "#38bdf8";
+      g.beginPath();
+      g.arc(W / 2, H / 2 - 40, 110, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#0f172a";
+      g.font = "600 120px system-ui, sans-serif";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(name.charAt(0).toUpperCase(), W / 2, H / 2 - 32);
+      g.fillStyle = "#e2e8f0";
+      g.font = "500 44px system-ui, sans-serif";
+      g.fillText(name, W / 2, H / 2 + 130);
     }
   };
 

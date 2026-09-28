@@ -25,8 +25,20 @@ export class AnamError extends Error {
   }
 }
 
+/**
+ * Pasted into a dashboard, a key picks up surrounding spaces, quotes, a trailing newline
+ * or even its own "ANAM_API_KEY=" — each enough for Anam to call it invalid, which is
+ * what left her face black in her first Teams call.
+ */
+const clean = (v: string | undefined, name: string) =>
+  (v ?? "")
+    .trim()
+    .replace(new RegExp(`^${name}\\s*=\\s*`), "")
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
+
 function apiKey() {
-  const key = process.env.ANAM_API_KEY;
+  const key = clean(process.env.ANAM_API_KEY, "ANAM_API_KEY");
   if (!key) throw new AnamError("ANAM_API_KEY is not set. Add it to .env.local and restart.", 501);
   return key;
 }
@@ -53,8 +65,8 @@ async function persona(): Promise<{ avatarId: string; voiceId?: string; name: st
 
   // An avatar id is enough for her face, which lip-syncs to her ElevenLabs voice and has
   // no voice of its own; the Anam voice id only matters for the older full persona.
-  const avatarId = process.env.ANAM_AVATAR_ID;
-  const voiceId = process.env.ANAM_VOICE_ID || undefined;
+  const avatarId = clean(process.env.ANAM_AVATAR_ID, "ANAM_AVATAR_ID") || undefined;
+  const voiceId = clean(process.env.ANAM_VOICE_ID, "ANAM_VOICE_ID") || undefined;
   if (avatarId && (voiceId || !process.env.ANAM_PERSONA_ID)) {
     resolved = { avatarId, voiceId, name: process.env.BOT_NAME?.split("—")[0].trim() || "Ava" };
     return resolved;

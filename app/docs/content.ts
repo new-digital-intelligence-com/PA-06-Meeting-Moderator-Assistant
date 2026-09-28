@@ -28,6 +28,19 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "First Teams call: fixes",
+    points: [
+      "She joined Teams as a guest, was admitted, switched on live captions and said hello — the join works.",
+      "Her tile was black: the Anam key on Vercel was refused, and the new avatar had no resting clip yet. She now shows her last resting clip, or a card with her name, and the key is cleaned of stray spaces and quotes.",
+      "The end of a call must be seen three checks in a row, so Teams hiding its toolbar cannot make her leave.",
+      "She keeps a snapshot of the Teams page 20 seconds in and when she leaves, to check her captions and people count against it.",
+      "Sent with nobody listed for the notes, they now go to whoever sent her.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-09-28",
     title: "Smarter in group calls, and she leaves when everybody else has",
     points: [
       "Everything unanswered waits in a queue, so a question put to her is not lost when somebody else talks straight after it.",
