@@ -309,6 +309,7 @@ export default function Docs() {
                     ["Saving minutes", "The face rests after 45 quiet seconds (AVA_FACE_IDLE_SECONDS) and reconnects as soon as somebody talks to her."],
                     ["Lost mid-sentence", "She finishes the sentence without the face, from where it was cut."],
                     ["Out of minutes", "Anam refuses; she stops retrying for that meeting and carries on with her voice."],
+                    ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
                   ]}
                 />
               </div>

@@ -67,6 +67,11 @@ type AvaApi = {
    * gets a fresh copy of this script, which has to be started again.
    */
   started(): boolean;
+  /**
+   * The meeting is over: close her face session now. Closing the browser alone leaves
+   * Anam to notice the connection has gone, and it bills by the minute until it does.
+   */
+  end(): Promise<void>;
 };
 
 /** Avatar mode's audio format, which is what Anam lip-syncs to. */
@@ -658,6 +663,14 @@ if (window.top === window && platform && !window.__ava) {
     speaking: () => isSpeaking,
     face: () => (mode === "voice" ? "voice" : face),
     started: () => startCalled,
+
+    async end() {
+      if (mode !== "avatar") return;
+      faceRetryAt = Number.POSITIVE_INFINITY; // nothing may reconnect it now
+      const c = client;
+      dropFace("the meeting is over");
+      await c?.stopStreaming().catch(() => {});
+    },
   };
 
   window.__ava = api;

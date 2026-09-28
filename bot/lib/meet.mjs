@@ -321,6 +321,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   }
 
   // 7 — after: leave, then the notes.
+  // Her face first: a session left for Anam to time out is billed until it does.
+  await page.evaluate(() => window.__ava?.end?.()).catch(() => {});
   await platform.leave(page).catch(() => {});
   await context.close().catch(() => {});
 

@@ -28,6 +28,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "Back in avatar mode; face sessions closed on the way out",
+    points: [
+      "She runs with her Anam face again. Until the Anam plan is upgraded (Free is 30/30 minutes) the face cannot connect, so she talks over her resting clip.",
+      "When a meeting ends she now closes the Anam session herself before leaving, instead of leaving Anam to notice — no minutes billed after she has gone.",
+    ],
+    commits: [],
+    tone: "violet",
+  },
+  {
+    date: "2026-09-28",
     title: "Microsoft Teams, sent from the control room",
     points: [
       "Paste a Teams link in the control room and press Send: her container picks it up within about ten seconds, opens it in her Chrome as a guest named Ava, and waits in the lobby to be admitted.",
