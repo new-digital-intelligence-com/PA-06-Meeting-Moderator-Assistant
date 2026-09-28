@@ -31,7 +31,7 @@ export const CHANGELOG: Change[] = [
     title: "She runs on a server now",
     points: [
       "Her container moved from a PC to an AWS EC2 server (Ubuntu 24.04, 2 vCPU, 4 GB), with her Google sign-in carried over — no new sign-in needed. Docker starts at boot and she restarts by herself.",
-      "Her screen is reached through an SSH tunnel; nothing on the server is open to the internet but SSH.",
+      "Her screen is online over HTTPS — Caddy in front with a Let's Encrypt certificate, her screen's own password behind it — and plain HTTP forwards to it. The server has 96 GB of disk and 4 GB of swap.",
     ],
     commits: [],
     tone: "emerald",

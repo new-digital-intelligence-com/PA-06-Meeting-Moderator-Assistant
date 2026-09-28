@@ -3,11 +3,15 @@
 #   cp .env.example .env      # then fill it in
 #   docker compose up -d --build
 #
-# Her screen is only reachable from the server itself — it is a signed-in Google account,
-# and a password sent over plain HTTP could be read by anyone on the path. Reach it from
-# your own computer through an SSH tunnel:
+# Her screen is a signed-in Google account, so it is never served over plain HTTP. Two ways
+# to reach it:
 #
-#   ssh -L 8080:localhost:8080 root@<server>      then open http://localhost:8080/vnc.html
+#   - Private (default): only from the server itself, through an SSH tunnel from your
+#     computer:  ssh -L 8080:localhost:8080 ubuntu@<server>   then http://localhost:8080/vnc.html
+#
+#   - Online, over HTTPS: set COMPOSE_PROFILES=public and AVA_SCREEN_HOST in .env (see
+#     .env.example), open ports 80 and 443 to the server, and `docker compose up -d`.
+#     Caddy gets a trusted certificate by itself; the screen's own password still applies.
 
 services:
   ava:
@@ -24,5 +28,22 @@ services:
     # Chrome crashes tabs when /dev/shm is Docker's default 64 MB.
     shm_size: "1gb"
 
+  # Her screen online, over HTTPS — only with COMPOSE_PROFILES=public.
+  screen:
+    image: caddy:2-alpine
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on: [ava]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      AVA_SCREEN_HOST: ${AVA_SCREEN_HOST:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates, kept across restarts so they are not requested again every time.
+      - screen-data:/data
+
 volumes:
   ava-data:
+  screen-data:

@@ -1,0 +1,26 @@
+# Her screen online, over HTTPS. Caddy obtains and renews the certificate for
+# AVA_SCREEN_HOST by itself — a name that points at this server, e.g. the free
+# 100-58-215-103.sslip.io for the IP 100.58.215.103, or a subdomain of your own.
+#
+# The screen's own password (user "ava", AVA_ADMIN_PASSWORD) is checked behind this, by
+# the screen itself; this only adds the encryption, so that password and everything on her
+# screen cannot be read on the way.
+
+{$AVA_SCREEN_HOST} {
+	# The address alone opens her screen, connected and scaled to the window.
+	@home path /
+	redir @home /vnc.html?autoconnect=true&resize=scale 302
+
+	reverse_proxy ava:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+	}
+}
+
+# The bare IP over HTTP: straight to the HTTPS address.
+:80 {
+	redir https://{$AVA_SCREEN_HOST}{uri} permanent
+}

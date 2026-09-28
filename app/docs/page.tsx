@@ -536,11 +536,12 @@ export default function Docs() {
 docker compose start           # start again
 docker compose stop            # stop — she will not join meetings
 docker compose logs -f         # follow what she is doing`}</CodeBlock>
-                <CodeBlock title="her screen">{`# on the server itself
-http://localhost:8080/vnc.html     user: ava
+                <CodeBlock title="her screen">{`# online, over HTTPS (COMPOSE_PROFILES=public)
+https://<AVA_SCREEN_HOST>          user: ava
 
-# from your computer, to a remote server
-ssh -L 8080:localhost:8080 root@<server>`}</CodeBlock>
+# or privately, through an SSH tunnel
+ssh -L 8080:localhost:8080 ubuntu@<server>
+http://localhost:8080/vnc.html`}</CodeBlock>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <Card title="Signed out?">She stops and opens a Google sign-in window. Sign her in on her screen and close it.</Card>
