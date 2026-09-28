@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { GoogleClient } from "@/lib/google";
-import { getMeeting, updateMeeting } from "@/lib/meeting";
-import { composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
+import { getMeeting, speakers, updateMeeting, type Meeting } from "@/lib/meeting";
+import { renderNotesEmail } from "@/lib/email";
+import { botName, composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
 import { readSession, sessionCookie, type Session } from "@/lib/session";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
 import { createDraft, sendEmail } from "@/lib/workspace";
@@ -103,8 +104,8 @@ export async function POST(request: Request) {
   try {
     const result =
       mode === "send"
-        ? { sent: true, ...(await sendEmail(google, to, written.subject, written.body)) }
-        : { sent: false, ...(await createDraft(google, to, written.subject, written.body)) };
+        ? { sent: true, ...(await sendEmail(google, to, written.subject, written.body, designed(meeting, written.subject, written.body))) }
+        : { sent: false, ...(await createDraft(google, to, written.subject, written.body, designed(meeting, written.subject, written.body))) };
 
     if (mode === "send") {
       await updateMeeting((m) => {
@@ -147,8 +148,8 @@ export async function PUT(request: Request) {
   try {
     const result =
       body.mode === "send"
-        ? { sent: true, ...(await sendEmail(google, to, subject, text)) }
-        : { sent: false, ...(await createDraft(google, to, subject, text)) };
+        ? { sent: true, ...(await sendEmail(google, to, subject, text, designed(meeting, subject, text))) }
+        : { sent: false, ...(await createDraft(google, to, subject, text, designed(meeting, subject, text))) };
 
     await updateMeeting((m) => {
       m.followUp = { to, subject, body: text, sentAt: body.mode === "send" ? Date.now() : m.followUp?.sentAt };
@@ -160,6 +161,21 @@ export async function PUT(request: Request) {
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Gmail refused it." }, { status: 502 });
   }
+}
+
+/** The NDI-branded version of the notes, built from the text being sent — edits included. */
+function designed(m: Meeting, subject: string, body: string) {
+  return renderNotesEmail({
+    subject,
+    body,
+    meeting: {
+      title: m.title,
+      startedAt: m.startedAt,
+      endedAt: m.endedAt,
+      participants: speakers(m).filter((s) => s.toLowerCase() !== botName().toLowerCase()),
+    },
+    assistant: botName(),
+  });
 }
 
 /**

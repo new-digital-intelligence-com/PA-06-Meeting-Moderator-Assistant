@@ -120,7 +120,7 @@ export default function Docs() {
                   },
                   {
                     title: "She introduces herself",
-                    body: "One fixed line — who she is, that she is taking notes. Scripted, so it cannot fail or ramble.",
+                    body: "Once somebody else is there — not to an empty room. One fixed line: who she is, that she is taking notes. Scripted, so it cannot fail or ramble.",
                     tone: "emerald",
                   },
                   {
@@ -141,7 +141,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, 20 seconds after everybody else has left (15 minutes if nobody ever turned up), or when it is ended from the control room. Her face session is closed on the way out.",
+                    body: "When the meeting ends, when she is removed, 30 seconds after everybody else has left, one minute after the start time if nobody turned up at all, or when it is ended from the control room. Her face session is closed on the way out.",
                     tone: "violet",
                   },
                   {
@@ -311,6 +311,7 @@ export default function Docs() {
                     ["Lost mid-sentence", "She finishes the sentence without the face, from where it was cut."],
                     ["Out of minutes", "Anam refuses; she stops retrying for that meeting and carries on with her voice."],
                     ["No face at all", "Her last resting clip — or, before one exists, a card with her name. Never a black tile."],
+                    ["Empty room", "The face connects only once somebody else is in the meeting; until then the camera shows her at rest, at no cost."],
                     ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
                   ]}
                 />
@@ -378,6 +379,11 @@ export default function Docs() {
                   Her meetings’ notes go from Ava’s Gmail to the invite’s guests — not meeting rooms, not herself. A second “send”
                   for the same meeting is ignored; an edited resend is deliberate.
                 </Card>
+                <Card tone="slate" title="A designed email">
+                  NDI-branded HTML — the actions first, each with its owner and due date, then the summary and any files — with the
+                  plain text alongside for mail apps that do not show HTML. Built from the text you can edit, so edits show up too.
+                  Nobody came, no email.
+                </Card>
               </div>
             </Section>
 
@@ -398,6 +404,7 @@ export default function Docs() {
                 <FileRow path="lib/store.ts">Where it is kept: Redis, MongoDB, or a local file in development.</FileRow>
                 <FileRow path="lib/ava.ts">Her own Google access, stored encrypted on the server; the runner-key check.</FileRow>
                 <FileRow path="lib/workspace.ts">Calendar (her invites), Gmail (drafts and sending), Drive (search and sharing).</FileRow>
+                <FileRow path="lib/email.ts">The NDI-branded notes email, built from the plain-text notes.</FileRow>
                 <FileRow path="lib/google.ts · lib/session.ts">Google OAuth and the encrypted session cookie for whoever uses the control room.</FileRow>
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
                 <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams.</FileRow>

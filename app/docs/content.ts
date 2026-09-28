@@ -28,6 +28,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "A designed notes email; she leaves empty rooms",
+    points: [
+      "The notes now arrive as an NDI-branded email: actions first with owners and due dates, then the summary and files, with the plain text alongside.",
+      "Nobody turns up: she leaves one minute after the start time, and sends no notes. Everybody leaves: she waits 30 seconds, then goes.",
+      "She says hello, and connects her face, only once somebody else is there — waiting in an empty room costs no Anam minutes.",
+      "Teams: people are counted from their tiles, as her snapshot of a real call showed.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-28",
     title: "Settings tidied; the site survives a missing Redis URL",
     points: [
       "The app's own settings now hold only what it uses: her face (Anam) and voice (ElevenLabs) are configured in her container.",

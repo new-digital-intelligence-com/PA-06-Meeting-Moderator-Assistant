@@ -53,6 +53,8 @@ type TickBody = {
   captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
   /** How many people are in the call, her included. Null when the page cannot tell. */
   people?: number | null;
+  /** Nobody else has arrived yet: no hello to an empty room. */
+  waiting?: boolean;
 };
 
 /** A second of silence in the captions: the moment a person would take their turn. */
@@ -307,6 +309,7 @@ export async function POST(request: Request) {
 
   if (meeting.status !== "live") return quiet(`meeting is ${meeting.status}`);
   if (body.idle === false) return quiet("she is still speaking");
+  if (body.waiting) return quiet("waiting for somebody to arrive");
 
   /* 1 ─ the opening, once */
   const cue = dueCue(meeting);

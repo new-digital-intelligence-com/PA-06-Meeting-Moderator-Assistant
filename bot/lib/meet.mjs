@@ -12,9 +12,11 @@ import { keepEvidence, platformOf } from "./platforms.mjs";
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
 /** How long she stays once everybody else has left — a moment, in case somebody is only reconnecting. */
-const ALONE_MS = 20_000;
-/** How long she waits in an empty meeting nobody has turned up to yet. */
-const NOBODY_MS = 15 * 60_000;
+const ALONE_MS = 30_000;
+/** How long after the start time she waits for anybody to turn up. */
+const NOBODY_MS = 60_000;
+/** The same, when the page cannot tell whether she is alone: never longer than this. */
+const NOBODY_CAP_MS = 10 * 60_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -52,7 +54,8 @@ function readIdleClip(avatarId) {
 /**
  * Attends one meeting from start to finish, then writes and sends the notes.
  *
- * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[] }} meeting
+ * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[], startsAt?: number }} meeting
+ *   `startsAt`: when the meeting is due to start — she may be early, and waits for people from then.
  * @param {{ log?: (m: string) => void, briefed?: boolean }} options `briefed`: sent from the
  *   control room, whose briefing is already on the server and must not be overwritten.
  */
@@ -187,7 +190,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       return null;
     });
     if (s) avatarId = s.avatarId;
-    startWith = { token: s?.sessionToken, idleClip: readIdleClip(s?.avatarId) };
+    // The face connects when somebody else is there: minutes spent on an empty room are
+    // minutes billed for nothing.
+    startWith = { token: s?.sessionToken, idleClip: readIdleClip(s?.avatarId), faceLater: true };
   }
   // Started on whichever page she is on, and again if it navigates: Teams' launcher loads
   // a new page, whose fresh copy of her script would otherwise leave Teams waiting for a
@@ -229,6 +234,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let aloneSince = null;
   /** Whether anybody else has been in the call — until then, being alone is just early. */
   let sawOthers = false;
+  /** Nobody else ever arrived: there is nothing to write up. */
+  let nobodyCame = false;
   /** Checks in a row that found no hang-up button: one alone is Teams hiding its toolbar. */
   let outOfCall = 0;
   const inCallAt = Date.now();
@@ -268,6 +275,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
           secondsSinceLast: lastHeardAt ? Math.round((Date.now() - lastHeardAt) / 100) / 10 : null,
         },
         people,
+        // Nobody else here yet: she holds her hello until somebody is.
+        waiting: !sawOthers,
       });
 
       // Why she is quiet, whenever that changes — "she stopped talking" should be
@@ -349,14 +358,29 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       await finish(state.ended ? "the meeting ended" : "she is no longer in the call");
       break;
     }
-    // Leave once everybody else has: a short grace for somebody reconnecting, and the
-    // face session is closed on the way out. Alone before anybody has arrived is only
-    // being early, and gets a long wait instead.
-    if ((state.people ?? 0) >= 2 || heardCount > 0) sawOthers = true;
-    if (state.alone || state.people === 1) {
+    // Somebody else is here: say hello, and bring her face up for them.
+    if (!sawOthers && ((state.people ?? 0) >= 2 || heardCount > 0)) {
+      sawOthers = true;
+      log("  somebody is here");
+      if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+      wake();
+    }
+
+    // Leaving an empty room. Nobody turned up: one minute after the start time (she may
+    // have come early). Everybody has gone: thirty seconds, in case somebody is only
+    // reconnecting. Either way her face session is closed on the way out.
+    const aloneNow = state.alone || state.people === 1;
+    if (!sawOthers) {
+      const deadline = Math.max(inCallAt, meeting.startsAt ?? 0) + NOBODY_MS;
+      if ((aloneNow && Date.now() > deadline) || Date.now() - inCallAt > NOBODY_CAP_MS) {
+        nobodyCame = true;
+        await finish("nobody came");
+        break;
+      }
+    } else if (aloneNow) {
       aloneSince ??= Date.now();
-      if (Date.now() - aloneSince > (sawOthers ? ALONE_MS : NOBODY_MS)) {
-        await finish(sawOthers ? "everybody else left" : "nobody came");
+      if (Date.now() - aloneSince > ALONE_MS) {
+        await finish("everybody else left");
         break;
       }
     } else {
@@ -380,6 +404,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   }
 
   await app.stop().catch((e) => log(`  could not close the meeting: ${e.message}`));
+  if (nobodyCame) {
+    log("  nobody came — no notes to send");
+    return;
+  }
   try {
     const r = await app.sendNotes();
     log(r.delivered?.sent ? `  notes sent to ${r.followUp?.to}` : "  notes written — nobody to send them to");

@@ -278,6 +278,11 @@ export const teams = {
       const n = `${label} ${b.textContent ?? ""}`.match(/\b(\d{1,3})\b/);
       if (n) people = Math.max(people, Number(n[1]));
     }
+    // One tile per person, her included: data-tid="video-item-container-<name>".
+    const tiles = new Set(
+      [...document.querySelectorAll('[data-tid^="video-item-container-"]')].map((e) => e.getAttribute("data-tid")),
+    ).size;
+    people = Math.max(people, tiles);
     return {
       inCall: Boolean(
         document.querySelector(

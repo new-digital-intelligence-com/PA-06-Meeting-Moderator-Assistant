@@ -108,6 +108,7 @@ for (;;) {
           title: due.title,
           context: briefingFrom(due),
           recipients: due.guests.map((g) => g.email),
+          startsAt: due.start,
         },
         { log },
       );

@@ -108,22 +108,44 @@ export async function fileMeta(google: GoogleClient, fileId: string): Promise<Dr
 
 /* ------------------------------------------------------------------- gmail */
 
-function rfc822(to: string, subject: string, body: string) {
-  const lines = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "",
-    body,
-  ];
+/**
+ * The message Gmail sends. With `html`, the designed version and the plain text travel
+ * together (multipart/alternative): mail apps show the HTML, and anything that cannot
+ * falls back to the text. Both parts, and the subject, are encoded so that a dash or an
+ * accent arrives as written.
+ */
+function rfc822(to: string, subject: string, body: string, html?: string) {
+  const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64").replace(/.{76}/g, "$&\r\n");
+  const head = [`To: ${to}`, `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`, "MIME-Version: 1.0"];
+  const lines = html
+    ? (() => {
+        const boundary = `ava-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        return [
+          ...head,
+          `Content-Type: multipart/alternative; boundary="${boundary}"`,
+          "",
+          `--${boundary}`,
+          'Content-Type: text/plain; charset="UTF-8"',
+          "Content-Transfer-Encoding: base64",
+          "",
+          b64(body),
+          `--${boundary}`,
+          'Content-Type: text/html; charset="UTF-8"',
+          "Content-Transfer-Encoding: base64",
+          "",
+          b64(html),
+          `--${boundary}--`,
+          "",
+        ];
+      })()
+    : [...head, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", b64(body)];
   return Buffer.from(lines.join("\r\n"), "utf8").toString("base64url");
 }
 
-export async function createDraft(google: GoogleClient, to: string, subject: string, body: string) {
+export async function createDraft(google: GoogleClient, to: string, subject: string, body: string, html?: string) {
   const draft = await google.request<{ id: string; message?: { id: string } }>(`${GMAIL}/drafts`, {
     method: "POST",
-    body: JSON.stringify({ message: { raw: rfc822(to, subject, body) } }),
+    body: JSON.stringify({ message: { raw: rfc822(to, subject, body, html) } }),
   });
   return {
     draftId: draft.id,
@@ -132,10 +154,10 @@ export async function createDraft(google: GoogleClient, to: string, subject: str
   };
 }
 
-export async function sendEmail(google: GoogleClient, to: string, subject: string, body: string) {
+export async function sendEmail(google: GoogleClient, to: string, subject: string, body: string, html?: string) {
   const sent = await google.request<{ id: string }>(`${GMAIL}/messages/send`, {
     method: "POST",
-    body: JSON.stringify({ raw: rfc822(to, subject, body) }),
+    body: JSON.stringify({ raw: rfc822(to, subject, body, html) }),
   });
   return { messageId: sent.id, to };
 }

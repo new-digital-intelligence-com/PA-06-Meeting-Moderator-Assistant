@@ -424,7 +424,7 @@ const FOLLOWUP_TOOL: Anthropic.Tool = {
       body: {
         type: "string",
         description:
-          "ONLY the opening of the email: one line of context, then the actions as a numbered list with owners and dates. Stop there. The notes and the file links are appended after this automatically — do not write them here, do not refer to them as being 'below', and do not add a sign-off.",
+          "ONLY the opening of the email: one line of context, then the actions as a numbered list, each written exactly as `1. Owner — what to do (by when)`, leaving out the owner or the date when nobody said one. Stop there. The notes and the file links are appended after this automatically — do not write them here, do not refer to them as being 'below', and do not add a sign-off.",
       },
     },
     required: ["summary", "subject", "body"],

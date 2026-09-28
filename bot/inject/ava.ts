@@ -55,7 +55,11 @@ declare global {
 
 type AvaApi = {
   /** Avatar mode takes the first session token, and her idle clip if one was saved. */
-  start(options?: { token?: string; idleClip?: string[] }): Promise<void>;
+  /**
+   * `faceLater`: do not connect the face yet — nobody else is in the meeting, and an
+   * empty room is not worth Anam's minutes. `warm()` brings it up when somebody arrives.
+   */
+  start(options?: { token?: string; idleClip?: string[]; faceLater?: boolean }): Promise<void>;
   /** Her voice: base64 mp3 in voice mode, 16 kHz 16-bit mono PCM in avatar mode. */
   play(base64: string): Promise<boolean>;
   /** Somebody is talking to her: have the face ready for when she answers. */
@@ -592,9 +596,14 @@ if (window.top === window && platform && !window.__ava) {
       setInterval(draw, 40);
       if (opts.idleClip?.length) await loadIdle(opts.idleClip).catch((e) => log(`idle clip unusable: ${e}`));
 
-      // She says hello the moment she walks in, so the face is wanted straight away.
       firstToken = opts.token;
       lastActive = Date.now();
+      if (opts.faceLater) {
+        // The camera shows her at rest until somebody is there to see her.
+        log("voice ready — her face connects when somebody else arrives");
+        markReady();
+        return;
+      }
       await Promise.race([openFace(), sleep(12_000)]);
       log(face === "live" ? "face and voice ready" : "voice ready — her face will join when Anam connects");
       markReady();
