@@ -28,6 +28,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-28",
+    title: "Settings tidied; the site survives a missing Redis URL",
+    points: [
+      "The app's own settings now hold only what it uses: her face (Anam) and voice (ElevenLabs) are configured in her container.",
+      "With KV_REST_API_URL deleted, every page that reads the meeting failed and her container could not reach the site. The address is now worked out from KV_URL, which the Upstash integration also sets.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
+  {
+    date: "2026-09-28",
     title: "First Teams call: fixes",
     points: [
       "She joined Teams as a guest, was admitted, switched on live captions and said hello — the join works.",

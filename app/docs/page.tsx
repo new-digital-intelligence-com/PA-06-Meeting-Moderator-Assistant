@@ -478,14 +478,14 @@ export default function Docs() {
                     rows={[
                       [<C key="v">ANTHROPIC_API_KEY</C>, "Claude"],
                       [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the live and write-up models"],
-                      [<C key="v">KV_REST_API_URL · _TOKEN</C>, "Redis for the meeting state"],
+                      [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state — required; the URL is worked out from KV_URL if missing"],
                       [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "Google sign-in"],
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
                       [<C key="v">AVA_ALIASES</C>, "Other spellings of her name (default Eva, Iva, Eeva, Ayva, Avah)"],
                       [<C key="v">BOT_NAME</C>, "Her name"],
-                      [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face (no Anam voice needed)"],
+                      [<C key="v">RECALL_API_KEY · RECALL_REGION</C>, "Only the Send button on a Google Meet link (the older Recall bot)"],
                     ]}
                   />
                 </div>

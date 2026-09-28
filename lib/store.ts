@@ -42,8 +42,20 @@ const LOCK = "meeting:lock";
 const LOCK_MS = 5000;
 
 function redisCreds() {
-  const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+  let url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Upstash's REST address is its Redis host over HTTPS, and the integration also sets
+  // the plain Redis URL. With only that left — KV_REST_API_URL was deleted once and every
+  // page that reads the meeting fell back to a file, which Vercel does not allow — work
+  // the address out from it.
+  if (!url && token) {
+    const tcp = process.env.KV_URL || process.env.REDIS_URL;
+    try {
+      if (tcp) url = `https://${new URL(tcp).hostname}`;
+    } catch {
+      /* not a URL: no Redis */
+    }
+  }
   return url && token ? { url: url.replace(/\/$/, ""), token } : null;
 }
 
