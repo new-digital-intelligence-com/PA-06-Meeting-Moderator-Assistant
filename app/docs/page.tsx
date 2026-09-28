@@ -199,7 +199,7 @@ export default function Docs() {
                 <Stat value="ElevenLabs" label="Her voice · Flash v2.5" />
                 <Stat value="Upstash Redis" label="The meeting state" />
                 <Stat value="Google APIs" label="Calendar, Gmail, Drive" />
-                <Stat value={<span className="text-white/50">Anam</span>} label="Her face · paused" />
+                <Stat value="Anam" label="Her face · Cara, lip-synced" />
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -284,14 +284,14 @@ export default function Docs() {
               }
             >
               <div className="grid gap-4 md:grid-cols-2">
-                <Card tone="emerald" kicker="In use" title="Voice mode">
+                <Card tone="emerald" kicker="Default" title="Voice mode">
                   <p>
                     She joins camera-off with her Google profile photo. Each reply is turned into speech by ElevenLabs and played
                     into a microphone track that exists only in her browser.
                   </p>
                   <p className="mt-2">One request per sentence, nothing held open — so nothing can drop mid-meeting.</p>
                 </Card>
-                <Card tone="amber" kicker="Paused" title="Avatar mode">
+                <Card tone="violet" kicker="In use" title="Avatar mode">
                   <p>
                     Her camera is a canvas. While she is in conversation it shows her Anam face, lip-synced to the same
                     ElevenLabs audio. Otherwise it crossfades to a looping clip of her at rest, filmed once from the live face and

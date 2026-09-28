@@ -10,10 +10,10 @@ export const UPDATED = "2026-09-28";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
-  { label: "Mode", value: "Voice only — she joins with her profile photo", tone: "emerald" },
+  { label: "Mode", value: "Avatar — Anam face on her ElevenLabs voice", tone: "emerald" },
+  { label: "Anam", value: "Free minutes used up — the face moves again once the plan is upgraded", tone: "amber" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
-  { label: "Avatar", value: "Paused — Anam's free minutes are used up this month", tone: "amber" },
-  { label: "Runner", value: "Docker on a PC for testing, stopped — a VPS next", tone: "slate" },
+  { label: "Runner", value: "Docker on a PC for testing, running — a VPS next", tone: "sky" },
 ];
 
 export type Change = {
