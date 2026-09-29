@@ -6,7 +6,7 @@ import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
 import { BRAIN, DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
-import { connectLive } from "./live.mjs";
+import { DELEGATE, EFFORT, connectLive } from "./live.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
 import { CHAT_ASK, langOf } from "./language.mjs";
@@ -64,16 +64,64 @@ function liveInstructions(meeting, lang, product) {
     "Stop speaking when somebody interrupts. Listen to what they say and respond to that.",
     "",
     "# Delegation policy",
-    "Your backend has the full transcript of this meeting, the actions noted so far and your working notes. Delegate to the backend when:",
+    `Your backend has the full transcript of this meeting, the actions noted so far and your working notes${DELEGATE === "claude" ? "" : ", and it can search the web"}. Delegate to the backend when:`,
     "- somebody asks what was said, agreed or decided earlier in this meeting, for a recap, or for the actions so far;",
     "- somebody asks you to note down or remember an action, a decision or a task;",
-    "- the answer depends on facts about this company, these people or this project that are not in what you were told above.",
-    "Delegate before answering anything that depends on it: say at most a very short 'one moment' and do not guess the result. Answer general questions from your own knowledge without delegating.",
+    "- the answer depends on facts about this company, these people or this project that are not in what you were told above;",
+    ...(DELEGATE === "claude" ? [] : ["- somebody asks about something current — news, prices, weather, a recent release — or a fact you are not sure of;"]),
+    "- a question needs careful thought: a calculation, a comparison, a plan.",
+    "Delegate before answering anything that depends on it: say at most a very short 'one moment' and do not guess the result. Answer simple general questions from your own knowledge without delegating.",
     "",
     "# Facts",
     "Facts about this company, these people or this project come only from what you were told, what was said, or your backend; otherwise say you don't know. Never invent a decision, a commitment or a deadline.",
   ].join("\n");
 }
+
+/**
+ * What GPT-Live's OpenAI backend is told: it answers what she hands over, and the meeting
+ * itself it reads with our tools rather than guessing.
+ */
+function backendInstructions(meeting, lang) {
+  return [
+    `You are the backend of ${DISPLAY_NAME}, NDI's meeting assistant, who is taking part in a live meeting by voice. Her voice model hands you what needs thought, the meeting's record or the web; your answer is spoken aloud by her, in her own words.`,
+    "",
+    `Meeting: ${meeting.title || "Meeting"}`,
+    "What she was told beforehand:",
+    (meeting.context?.trim() || "(nothing — no briefing)").slice(0, 30_000),
+    "",
+    "How to answer:",
+    "- Anything about this meeting — what was said, agreed or decided, a recap, the actions so far, who said what — call meeting_record first and answer only from it. Never invent a decision, a commitment or a deadline.",
+    "- Asked to note down an action, a decision or a task: call note_action, then confirm in a few words.",
+    "- Current or public facts: search the web. Facts about this company, these people or this project come only from the briefing and the record; if they are not there, say so.",
+    `- Answer in ${LANGUAGE_NAME[lang]} unless the request is in another language, then in that one.`,
+    "- Short and speakable: the answer itself in one to three sentences. No lists, no markdown, no links; say numbers the way they are spoken.",
+  ].join("\n");
+}
+
+/** Her backend's tools: the meeting as the app has it, and noting an action. */
+const BACKEND_TOOLS = [
+  {
+    type: "function",
+    name: "meeting_record",
+    description: "The meeting so far: the transcript from live captions (speaker names included), the actions noted and her working notes.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    type: "function",
+    name: "note_action",
+    description: "Write down an action, a decision or a task somebody asked her to note. It goes into the notes emailed after the meeting.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "The action, phrased as a task." },
+        owner: { type: "string", description: "Who owns it, if named." },
+        due: { type: "string", description: "Plain-language due date, if given." },
+      },
+      required: ["text"],
+      additionalProperties: false,
+    },
+  },
+];
 
 /** Whether a piece of her voice has any sound in it — Live may stream silence between turns. */
 function voiced(b64) {
@@ -453,12 +501,37 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         }.`,
       );
     }
-    log(`  GPT-Live is her ears and voice${resume ? " again" : ""}; Claude is her memory`);
+    log(`  GPT-Live is her ears and voice${resume ? " again" : ""}; ${DELEGATE === "claude" ? "Claude" : `${DELEGATE} (${EFFORT} effort)`} does the thinking`);
   };
 
   const openLive = (resume, recap, openedAt) => {
     const session = connectLive({
       instructions: liveInstructions(meeting, lang, platform.name),
+      // What she hands over: to Claude through the app, or to an OpenAI model OpenAI runs.
+      delegation:
+        DELEGATE === "claude"
+          ? { type: "client" }
+          : {
+              type: "responses",
+              responses: {
+                model: DELEGATE,
+                instructions: backendInstructions(meeting, lang),
+                reasoning: { effort: EFFORT },
+                text: { verbosity: "low" },
+                tools: [{ type: "web_search" }, ...BACKEND_TOOLS],
+                tool_choice: "auto",
+                parallel_tool_calls: false,
+              },
+            },
+      onFunctionCall: async (name, args) => {
+        if (name === "meeting_record") return (await app.record()).record;
+        if (name === "note_action") {
+          await app.record(args);
+          log(`  noted: ${args.text}`);
+          return "Noted — it will be in the notes emailed after the meeting.";
+        }
+        return "Unknown tool.";
+      },
       history: resume && recap ? `The meeting so far, from its captions (your session was reconnected; carry on from here):\n${recap}` : null,
       log,
       onStarted: (expiresAt) => {
@@ -475,7 +548,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         recent.set(`said:${at}`, `${DISPLAY_NAME}: ${text}`);
         said.push({ key: `live:${at.toString(36)}:${said.length}`, text, at });
       },
-      onDelegation: (id) => void answerDelegation(id),
+      onDelegation: (id, target) => {
+        if (target === "client") void answerDelegation(id);
+        else log(`  she hands it to ${DELEGATE}`);
+      },
       onClose: (why, byUs) => {
         // A session she replaced or closed herself: nothing to do.
         if (rt !== session) return;

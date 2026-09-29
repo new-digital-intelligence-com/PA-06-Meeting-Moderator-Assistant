@@ -70,6 +70,9 @@ export const tick = (body) => call("POST", "/api/moderator/tick", body);
 /** GPT-Live handed something over that needs her memory of the meeting: Claude answers. */
 export const ask = (asked) => call("POST", "/api/moderator/ask", { asked });
 
+/** The meeting so far — transcript, actions, notes — for GPT-Live's OpenAI backend; `note` adds an action first. */
+export const record = (note) => call("POST", "/api/moderator/record", note ? { note } : {});
+
 /** She has left the call. */
 export const stop = () => call("POST", "/api/meeting/control", { command: "stop" });
 

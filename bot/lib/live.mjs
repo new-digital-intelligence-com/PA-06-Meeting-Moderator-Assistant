@@ -1,27 +1,33 @@
 // OpenAI GPT-Live: her ears and voice when AVA_BRAIN=live. One model hears the meeting and
 // talks, over one live connection — it listens while it speaks ("full duplex"), so it
-// takes turns, stops when talked over and backchannels by itself. What needs her memory
-// of the meeting it hands back to us ("delegation"), and Claude answers.
+// takes turns, stops when talked over and backchannels by itself. What needs more
+// thought or her memory of the meeting it hands to a backend ("delegation"): an OpenAI
+// model that OpenAI runs for it, or Claude through the app.
 //
 // This file is only the connection. What she is told, when she may speak and where her
 // voice goes are decided in meet.mjs.
 
 const LIVE_URL = "wss://api.openai.com/v1/live/sessions";
 export const LIVE_MODEL = process.env.OPENAI_LIVE_MODEL || "gpt-live-1";
-const VOICE = process.env.OPENAI_VOICE || "gleam";
+export const VOICE = process.env.OPENAI_VOICE || "gleam";
+/** Who answers what she hands over: an OpenAI model (OpenAI runs it), or "claude" (the app). */
+export const DELEGATE = (process.env.OPENAI_DELEGATION_MODEL || "gpt-6-luna").trim();
+/** How hard the OpenAI backend thinks: none, minimal, low, medium, high, xhigh. */
+export const EFFORT = (process.env.OPENAI_DELEGATION_EFFORT || "low").trim();
 /** What she said is transcribed in pieces with no end marker: a pause this long ends a line. */
 const LINE_GAP_MS = 1200;
 
 /**
- * Opens a session. Handlers:
+ * Opens a session. `delegation` is the session's delegation config. Handlers:
  *   onAudio(base64Pcm24k)       a piece of her voice, in order, as it is made
  *   onHeard(text)               a piece of what the room said, as she heard it
  *   onSaid(text, at)            one line of hers, once she has finished it
- *   onDelegation(id)            she handed something over — answer with say(text, id)
+ *   onDelegation(id, target)    she handed something over; for "client", answer with say(text, id)
+ *   onFunctionCall(name, args)  the OpenAI backend calls one of our tools; resolves to its output
  *   onStarted(expiresAt)        the session is up (expiresAt in ms)
  *   onClose(reason, byUs)       the session ended
  */
-export function connectLive({ instructions, history, log, onAudio, onHeard, onSaid, onDelegation, onStarted, onClose }) {
+export function connectLive({ instructions, history, delegation, log, onAudio, onHeard, onSaid, onDelegation, onFunctionCall, onStarted, onClose }) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new Error("OPENAI_API_KEY is not set in bot/.env");
 
@@ -43,8 +49,7 @@ export function connectLive({ instructions, history, log, onAudio, onHeard, onSa
         model: LIVE_MODEL,
         instructions,
         audio: { format: { type: "audio/pcm", rate: 24000 }, output: { voice: VOICE } },
-        // What she hands over comes to us, and Claude answers it.
-        delegation: { type: "client" },
+        delegation: delegation ?? { type: "client" },
         ...(history ? { input: [{ type: "message", role: "developer", content: [{ type: "input_text", text: history }] }] } : {}),
       },
     });
@@ -58,6 +63,28 @@ export function connectLive({ instructions, history, log, onAudio, onHeard, onSa
     const text = saying.replace(/\s+/g, " ").trim();
     if (text) onSaid?.(text, sayingAt);
     saying = "";
+  };
+
+  /** The OpenAI backend's own events, wrapped: our tools, and its failures. */
+  const backend = (inner) => {
+    if (inner?.type === "response.output_item.done" && inner.item?.type === "function_call") {
+      const { call_id, name } = inner.item;
+      let args = {};
+      try {
+        args = JSON.parse(inner.item.arguments || "{}");
+      } catch {
+        /* no arguments */
+      }
+      void Promise.resolve()
+        .then(() => onFunctionCall?.(name, args) ?? "Not available.")
+        .catch((e) => `Failed: ${e.message}`)
+        .then((output) => {
+          command({ type: "response.item.create", item: { type: "function_call_output", call_id, output: String(output) } });
+          command({ type: "response.create" });
+        });
+    } else if (inner?.type === "response.failed" || inner?.type === "error") {
+      log(`  her backend failed: ${inner.response?.error?.message ?? inner.error?.message ?? inner.message ?? inner.type}`);
+    }
   };
 
   ws.addEventListener("message", (msg) => {
@@ -87,7 +114,10 @@ export function connectLive({ instructions, history, log, onAudio, onHeard, onSa
         onHeard?.(e.delta);
         break;
       case "session.delegation.created":
-        if (e.delegation?.target === "client") onDelegation?.(e.delegation.id);
+        onDelegation?.(e.delegation?.id, e.delegation?.target);
+        break;
+      case "response.event":
+        backend(e.event);
         break;
       case "session.closed":
         closedReason = e.reason;

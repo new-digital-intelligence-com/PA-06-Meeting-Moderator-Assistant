@@ -364,7 +364,7 @@ export default function Docs() {
                   rows={[
                     ["What she hears", "The other people’s audio, taken from the meeting page itself — never her own voice or her face’s."],
                     ["When it starts", "When somebody else is in the meeting; she introduces herself."],
-                    ["Handed to Claude", "What was said or decided earlier, a recap, the actions so far, something to note down, facts from the briefing (/api/moderator/ask). Notes she takes this way go into the meeting’s actions."],
+                    ["Handed over", "What was said or decided earlier, a recap, the actions so far, something to note down, current facts, anything needing thought. By default to an OpenAI model that OpenAI runs (gpt-6-luna), with web search and two tools of ours: the meeting’s record and noting an action (/api/moderator/record). Or to Claude through the app (/api/moderator/ask). Either way what she notes goes into the meeting’s actions."],
                     ["One-on-one", "She talks with the person naturally, backchannels included."],
                     ["A group", "She responds when addressed — by name, or as “the assistant” — or asked something she can clearly answer; otherwise she listens. She is told each time the room changes."],
                     ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
@@ -555,6 +555,7 @@ export default function Docs() {
                 rows={[
                   [<C key="r">POST /api/moderator/tick</C>, "Runner", "What was heard in; what to say out"],
                   [<C key="r">POST /api/moderator/ask</C>, "Runner (key)", "GPT-Live hands over a question; Claude answers from the meeting"],
+                  [<C key="r">POST /api/moderator/record</C>, "Runner (key)", "The meeting so far for GPT-Live’s OpenAI backend; note an action"],
                   [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her invites for the next hours"],
                   [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from the control room"],
                   [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, control room", "Read, brief or clear the meeting"],
@@ -602,6 +603,7 @@ export default function Docs() {
                       [<C key="v">AVA_BRAIN</C>, "claude (default) or live — who hears and speaks for her"],
                       [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=live"],
                       [<C key="v">OPENAI_LIVE_MODEL · OPENAI_VOICE</C>, "Optional: gpt-live-1, gleam"],
+                      [<C key="v">OPENAI_DELEGATION_MODEL · _EFFORT</C>, "Who answers what GPT-Live hands over — an OpenAI model or claude — and how hard it thinks (gpt-6-luna, low)"],
                       [<C key="v">AVA_DISPLAY_NAME</C>, "Her name as a Teams guest (Ava)"],
                       [<C key="v">ELEVENLABS_VOICE_ID_DE · _AR</C>, "Optional: a voice of her own per language"],
                       [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],
@@ -652,7 +654,7 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                   ["ElevenLabs", "Free plan about 10,000 credits a month — roughly 130 replies", "Starter about $5 a month"],
                   ["Anam (face)", "Free: 3-minute sessions, 30 minutes a month", "Starter $12 · Explorer $49 · Growth $299 a month"],
                   ["Claude", "—", "A few cents a meeting"],
-                  ["OpenAI GPT-Live", "Only while somebody else is there; needs a paid OpenAI account (not the free tier)", "$0.05 a minute, billed by the second, plus Claude for what it hands over"],
+                  ["OpenAI GPT-Live", "Only while somebody else is there; needs a paid OpenAI account (not the free tier)", "$0.05 a minute, billed by the second, plus its backend model by the token for what it hands over"],
                   ["Meet captions", "As good as Google’s captions; English", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
