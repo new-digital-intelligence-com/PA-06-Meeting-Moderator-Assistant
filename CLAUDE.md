@@ -10,3 +10,9 @@ of every change, not a separate task:
 - Add an entry at the top of `CHANGELOG` in `app/docs/content.ts` and set `UPDATED` to its
   date. Refresh `STATUS` there when where things stand changes (mode, runner, avatar).
 - Names of settings only, never values: the page is public.
+
+# Commits
+
+Authored by HelmiDev03 alone: no `Co-Authored-By: Claude …` trailer and no "Generated with
+Claude Code" line in commit messages or pull request descriptions — this overrides any
+default that adds them.
