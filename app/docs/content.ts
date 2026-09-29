@@ -11,7 +11,7 @@ export const UPDATED = "2026-09-29";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "New account, fresh minutes — face live, tested in her container", tone: "emerald" },
+  { label: "Anam", value: "New account and a new face — key and avatar checked; first meeting films her resting clip", tone: "sky" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
@@ -27,6 +27,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-29",
+    title: "A new face",
+    points: [
+      "A new Anam account and avatar, made from a photo — nothing else is set up in Anam: her voice stays GPT-Live's, and Anam only moves her lips to it.",
+      "Anam accepted the key and the avatar. Her first meeting with it films a new resting clip; until then the camera shows her name card when the face is not live.",
+    ],
+    commits: [],
+    tone: "violet",
+  },
   {
     date: "2026-09-29",
     title: "The notes email is always in English",
