@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
+import { elapsed, getMeeting, updateMeeting, type Meeting } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner } from "@/lib/ava";
+import { GoogleClient } from "@/lib/google";
 import { platformOf } from "@/lib/platform";
-import { readSession } from "@/lib/session";
+import { readSession, type Session } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,10 +15,28 @@ type Command =
   | "attend"    // she is in the room in person, in her own signed-in Chrome
   | "dispatch"; // send her own Chrome to the meeting link from the control room
 
+/**
+ * The signed-in person sending her: their address, and their name as Google shows it —
+ * the name the meeting shows for them too.
+ */
+async function sender(session: Session): Promise<Meeting["sentBy"]> {
+  const email = session.google?.email;
+  if (!email) return undefined;
+  try {
+    const google = GoogleClient.fromSession(session);
+    const me = await google?.request<{ name?: string }>("https://openidconnect.googleapis.com/v1/userinfo");
+    return { email, name: me?.name?.trim() || undefined };
+  } catch {
+    return { email };
+  }
+}
+
 export async function POST(request: Request) {
   let command: Command;
+  /** attend: where she came from — her calendar, or a send from the control room. */
+  let from: "calendar" | "dispatch" | undefined;
   try {
-    ({ command } = await request.json());
+    ({ command, from } = await request.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
@@ -33,6 +52,7 @@ export async function POST(request: Request) {
     if (!isRunner(request)) {
       return NextResponse.json({ error: "Only her runner can mark her as attending." }, { status: 403 });
     }
+    // From her calendar, nobody sent her: an earlier send's sender does not carry over.
     const meeting = await updateMeeting((m) => {
       m.status = "live";
       m.attendedBy = "self";
@@ -43,6 +63,11 @@ export async function POST(request: Request) {
       m.transcript = [];
       m.actions = [];
       m.files = [];
+      m.participants = [];
+      if (from === "calendar") {
+        m.dispatch = undefined;
+        m.sentBy = undefined;
+      }
       m.notedUpTo = 0;
       m.lastSpokeAt = undefined;
       m.lastSaid = undefined;
@@ -65,7 +90,8 @@ export async function POST(request: Request) {
    * a stranger who found the page should not be able to.
    */
   if (command === "dispatch") {
-    if (!isRunner(request) && !(await readSession()).google) {
+    const session = await readSession();
+    if (!isRunner(request) && !session.google) {
       return NextResponse.json({ error: "Sign in with Google in the control room first." }, { status: 401 });
     }
     if (!platformOf(before.meetingUrl)) {
@@ -75,10 +101,13 @@ export async function POST(request: Request) {
       );
     }
     const at = before.joinAt && before.joinAt > Date.now() ? before.joinAt : Date.now();
-    // The notes go to the people in the meeting — those listed here, and whoever gives
-    // her their email in the meeting chat — never by default to whoever sent her.
+    // The notes go to the people in the meeting: those listed here, whoever gives her
+    // their email in the meeting chat — and whoever sent her, if they are in it too (their
+    // name on the call). Never just for having sent her.
+    const sentBy = await sender(session);
     const meeting = await updateMeeting((m) => {
       m.dispatch = { at };
+      m.sentBy = sentBy;
       m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
       m.attendedBy = undefined;
       m.botId = undefined;

@@ -206,11 +206,16 @@ export const meet = {
     }
     let humans = 0;
     const bots = [];
+    /** Who else is on a tile — its first lines carry the person's name. */
+    const names = [];
     for (const text of tiles.values()) {
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
       const name = lines.find((l) => bot.test(l));
       if (name && !lines.some((l) => me.test(l))) bots.push(name);
-      else humans++;
+      else {
+        humans++;
+        if (lines.length && !lines.some((l) => me.test(l))) names.push(lines.slice(0, 3).join(" ").slice(0, 120));
+      }
     }
     // The People button's number counts everybody, bots too; it only matters when there
     // are more people than tiles on screen, and then she is plainly not alone.
@@ -227,6 +232,7 @@ export const meet = {
       alone: /you're the only one here|only one here/i.test(text),
       people: (badge > tiles.size ? badge - bots.length : humans) || null,
       bots,
+      names,
       face: window.__ava?.face?.() ?? null,
     };
   },
@@ -246,14 +252,22 @@ export const meet = {
       await sleep(1500);
       await page.getByRole("tab", { name: /audio/i }).first().click({ force: true, timeout: 3000 }).catch(() => {});
       await sleep(800);
+      const found = [];
       for (const name of ["Studio sound", "Adaptive audio"]) {
         const toggle = page.getByRole("switch", { name, exact: true }).first();
-        if (!(await toggle.isVisible({ timeout: 1500 }).catch(() => false))) continue;
-        if ((await toggle.getAttribute("aria-checked")) !== "true") continue;
+        if (!(await toggle.isVisible({ timeout: 1500 }).catch(() => false))) {
+          found.push(`${name}: not offered`);
+          continue;
+        }
+        if ((await toggle.getAttribute("aria-checked")) !== "true") {
+          found.push(`${name}: already off`);
+          continue;
+        }
         await toggle.click({ force: true }).catch(() => {});
         await sleep(600);
-        log((await toggle.getAttribute("aria-checked")) === "false" ? `  Meet's ${name} off` : `  could not turn Meet's ${name} off`);
+        found.push((await toggle.getAttribute("aria-checked")) === "false" ? `${name}: turned off` : `${name}: COULD NOT turn off`);
       }
+      log(`  Meet's own audio processing — ${found.join(", ")}`);
     } catch (e) {
       log(`  could not open Meet's audio settings: ${e.message.split("\n")[0]}`);
     } finally {
@@ -523,6 +537,7 @@ export const teams = {
       alone: /waiting for others to join|you're the only one here|no one else is here/i.test(text),
       people: people || null,
       bots,
+      names: names.filter((n) => !bot.test(n) && !me.test(n)),
       face: window.__ava?.face?.() ?? null,
     };
   },

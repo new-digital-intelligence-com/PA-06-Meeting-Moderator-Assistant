@@ -99,6 +99,8 @@ type AvaApi = {
 const PCM_RATE = 16000;
 /** How far Anam's picture and sound run behind the audio we send it. */
 const FACE_LAG_MS = 600;
+/** How long her face's sound stays open after what she said should have played. */
+const FACE_TAIL_MS = 900;
 /** How long a reply waits for the face to connect before she speaks without it. */
 const FACE_WAIT_MS = 3500;
 /** Reconnect this long before Anam's cut-off, while she is quiet. */
@@ -275,6 +277,45 @@ if (window.top === window && platform && !window.__ava) {
   let opening: Promise<boolean> | null = null;
   /** Resolves when the live face goes away, so a sentence mid-flight can carry on without it. */
   let faceGone: () => void = () => {};
+
+  /**
+   * Her face's sound reaches her microphone only while she is speaking through it. Between
+   * sentences the face's audio still carries the stream's own hiss — hidden while Meet's
+   * Studio sound was scrubbing her voice, a steady noise under the conversation once it
+   * was off. Opened as soon as her voice is sent to the face, closed a margin after it has
+   * played; the face's level while closed is logged once per session.
+   */
+  let faceOpenUntil = 0;
+  let faceGateOpen = false;
+  let faceMeter: AnalyserNode | null = null;
+  let faceLevelNoted = false;
+  const gateFace = () => {
+    if (!audio || !faceGain) return;
+    const open = Date.now() < faceOpenUntil;
+    if (open === faceGateOpen) return;
+    faceGateOpen = open;
+    const at = audio.currentTime;
+    faceGain.gain.cancelScheduledValues(at);
+    faceGain.gain.setTargetAtTime(open ? 1 : 0, at, open ? 0.01 : 0.05);
+  };
+  const openFaceSound = (untilMs: number) => {
+    faceOpenUntil = Math.max(faceOpenUntil, untilMs);
+    gateFace();
+  };
+  const muteFaceSound = () => {
+    faceOpenUntil = 0;
+    gateFace();
+  };
+  const noteFaceLevel = () => {
+    if (faceLevelNoted || !faceMeter || faceGateOpen || face !== "live" || Date.now() - sessionAt < 3000) return;
+    const samples = new Float32Array(faceMeter.fftSize);
+    faceMeter.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (const s of samples) sum += s * s;
+    const db = 10 * Math.log10(sum / samples.length + 1e-12);
+    faceLevelNoted = true;
+    log(`face sound while she is quiet: ${db.toFixed(0)} dBFS — kept out of her microphone`);
+  };
   let faceGonePromise = new Promise<void>(() => {});
   let firstToken: string | undefined;
 
@@ -305,6 +346,7 @@ if (window.top === window && platform && !window.__ava) {
     face = "down";
     faceSound?.disconnect();
     faceSound = null;
+    faceMeter = null;
     faceGone();
     if (c) void c.stopStreaming().catch(() => {});
   };
@@ -361,7 +403,15 @@ if (window.top === window && platform && !window.__ava) {
         const { audio, faceGain } = ensureAudio();
         faceSound = audio.createMediaStreamSource(new MediaStream(stream!.getAudioTracks()));
         faceSound.connect(faceGain);
-        faceGain.gain.value = 1;
+        // Closed until she speaks through it (see gateFace).
+        faceGain.gain.cancelScheduledValues(audio.currentTime);
+        faceGain.gain.value = 0;
+        faceGateOpen = false;
+        faceOpenUntil = 0;
+        faceMeter = audio.createAnalyser();
+        faceMeter.fftSize = 2048;
+        faceSound.connect(faceMeter);
+        faceLevelNoted = false;
         faceInput = c.createAgentAudioInputStream({ encoding: "pcm_s16le", sampleRate: options.pcmRate ?? PCM_RATE, channels: 1 });
         faceGonePromise = new Promise<void>((r) => (faceGone = r));
         face = "live";
@@ -389,6 +439,14 @@ if (window.top === window && platform && !window.__ava) {
     })();
     return opening;
   };
+
+  // Her face's sound: shut when she is not speaking through it (see gateFace).
+  if (mode === "avatar") {
+    setInterval(() => {
+      gateFace();
+      noteFaceLevel();
+    }, 50);
+  }
 
   // Close when the conversation has gone quiet (minutes are billed), and reconnect ahead
   // of Anam's cut-off at a moment she is not speaking, rather than be cut off mid-word.
@@ -837,7 +895,7 @@ if (window.top === window && platform && !window.__ava) {
           return true;
         }
 
-        faceGain.gain.value = 1;
+        openFaceSound(Date.now() + ms + FACE_LAG_MS + FACE_TAIL_MS);
         const sentAt = Date.now();
         const chunk = PCM_RATE * 2 * 0.2;
         for (let i = 0; i < bytes.length; i += chunk) input.sendAudioChunk(bytes.slice(i, i + chunk));
@@ -886,7 +944,7 @@ if (window.top === window && platform && !window.__ava) {
       const streaming = rtSources.length > 0 || Date.now() < rtFaceEnd;
       stopStream();
       if (streaming && faceGain && face === "live") {
-        faceGain.gain.value = 0;
+        muteFaceSound();
         try {
           client?.interruptPersona();
         } catch {
@@ -896,7 +954,7 @@ if (window.top === window && platform && !window.__ava) {
       // The face has the rest of the sentence queued: silence it until that has played
       // out, rather than let it carry on over the person who cut in.
       if (faceGain && isSpeaking && face === "live") {
-        faceGain.gain.value = 0;
+        muteFaceSound();
         try {
           client?.interruptPersona();
         } catch {
@@ -925,9 +983,7 @@ if (window.top === window && platform && !window.__ava) {
       lastActive = Date.now();
       const faceReady = mode === "avatar" && face === "live" && Boolean(faceInput);
       if (turn !== rtItem) {
-        // A new reply: whatever was muted for an interruption is heard again.
         rtItem = turn;
-        faceGain.gain.value = 1;
         rtVia = faceReady ? "face" : "mic";
         resetResampler();
         // A little ahead, so a piece arriving late does not leave a click in the middle.
@@ -952,6 +1008,8 @@ if (window.top === window && platform && !window.__ava) {
         faceInput.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? base64 : to16k(samples));
         const now = Date.now();
         rtFaceEnd = Math.max(rtFaceEnd, now + FACE_LAG_MS) + ms;
+        // Heard from now (so no word's start is cut) until a margin after it has played.
+        openFaceSound(rtFaceEnd + FACE_TAIL_MS);
         ahead((rtFaceEnd - now - FACE_LAG_MS) / 1000);
         return;
       }

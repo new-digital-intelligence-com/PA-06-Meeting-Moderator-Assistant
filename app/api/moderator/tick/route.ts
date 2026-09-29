@@ -52,6 +52,8 @@ type TickBody = {
   faceDetail?: string;
   /** Her GPT-Live session: open, or closed while nobody else is there. */
   voice?: string;
+  /** Names on the call's tiles so far, other than hers and bots' — who was in the meeting. */
+  participants?: string[];
   captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
   /** How many people are in the call, her included. Null when the page cannot tell. */
   people?: number | null;
@@ -323,6 +325,14 @@ export async function POST(request: Request) {
     }
     if (body.face) {
       m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions, people: body.people, voice: body.voice };
+    }
+    if (body.participants?.length) {
+      const seen = new Set(m.participants ?? []);
+      for (const name of body.participants) {
+        const n = String(name).trim().slice(0, 120);
+        if (n) seen.add(n);
+      }
+      m.participants = [...seen].slice(-100);
     }
     // The stage only ticks once she is actually in the call.
     if (m.status === "joining" || m.status === "scheduled") m.status = "live";

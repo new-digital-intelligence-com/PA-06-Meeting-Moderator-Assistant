@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleClient } from "@/lib/google";
-import { getMeeting, speakers, updateMeeting, type Meeting } from "@/lib/meeting";
+import { getMeeting, speakers, updateMeeting, wasInMeeting, type Meeting } from "@/lib/meeting";
 import { renderNotesEmail } from "@/lib/email";
 import { botName, composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
 import { readSession, sessionCookie, type Session } from "@/lib/session";
@@ -81,6 +81,15 @@ export async function POST(request: Request) {
       { error: e instanceof Error ? e.message : "Could not write the notes." },
       { status: 502 },
     );
+  }
+
+  // Whoever sent her from the control room gets the notes too — if they were in the
+  // meeting themselves (their name on the call), not just for having sent her.
+  const by = meeting.sentBy;
+  if (by?.email && !meeting.recipients.includes(by.email.toLowerCase()) && wasInMeeting(meeting, by.name)) {
+    meeting = await updateMeeting((m) => {
+      m.recipients = [...m.recipients, by.email.toLowerCase()];
+    });
   }
 
   const to = meeting.recipients.join(", ");

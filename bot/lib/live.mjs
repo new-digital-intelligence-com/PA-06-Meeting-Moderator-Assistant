@@ -60,7 +60,12 @@ export function connectLive({ instructions, history, delegation, log, onAudio, o
   let sayTimer = null;
   const flushSaid = () => {
     clearTimeout(sayTimer);
-    const text = saying.replace(/\s+/g, " ").trim();
+    // Her transcript marks sounds as "[sigh]" or "[laughs]": not words, not for the notes.
+    const text = saying
+      .replace(/\[[^\]\n]{1,24}\]/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/\s+([,.!?،؟])/g, "$1")
+      .trim();
     if (text) onSaid?.(text, sayingAt);
     saying = "";
   };

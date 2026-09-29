@@ -28,7 +28,7 @@ async function call(method, path, body) {
 export const brief = (meeting) => call("PUT", "/api/meeting", meeting);
 
 /** Tell the server she is in the room, as herself — not a rehearsal, not a Recall bot. */
-export const attend = () => call("POST", "/api/meeting/control", { command: "attend" });
+export const attend = (from) => call("POST", "/api/meeting/control", { command: "attend", from });
 
 /**
  * A short-lived session for her face: `{ sessionToken, avatarId }`. The face lip-syncs to

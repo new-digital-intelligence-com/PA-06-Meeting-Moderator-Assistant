@@ -29,6 +29,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
+    title: "The notes go out by themselves; no hiss between sentences",
+    points: [
+      "The control room is for sending her, not for sending notes. Whoever sends her from it now gets the notes automatically when the meeting ends — if their Google name was on the call or in its captions (tested: exact names, with or without accents or capitals; never somebody else's) — alongside invite guests, addresses given, and addresses typed in the chat.",
+      "Her voice is clear since Meet's Studio sound is off, but the face's stream carries a steady hiss between sentences, which Studio sound had been hiding. The face's sound now reaches her microphone only while she speaks through it.",
+      "Meet's audio settings are logged every meeting (turned off, already off, or not offered), and her transcript drops sound marks like “[sigh]”.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-29",
     title: "No more echo from Meet; the notes reach somebody",
     points: [
       "The echo: Meet's own “Studio sound” — Gemini rebuilding a voice to sound studio-recorded — was on for her, with “Adaptive audio”, reprocessing a voice that is already synthetic. Both are on again in every new meeting, so she switches them off as she joins. Tested in a meeting of her own: both on before, both off after.",

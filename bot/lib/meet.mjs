@@ -195,7 +195,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       language: lang,
     });
   }
-  await app.attend();
+  await app.attend(briefed ? "dispatch" : "calendar");
   log(`  ${briefed ? "sent from the control room" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
 
   // 2 — her browser.
@@ -240,6 +240,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let pauseTimer = null;
   /** How many people are in the call, her included — two means everything is said to her. */
   let people = null;
+  /** Everybody seen on a tile of the call (not her, not bots), for the app. */
+  const seenNames = new Set();
   let warmedAt = 0;
   /**
    * Her voice session and face are closed because nobody else is here. Rule: neither is
@@ -641,6 +643,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         waiting: !sawOthers || alone,
         // Addresses given in the meeting chat since the last tick.
         emails: newEmails.splice(0),
+        // Who was on the call: whoever sent her gets the notes too if they are here.
+        participants: [...seenNames].slice(-50),
         // GPT-Live speaks for her: the app keeps the transcript but says nothing.
         listenOnly: live,
       });
@@ -719,6 +723,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     }
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
+    for (const name of state.names ?? []) seenNames.add(name);
     tellRoom();
 
     // The language they actually speak, from what GPT-Live hears: the captions — and so
