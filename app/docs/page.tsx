@@ -355,6 +355,7 @@ export default function Docs() {
                     ["No face at all", "Her last resting clip — or, before one exists, a card with her name. Never a black tile."],
                     ["Empty room", "Nothing is open while she is the only one there — bots do not count. The face connects only once somebody else is in the meeting and closes within seconds of the room emptying, with her GPT-Live session; the camera shows her at rest, at no cost. Both reopen when somebody is back, seen twice in a row so a tile lingering after somebody left does not reopen them."],
                     ["Face or microphone", "Her voice goes through the face whenever it is up, so her lips move with it. If the face comes up while she is talking, it takes over at the next pause; if it goes away, her microphone carries on."],
+                    ["Meet’s own processing, off", "Meet turns on “Studio sound” (Gemini rebuilding a voice to sound studio-recorded) and “Adaptive audio” in every new meeting. On her already-synthetic voice they added an echo, so she switches both off as she joins."],
                     ["Clean audio for the face", "GPT-Live speaks at 24 kHz; the face lip-syncs at 16 kHz. The conversion filters out what is above 8 kHz first (a windowed-sinc low-pass), rather than letting it fold back as hiss. ANAM_PCM_RATE=24000 sends it untouched instead."],
                     ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
                   ]}
@@ -503,8 +504,13 @@ export default function Docs() {
                   English, translated if the meeting was held in German or Arabic.
                 </Card>
                 <Card tone="emerald" title="Sent as her, once">
-                  Her meetings’ notes go from Ava’s Gmail to the invite’s guests — not meeting rooms, not herself. A second “send”
-                  for the same meeting is ignored; an edited resend is deliberate.
+                  Her meetings’ notes go from Ava’s Gmail to the invite’s guests, or to the addresses given in the control room —
+                  not meeting rooms, not herself. A second “send” for the same meeting is ignored; an edited resend is deliberate.
+                </Card>
+                <Card tone="amber" title="Nobody to send them to?">
+                  Meet and Teams show her nobody’s email. With no guests and no addresses, she asks in the meeting chat and adds
+                  every address typed there. Still nobody: the notes are written and wait in the control room for an address and
+                  Send. The control room’s “+ me” adds yours in one click.
                 </Card>
                 <Card tone="slate" title="A designed email">
                   NDI-branded HTML — the actions first, each with its owner and due date, then the summary and any files — with the

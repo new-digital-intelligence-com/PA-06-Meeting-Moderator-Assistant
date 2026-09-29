@@ -170,7 +170,10 @@ if (window.top === window && platform && !window.__ava) {
   if (Native) {
     const Watched = function (...args: ConstructorParameters<typeof RTCPeerConnection>) {
       const pc = new Native(...args);
-      if (buildingFace) hers.add(pc);
+      // Hers: made while her face connects — or made by Anam's SDK at any time, since it
+      // builds a new connection when it reconnects mid-session, and hearing that one would
+      // have her hear her own voice.
+      if (buildingFace || /initPeerConnection/.test(new Error().stack ?? "")) hers.add(pc);
       pc.addEventListener("track", (e: RTCTrackEvent) => {
         if (e.track.kind !== "audio" || hers.has(pc)) return;
         remote.set(e.track.id, e.track);

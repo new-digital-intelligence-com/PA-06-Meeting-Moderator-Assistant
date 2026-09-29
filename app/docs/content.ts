@@ -29,6 +29,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
+    title: "No more echo from Meet; the notes reach somebody",
+    points: [
+      "The echo: Meet's own “Studio sound” — Gemini rebuilding a voice to sound studio-recorded — was on for her, with “Adaptive audio”, reprocessing a voice that is already synthetic. Both are on again in every new meeting, so she switches them off as she joins. Tested in a meeting of her own: both on before, both off after.",
+      "A connection Anam's SDK makes when it reconnects mid-session is now recognised as her face's too, so she can never hear her own voice.",
+      "Notes: every test sent from the control room had no addresses, so nothing went out. In Meet too she now asks in the chat when nobody is to get the notes, and adds the addresses typed there (tested: posted, and read back). The control room has “+ me”, warns when the list is empty, and shows notes she wrote as soon as they are written.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-29",
     title: "Elena, and logs that survive a restart",
     points: [
       "Her face is Elena: an avatar made for NDI (Anam's Cara 4 model), in an office with the NDI sign behind her. Anam only moves her lips; her voice stays GPT-Live's.",

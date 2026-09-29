@@ -161,9 +161,12 @@ export default function ControlRoom({
     /** When she should walk in, epoch ms. Null means "as soon as I press the button". */
     joinAt: initialMeeting.joinAt ?? (null as number | null),
   });
-  const [followUp, setFollowUp] = useState(
-    initialMeeting.followUp ?? { to: "", subject: "", body: "" },
-  );
+  // The notes as she wrote them — from the poll, so notes she writes when a meeting ends by
+  // itself show up without a reload — until you edit them here, for this meeting.
+  const [edited, setEdited] = useState<{ meetingId: string; notes: NonNullable<Meeting["followUp"]> } | null>(null);
+  const followUp =
+    edited?.meetingId === meeting.id ? edited.notes : (meeting.followUp ?? { to: "", subject: "", body: "" });
+  const setFollowUp = (notes: NonNullable<Meeting["followUp"]>) => setEdited({ meetingId: meeting.id, notes });
 
   const say = (message: string) => {
     setNote(message);
@@ -499,6 +502,24 @@ export default function ControlRoom({
               placeholder="sam@acme.com, priya@acme.com"
             />
           </label>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            {config.email && !draft.recipients.toLowerCase().includes(config.email.toLowerCase()) && (
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((d) => ({ ...d, recipients: [d.recipients.trim(), config.email].filter(Boolean).join(", ") }))
+                }
+                className="rounded-md bg-white/5 px-2 py-1 text-white/60 hover:bg-white/10"
+              >
+                + me ({config.email})
+              </button>
+            )}
+            {!draft.recipients.trim() && (
+              <span className="text-amber-300/80">
+                Nobody yet — she will ask in the meeting chat, and only addresses typed there get the notes.
+              </span>
+            )}
+          </div>
 
           <div className="mt-4 space-y-1">
             <span className="text-xs text-white/40">

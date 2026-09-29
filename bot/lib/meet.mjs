@@ -180,6 +180,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   // English, German or Arabic: her captions, her voice, what she types in the chat.
   // With GPT-Live it follows what people actually speak, from what she hears (below).
   let lang = langOf(meeting.language);
+  // Nobody's email shows in Teams, or in Meet: with no invite guests or addresses from the
+  // control room, she asks in the meeting chat — otherwise the notes go to nobody.
+  const askForEmails = platform.id === "teams" || !meeting.recipients?.length;
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   if (!briefed) {
@@ -398,6 +401,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   }
   await platform.captionsOn(page, log);
   if (lang !== "en") await platform.setLanguage(page, log, lang).catch((e) => log(`  could not change the caption language: ${e.message}`));
+  // Meet's own voice processing (Studio sound, Adaptive audio) off: it is on again in
+  // every new meeting, and it gave her synthetic voice an echo.
+  if (platform.cleanAudio) await platform.cleanAudio(page, log);
   log("  in the meeting");
 
   // 6 — the conversation.
@@ -512,7 +518,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       rtGreeted = true;
       rt.say(
         `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, NDI's meeting assistant; you will follow along, take notes and send everyone a summary with the actions afterwards${
-          platform.id === "teams" ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
+          askForEmails ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
         }.`,
       );
     }
@@ -761,7 +767,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       log("  somebody is here");
       if (live && !rt) startLive();
       if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
-      if (platform.askForEmails) {
+      if (platform.askForEmails && askForEmails) {
         await platform.askForEmails(
           page,
           log,

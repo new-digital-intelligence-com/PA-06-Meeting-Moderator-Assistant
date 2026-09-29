@@ -231,9 +231,64 @@ export const meet = {
     };
   },
 
-  // Meet's guests come from the calendar invite: nothing to ask for in the chat.
-  askForEmails: null,
-  chatEmails: null,
+  /**
+   * Meet's own voice processing, off. "Studio sound" has Gemini rebuild the voice to sound
+   * studio-recorded, and "Adaptive audio" merges laptops sharing a room. Her voice is
+   * already clean and synthetic: processed again it came out watery, with an echo, and not
+   * the voice GPT-Live made. Meet's tips cover the buttons, so they are clicked from inside
+   * the page or forced.
+   */
+  async cleanAudio(page, log) {
+    try {
+      await page.evaluate(() => document.querySelector('[aria-label="Audio settings"]')?.click());
+      await sleep(1200);
+      await page.getByRole("button", { name: "Settings", exact: true }).last().click({ force: true, timeout: 5000 });
+      await sleep(1500);
+      await page.getByRole("tab", { name: /audio/i }).first().click({ force: true, timeout: 3000 }).catch(() => {});
+      await sleep(800);
+      for (const name of ["Studio sound", "Adaptive audio"]) {
+        const toggle = page.getByRole("switch", { name, exact: true }).first();
+        if (!(await toggle.isVisible({ timeout: 1500 }).catch(() => false))) continue;
+        if ((await toggle.getAttribute("aria-checked")) !== "true") continue;
+        await toggle.click({ force: true }).catch(() => {});
+        await sleep(600);
+        log((await toggle.getAttribute("aria-checked")) === "false" ? `  Meet's ${name} off` : `  could not turn Meet's ${name} off`);
+      }
+    } catch (e) {
+      log(`  could not open Meet's audio settings: ${e.message.split("\n")[0]}`);
+    } finally {
+      await page.getByRole("button", { name: "Close dialog" }).first().click({ force: true, timeout: 2000 }).catch(() => {});
+      await page.keyboard.press("Escape").catch(() => {});
+    }
+  },
+
+  /**
+   * Meet shows her nobody's email either. The invite's guests get the notes; a meeting
+   * she was sent to without any, she asks in the chat, as in Teams.
+   */
+  async askForEmails(page, log, message) {
+    const box = page.getByRole("textbox", { name: /send a message/i }).first();
+    if (!(await box.isVisible({ timeout: 1500 }).catch(() => false))) {
+      await page.evaluate(() => document.querySelector('[aria-label="Chat with everyone"]')?.click());
+      await sleep(1200);
+    }
+    if (!(await box.isVisible({ timeout: 5000 }).catch(() => false))) {
+      await keepEvidence(page, "meet-chat", log);
+      log("  could not open the meeting chat to ask for emails");
+      return false;
+    }
+    await box.click({ force: true });
+    await page.keyboard.type(message, { delay: 5 });
+    await page.keyboard.press("Enter");
+    log("  asked in the chat for emails to send the notes to");
+    return true;
+  },
+
+  /** Runs inside the page: every email address typed in the meeting chat. */
+  chatEmails: () => {
+    const text = [...document.querySelectorAll("[data-message-id]")].map((m) => m.innerText || "").join("\n");
+    return [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []).map((e) => e.toLowerCase()))];
+  },
 
   async leave(page) {
     await page.getByRole("button", { name: /leave call/i }).first().click({ timeout: 3000 });
@@ -471,6 +526,9 @@ export const teams = {
       face: window.__ava?.face?.() ?? null,
     };
   },
+
+  // Teams' own noise suppression is not something a guest can reach from the call.
+  cleanAudio: null,
 
   /**
    * Teams shows her nobody's email — guests have none there, and a signed-in person's is
