@@ -54,12 +54,13 @@ export const FACE = {
 };
 
 /**
- * Who hears, thinks and speaks for her in a meeting:
+ * Who hears and speaks for her in a meeting:
  *   claude (default): Meet/Teams captions → Claude (on the app) → ElevenLabs voice.
- *   openai: one OpenAI Realtime model hears the meeting's sound and answers out loud,
- *           full duplex. Captions still run, for the transcript and the notes.
+ *   live: OpenAI GPT-Live hears the meeting's sound and holds the conversation, full
+ *         duplex, handing what needs her memory of the meeting to Claude. Captions still
+ *         run, for the transcript and the notes.
  */
-export const BRAIN = process.env.AVA_BRAIN === "openai" ? "openai" : "claude";
+export const BRAIN = ["live", "openai"].includes(process.env.AVA_BRAIN ?? "") ? "live" : "claude";
 
 /** Her name where she has to type one: joining Teams as a guest. */
 export const DISPLAY_NAME = (process.env.AVA_DISPLAY_NAME || "Ava").trim();

@@ -50,7 +50,7 @@ declare global {
     __avaAnamToken?: () => Promise<string>;
     /** Keeps her idle clip for next time (JPEG frames, base64). */
     __avaIdleClip?: (frames: string[]) => void;
-    /** OpenAI Realtime: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
+    /** GPT-Live: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
     __avaHear?: (base64: string) => void;
   }
 }
@@ -82,14 +82,12 @@ type AvaApi = {
    * Anam to notice the connection has gone, and it bills by the minute until it does.
    */
   end(): Promise<void>;
-  /** OpenAI Realtime: start or stop sending the meeting's sound to her runner. */
+  /** GPT-Live: start or stop sending the meeting's sound to her runner. */
   listen(on: boolean): void;
-  /** OpenAI Realtime: a piece of her voice (24 kHz PCM, base64), played the moment it arrives. */
-  feed(base64: string, itemId: string): void;
-  /** OpenAI Realtime: the reply being fed is complete. */
+  /** GPT-Live: a piece of her voice (24 kHz PCM, base64), played the moment it arrives. */
+  feed(base64: string, turn: string): void;
+  /** GPT-Live: the reply being fed is complete. */
   feedDone(): void;
-  /** OpenAI Realtime: how much of this reply the room has actually heard, in ms. */
-  heardMs(itemId: string): number;
 };
 
 /** Avatar mode's audio format, which is what Anam lip-syncs to. */
@@ -132,7 +130,7 @@ if (window.top === window && platform && !window.__ava) {
   let markReady: () => void = () => {};
   const ready = new Promise<void>((r) => (markReady = r));
 
-  /* ── her ears for OpenAI Realtime: the meeting's own sound ─────────────── */
+  /* ── her ears for GPT-Live: the meeting's own sound ────────────────────── */
 
   // Other people reach the page as WebRTC audio tracks. Watching every peer connection
   // the page makes catches them, whatever Meet or Teams does with them afterwards. Her
@@ -672,17 +670,17 @@ if (window.top === window && platform && !window.__ava) {
 
   let startCalled = false;
 
-  /* ── her voice from OpenAI Realtime, played as it streams in ─────────────── */
+  /* ── her voice from GPT-Live, played as it streams in ────────────────────── */
 
   const RT_RATE = 24000;
   let rtItem = "";
-  /** Voice: audio-clock time this reply started, and when the next piece is due. */
-  let rtStart = 0;
+  /** Voice: when the next piece is due, on the audio clock. */
   let rtNext = 0;
   let rtSources: AudioBufferSourceNode[] = [];
-  /** Face: wall-clock time this reply started to be heard, and when what was sent ends. */
-  let rtFaceStart = 0;
+  /** Face: when what was sent to it ends, on the wall clock. */
   let rtFaceEnd = 0;
+  /** Live is meant to stream in step with the room; if it runs ahead, say so once a turn. */
+  let rtAheadSaid = "";
 
   const pcm24 = (bytes: Uint8Array) => {
     const n = bytes.length >> 1;
@@ -854,24 +852,28 @@ if (window.top === window && platform && !window.__ava) {
       }
     },
 
-    feed(base64, itemId) {
+    feed(base64, turn) {
       const { audio, mic, faceGain } = ensureAudio();
       const samples = pcm24(bytesOf(base64));
       lastActive = Date.now();
-      if (itemId !== rtItem) {
+      if (turn !== rtItem) {
         // A new reply: whatever was muted for an interruption is heard again.
-        rtItem = itemId;
-        rtStart = 0;
-        rtFaceStart = 0;
+        rtItem = turn;
         faceGain.gain.value = 1;
       }
       const ms = (samples.length / RT_RATE) * 1000;
+      const ahead = (s: number) => {
+        if (s > 1.5 && rtAheadSaid !== turn) {
+          rtAheadSaid = turn;
+          log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
+        }
+      };
       if (mode === "avatar" && face === "live" && faceInput) {
         // Lip-synced: the face plays it back, about FACE_LAG_MS later, in step with the lips.
         faceInput.sendAudioChunk(to16k(samples));
         const now = Date.now();
-        if (!rtFaceStart) rtFaceStart = now + FACE_LAG_MS;
         rtFaceEnd = Math.max(rtFaceEnd, now + FACE_LAG_MS) + ms;
+        ahead((rtFaceEnd - now - FACE_LAG_MS) / 1000);
         return;
       }
       // No face (or voice mode): straight into her microphone, each piece after the last.
@@ -880,10 +882,10 @@ if (window.top === window && platform && !window.__ava) {
       const source = audio.createBufferSource();
       source.buffer = buffer;
       source.connect(mic);
-      const at = Math.max(audio.currentTime + 0.03, rtNext);
-      if (!rtStart) rtStart = at;
+      const at = Math.max(audio.currentTime + 0.05, rtNext);
       source.start(at);
       rtNext = at + buffer.duration;
+      ahead(rtNext - audio.currentTime);
       rtSources.push(source);
       source.onended = () => {
         rtSources = rtSources.filter((s) => s !== source);
@@ -892,13 +894,6 @@ if (window.top === window && platform && !window.__ava) {
 
     feedDone() {
       if (mode === "avatar" && face === "live" && faceInput && Date.now() < rtFaceEnd) faceInput.endSequence();
-    },
-
-    heardMs(itemId) {
-      if (itemId !== rtItem) return 0;
-      if (rtFaceStart) return Math.max(0, Date.now() - rtFaceStart);
-      if (rtStart && audio) return Math.max(0, (audio.currentTime - rtStart) * 1000);
-      return 0;
     },
 
     async end() {

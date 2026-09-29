@@ -67,6 +67,9 @@ export const claimDispatch = async (earlySeconds) =>
 /** Hand over what was heard; get back what to say, if anything. */
 export const tick = (body) => call("POST", "/api/moderator/tick", body);
 
+/** GPT-Live handed something over that needs her memory of the meeting: Claude answers. */
+export const ask = (asked) => call("POST", "/api/moderator/ask", { asked });
+
 /** She has left the call. */
 export const stop = () => call("POST", "/api/meeting/control", { command: "stop" });
 

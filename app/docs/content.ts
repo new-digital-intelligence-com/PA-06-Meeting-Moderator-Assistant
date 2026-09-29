@@ -14,7 +14,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Anam", value: "New account, fresh minutes — face live, tested in her container", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
-  { label: "Brain", value: "Claude — OpenAI Realtime built, waiting for its first test", tone: "sky" },
+  { label: "Brain", value: "Claude — GPT-Live built, waiting for its first test", tone: "sky" },
 ];
 
 export type Change = {
@@ -29,11 +29,12 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
-    title: "A second brain to try: OpenAI Realtime",
+    title: "A second brain to try: OpenAI GPT-Live, with Claude",
     points: [
-      "AVA_BRAIN=openai: one OpenAI model hears the meeting's sound, decides and answers out loud over one live connection, and keeps listening while she speaks — instead of captions → Claude → ElevenLabs.",
-      "She stops the moment somebody talks over her. One-on-one she answers by herself; in a group, when her name is said. Her face lip-syncs to the voice as it streams in.",
-      "The captions still go to the app, which keeps the transcript, with her lines, and writes the notes. Claude stays the default.",
+      "AVA_BRAIN=live: OpenAI's GPT-Live hears the meeting's sound and holds the conversation over one live connection — it listens while she speaks, takes turns and stops when talked over — instead of captions → Claude → ElevenLabs.",
+      "What needs her memory of the meeting — earlier decisions, a recap, the actions, something to note — it hands to Claude, which answers from the whole transcript and the briefing (/api/moderator/ask).",
+      "One-on-one she talks naturally; in a group she responds when addressed. The session closes while she is alone and renews itself before its time limit. Her face lip-syncs to the voice as it streams in.",
+      "Built first on OpenAI's Realtime API the same day, then moved to GPT-Live, which OpenAI now recommends for conversation. Claude alone stays the default.",
     ],
     commits: [],
     tone: "violet",

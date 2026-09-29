@@ -374,6 +374,56 @@ export async function groupTurn(
   };
 }
 
+/* ------------------------------------------ her thinking, for her Live voice */
+
+/**
+ * With AVA_BRAIN=live, OpenAI's GPT-Live is her ears and voice: it holds the conversation
+ * itself, and hands over what needs her memory of the meeting — what was said or decided
+ * earlier, the actions so far, something to note down, facts from the briefing. Claude
+ * answers from the whole transcript and the briefing; GPT-Live says it.
+ */
+export async function answerForVoice(m: Meeting, recent: TranscriptLine[], asked: string): Promise<ModeratorReply> {
+  const system = [
+    `You are the thinking half of ${botName()}, an AI assistant taking part in a live video meeting. Her voice — a live speech model — holds the conversation, and has just handed you something that needs your knowledge of this meeting: what was said or decided earlier, a recap, the actions so far, something to note down, or facts from the briefing.`,
+    "",
+    "Give her what to say back: the answer itself, as she would say it out loud. She says it in her own words.",
+    "- Facts about this company, these people or this project come only from the briefing and the transcript. If they are not there, say so plainly.",
+    "- Asked to note something down: record it with add_actions and confirm in a few words.",
+    "- Asked for a recap or the actions: only what was actually said. Never invent a decision, a commitment or a deadline.",
+    "- If what was handed over is not clear, give your best reading of what they want; an empty say only if there is truly nothing to answer.",
+    "",
+    HEARING,
+    "",
+    VOICE,
+  ].join("\n");
+
+  const response = await client().messages.create({
+    model: FAST,
+    max_tokens: 500,
+    system: [
+      { type: "text", text: system, cache_control: { type: "ephemeral" } },
+      { type: "text", text: brief(m) },
+    ],
+    tools: [REPLY_TOOL],
+    tool_choice: { type: "tool", name: "reply" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          "The meeting so far (live captions):",
+          transcriptText(recent) || "(nothing yet)",
+          "",
+          "What her voice just heard, as it heard it:",
+          asked.trim() || "(unclear)",
+        ].join("\n"),
+      },
+    ],
+  });
+
+  const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  return block ? (block.input as ModeratorReply) : { say: "" };
+}
+
 /* ------------------------------------------------------------- note-taking */
 
 const NOTES_TOOL: Anthropic.Tool = {

@@ -329,7 +329,7 @@ export default function Docs() {
             <Section
               id="brains"
               eyebrow="Presence"
-              title="Two brains: Claude or OpenAI Realtime"
+              title="Two brains: Claude, or GPT-Live with Claude"
               intro={
                 <>
                   Set by <C>AVA_BRAIN</C> in the runner, so both can be tried in real meetings. Either way the captions still
@@ -345,26 +345,31 @@ export default function Docs() {
                   </p>
                   <p className="mt-2">Hears only what the captions catch, and one step at a time: listen, think, speak.</p>
                 </Card>
-                <Card tone="violet" kicker="Trial · openai" title="OpenAI Realtime, full duplex">
+                <Card tone="violet" kicker="Trial · live" title="OpenAI GPT-Live, full duplex">
                   <p>
-                    One model hears the meeting&apos;s sound itself, decides and answers out loud over one live connection — it
-                    keeps listening while she speaks. Her voice streams in as it is made, straight to her microphone or her face.
+                    GPT-Live hears the meeting&apos;s sound itself and holds the conversation over one live connection: it listens
+                    while she speaks, takes turns, stops when talked over. Her voice streams in as it is made, straight to her
+                    microphone or her face.
                   </p>
-                  <p className="mt-2">The app only listens: it keeps her lines in the transcript and says nothing itself.</p>
+                  <p className="mt-2">
+                    What needs her memory of the meeting it hands to Claude, which answers from the whole transcript and the
+                    briefing. The app keeps her lines in the transcript and otherwise stays quiet.
+                  </p>
                 </Card>
               </div>
 
               <div className="mt-6">
                 <Table
-                  head={["OpenAI Realtime detail", "How it works"]}
+                  head={["GPT-Live detail", "How it works"]}
                   rows={[
                     ["What she hears", "The other people’s audio, taken from the meeting page itself — never her own voice or her face’s."],
-                    ["When it starts", "When somebody else is in the meeting; she greets them. Nothing is sent while she is alone."],
-                    ["Interrupted", "She stops the moment somebody talks over her, and remembers only what the room actually heard."],
-                    ["One-on-one", "She answers by herself when the person finishes a thought."],
-                    ["A group", "She answers when her name is said (Ava, Eva, in Arabic script too); otherwise she listens."],
+                    ["When it starts", "When somebody else is in the meeting; she introduces herself."],
+                    ["Handed to Claude", "What was said or decided earlier, a recap, the actions so far, something to note down, facts from the briefing (/api/moderator/ask). Notes she takes this way go into the meeting’s actions."],
+                    ["One-on-one", "She talks with the person naturally, backchannels included."],
+                    ["A group", "She responds when addressed — by name, or as “the assistant” — or asked something she can clearly answer; otherwise she listens. She is told each time the room changes."],
                     ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
-                    ["Connection drops", "She reconnects and is given the conversation so far; after three quick failures she stays quiet."],
+                    ["Empty room", "The session is closed while she is alone (it is billed by the minute) and reopened, with the conversation so far, when somebody is back."],
+                    ["Time limit", "A session runs out after a while; she renews it in a quiet moment beforehand, and reconnects with the conversation so far if it drops. After three quick failures she stays quiet."],
                     ["Language", "The meeting’s language, and whichever of English, German or Arabic she is spoken to in."],
                   ]}
                 />
@@ -523,6 +528,10 @@ export default function Docs() {
                   her, reads the captions, plays her voice, draws her face.
                 </FileRow>
                 <FileRow path="lib/voice.mjs">ElevenLabs text-to-speech: mp3 for voice mode, raw audio for the face to lip-sync to.</FileRow>
+                <FileRow path="lib/live.mjs">
+                  AVA_BRAIN=live: the connection to OpenAI GPT-Live — the meeting&apos;s sound out, her voice and what she hands
+                  over back in.
+                </FileRow>
                 <FileRow path="lib/account.mjs">Is she signed in to Google? If not, opens a sign-in window instead of joining as a stranger.</FileRow>
                 <FileRow path="lib/app.mjs">
                   Every call to the brain, with her runner key — and her face sessions, straight from Anam when the key is set here.
@@ -544,6 +553,7 @@ export default function Docs() {
                 head={["Route", "Called by", "Does"]}
                 rows={[
                   [<C key="r">POST /api/moderator/tick</C>, "Runner", "What was heard in; what to say out"],
+                  [<C key="r">POST /api/moderator/ask</C>, "Runner (key)", "GPT-Live hands over a question; Claude answers from the meeting"],
                   [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her invites for the next hours"],
                   [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from the control room"],
                   [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, control room", "Read, brief or clear the meeting"],
@@ -588,9 +598,9 @@ export default function Docs() {
                       [<C key="v">AVA_RUNNER_KEY</C>, "Same value as the app"],
                       [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen"],
                       [<C key="v">AVA_MODE</C>, "voice or avatar"],
-                      [<C key="v">AVA_BRAIN</C>, "claude (default) or openai — who hears, thinks and speaks for her"],
-                      [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=openai"],
-                      [<C key="v">OPENAI_REALTIME_MODEL · _VOICE · _TRANSCRIBE_MODEL</C>, "Optional: gpt-realtime, marin, gpt-4o-mini-transcribe"],
+                      [<C key="v">AVA_BRAIN</C>, "claude (default) or live — who hears and speaks for her"],
+                      [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=live"],
+                      [<C key="v">OPENAI_LIVE_MODEL · OPENAI_VOICE</C>, "Optional: gpt-live-1, gleam"],
                       [<C key="v">AVA_DISPLAY_NAME</C>, "Her name as a Teams guest (Ava)"],
                       [<C key="v">ELEVENLABS_VOICE_ID_DE · _AR</C>, "Optional: a voice of her own per language"],
                       [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],
@@ -641,7 +651,7 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                   ["ElevenLabs", "Free plan about 10,000 credits a month — roughly 130 replies", "Starter about $5 a month"],
                   ["Anam (face)", "Free: 3-minute sessions, 30 minutes a month", "Starter $12 · Explorer $49 · Growth $299 a month"],
                   ["Claude", "—", "A few cents a meeting"],
-                  ["OpenAI Realtime", "Billed by the minute of audio heard and spoken, only while somebody else is there", "Roughly $0.10–0.30 a minute of conversation"],
+                  ["OpenAI GPT-Live", "Billed by the second of session, only while somebody else is there; a session has a time limit and is renewed", "About $0.05 a minute as reported at launch, plus Claude for what it hands over"],
                   ["Meet captions", "As good as Google’s captions; English", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
