@@ -50,6 +50,8 @@ declare global {
     __avaAnamToken?: () => Promise<string>;
     /** Keeps her idle clip for next time (JPEG frames, base64). */
     __avaIdleClip?: (frames: string[]) => void;
+    /** OpenAI Realtime: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
+    __avaHear?: (base64: string) => void;
   }
 }
 
@@ -80,6 +82,14 @@ type AvaApi = {
    * Anam to notice the connection has gone, and it bills by the minute until it does.
    */
   end(): Promise<void>;
+  /** OpenAI Realtime: start or stop sending the meeting's sound to her runner. */
+  listen(on: boolean): void;
+  /** OpenAI Realtime: a piece of her voice (24 kHz PCM, base64), played the moment it arrives. */
+  feed(base64: string, itemId: string): void;
+  /** OpenAI Realtime: the reply being fed is complete. */
+  feedDone(): void;
+  /** OpenAI Realtime: how much of this reply the room has actually heard, in ms. */
+  heardMs(itemId: string): number;
 };
 
 /** Avatar mode's audio format, which is what Anam lip-syncs to. */
@@ -121,6 +131,83 @@ if (window.top === window && platform && !window.__ava) {
 
   let markReady: () => void = () => {};
   const ready = new Promise<void>((r) => (markReady = r));
+
+  /* ── her ears for OpenAI Realtime: the meeting's own sound ─────────────── */
+
+  // Other people reach the page as WebRTC audio tracks. Watching every peer connection
+  // the page makes catches them, whatever Meet or Teams does with them afterwards. Her
+  // own microphone is never a remote track, so she does not hear herself; the face's
+  // connection (Anam) is marked as hers and never listened to either — otherwise she
+  // would hear her own voice come back from it and interrupt herself.
+  const remote = new Map<string, MediaStreamTrack>();
+  const hers = new WeakSet<RTCPeerConnection>();
+  let buildingFace = false;
+  let hearCtx: AudioContext | null = null;
+  let hearMix: GainNode | null = null;
+  let hearing = false;
+  const wired = new Map<string, MediaStreamAudioSourceNode>();
+
+  const wire = (track: MediaStreamTrack) => {
+    if (!hearCtx || !hearMix || wired.has(track.id)) return;
+    try {
+      const src = hearCtx.createMediaStreamSource(new MediaStream([track]));
+      src.connect(hearMix);
+      wired.set(track.id, src);
+    } catch {
+      /* ended already */
+    }
+  };
+  const unwire = (id: string) => {
+    wired.get(id)?.disconnect();
+    wired.delete(id);
+    remote.delete(id);
+  };
+
+  const Native = window.RTCPeerConnection;
+  if (Native) {
+    const Watched = function (...args: ConstructorParameters<typeof RTCPeerConnection>) {
+      const pc = new Native(...args);
+      if (buildingFace) hers.add(pc);
+      pc.addEventListener("track", (e: RTCTrackEvent) => {
+        if (e.track.kind !== "audio" || hers.has(pc)) return;
+        remote.set(e.track.id, e.track);
+        e.track.addEventListener("ended", () => unwire(e.track.id));
+        wire(e.track);
+      });
+      return pc;
+    } as unknown as typeof RTCPeerConnection;
+    Watched.prototype = Native.prototype;
+    Object.setPrototypeOf(Watched, Native);
+    window.RTCPeerConnection = Watched;
+  }
+
+  /** Mixes everybody else's audio at 24 kHz and hands it to the runner in small pieces. */
+  const ensureHearing = () => {
+    if (hearCtx) return;
+    hearCtx = new AudioContext({ sampleRate: 24000 });
+    hearMix = hearCtx.createGain();
+    const tap = hearCtx.createScriptProcessor(2048, 1, 1);
+    hearMix.connect(tap);
+    tap.connect(hearCtx.destination); // it only runs when connected; it outputs silence
+    tap.onaudioprocess = (e) => {
+      if (!hearing) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const pcm = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      const bytes = new Uint8Array(pcm.buffer);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      try {
+        window.__avaHear?.(btoa(bin));
+      } catch {
+        /* runner not listening */
+      }
+    };
+    for (const t of remote.values()) wire(t);
+  };
 
   /* ── her microphone ────────────────────────────────────────────────────── */
 
@@ -240,6 +327,7 @@ if (window.top === window && platform && !window.__ava) {
 
         const c = createClient(token, { disableInputAudio: true });
         client = c;
+        buildingFace = true;
         c.addListener(AnamEvent.CONNECTION_CLOSED, (reason: unknown) => {
           if (client === c) dropFace(`Anam closed the session (${String(reason)})`);
         });
@@ -262,6 +350,8 @@ if (window.top === window && platform && !window.__ava) {
         faceVideo = video;
         old.remove();
 
+        // Her own face's sound is never something she hears.
+        for (const t of stream!.getAudioTracks()) unwire(t.id);
         const { audio, faceGain } = ensureAudio();
         faceSound = audio.createMediaStreamSource(new MediaStream(stream!.getAudioTracks()));
         faceSound.connect(faceGain);
@@ -284,6 +374,7 @@ if (window.top === window && platform && !window.__ava) {
         if (video !== faceVideo) video?.remove();
         return false;
       } finally {
+        buildingFace = false;
         if (gen === generation || face !== "connecting") opening = null;
       }
     })();
@@ -581,6 +672,52 @@ if (window.top === window && platform && !window.__ava) {
 
   let startCalled = false;
 
+  /* ── her voice from OpenAI Realtime, played as it streams in ─────────────── */
+
+  const RT_RATE = 24000;
+  let rtItem = "";
+  /** Voice: audio-clock time this reply started, and when the next piece is due. */
+  let rtStart = 0;
+  let rtNext = 0;
+  let rtSources: AudioBufferSourceNode[] = [];
+  /** Face: wall-clock time this reply started to be heard, and when what was sent ends. */
+  let rtFaceStart = 0;
+  let rtFaceEnd = 0;
+
+  const pcm24 = (bytes: Uint8Array) => {
+    const n = bytes.length >> 1;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = view.getInt16(i * 2, true) / 32768;
+    return out;
+  };
+  /** 24 kHz → 16 kHz, the rate her face lip-syncs to. */
+  const to16k = (samples: Float32Array) => {
+    const n = Math.floor((samples.length * 2) / 3);
+    const out = new Int16Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = i * 1.5;
+      const j = Math.floor(x);
+      const f = x - j;
+      const v = samples[j] * (1 - f) + (samples[Math.min(j + 1, samples.length - 1)] ?? 0) * f;
+      out[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+    }
+    return new Uint8Array(out.buffer);
+  };
+  const stopStream = () => {
+    for (const s of rtSources) {
+      try {
+        s.stop();
+      } catch {
+        /* already done */
+      }
+    }
+    rtSources = [];
+    rtNext = 0;
+    rtFaceEnd = 0;
+    rtItem = "";
+  };
+
   const api: AvaApi = {
     async start(opts = {}) {
       if (startCalled) return;
@@ -682,6 +819,16 @@ if (window.top === window && platform && !window.__ava) {
       } catch {
         /* already stopped */
       }
+      const streaming = rtSources.length > 0 || Date.now() < rtFaceEnd;
+      stopStream();
+      if (streaming && faceGain && face === "live") {
+        faceGain.gain.value = 0;
+        try {
+          client?.interruptPersona();
+        } catch {
+          /* nothing in flight */
+        }
+      }
       // The face has the rest of the sentence queued: silence it until that has played
       // out, rather than let it carry on over the person who cut in.
       if (faceGain && isSpeaking && face === "live") {
@@ -695,11 +842,67 @@ if (window.top === window && platform && !window.__ava) {
       done();
     },
 
-    speaking: () => isSpeaking,
+    speaking: () => isSpeaking || rtSources.length > 0 || Date.now() < rtFaceEnd,
     face: () => (mode === "voice" ? "voice" : face),
     started: () => startCalled,
 
+    listen(on) {
+      hearing = on;
+      if (on) {
+        ensureHearing();
+        if (hearCtx?.state === "suspended") void hearCtx.resume().catch(() => {});
+      }
+    },
+
+    feed(base64, itemId) {
+      const { audio, mic, faceGain } = ensureAudio();
+      const samples = pcm24(bytesOf(base64));
+      lastActive = Date.now();
+      if (itemId !== rtItem) {
+        // A new reply: whatever was muted for an interruption is heard again.
+        rtItem = itemId;
+        rtStart = 0;
+        rtFaceStart = 0;
+        faceGain.gain.value = 1;
+      }
+      const ms = (samples.length / RT_RATE) * 1000;
+      if (mode === "avatar" && face === "live" && faceInput) {
+        // Lip-synced: the face plays it back, about FACE_LAG_MS later, in step with the lips.
+        faceInput.sendAudioChunk(to16k(samples));
+        const now = Date.now();
+        if (!rtFaceStart) rtFaceStart = now + FACE_LAG_MS;
+        rtFaceEnd = Math.max(rtFaceEnd, now + FACE_LAG_MS) + ms;
+        return;
+      }
+      // No face (or voice mode): straight into her microphone, each piece after the last.
+      const buffer = audio.createBuffer(1, Math.max(1, samples.length), RT_RATE);
+      buffer.getChannelData(0).set(samples);
+      const source = audio.createBufferSource();
+      source.buffer = buffer;
+      source.connect(mic);
+      const at = Math.max(audio.currentTime + 0.03, rtNext);
+      if (!rtStart) rtStart = at;
+      source.start(at);
+      rtNext = at + buffer.duration;
+      rtSources.push(source);
+      source.onended = () => {
+        rtSources = rtSources.filter((s) => s !== source);
+      };
+    },
+
+    feedDone() {
+      if (mode === "avatar" && face === "live" && faceInput && Date.now() < rtFaceEnd) faceInput.endSequence();
+    },
+
+    heardMs(itemId) {
+      if (itemId !== rtItem) return 0;
+      if (rtFaceStart) return Math.max(0, Date.now() - rtFaceStart);
+      if (rtStart && audio) return Math.max(0, (audio.currentTime - rtStart) * 1000);
+      return 0;
+    },
+
     async end() {
+      hearing = false;
       if (mode !== "avatar") return;
       faceRetryAt = Number.POSITIVE_INFINITY; // nothing may reconnect it now
       const c = client;

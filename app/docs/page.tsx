@@ -22,6 +22,7 @@ const SECTIONS = [
   { id: "architecture", label: "How it’s built" },
   { id: "talking", label: "When she talks" },
   { id: "voice", label: "Voice and face" },
+  { id: "brains", label: "Two brains" },
   { id: "teams", label: "Microsoft Teams" },
   { id: "languages", label: "Languages" },
   { id: "notes", label: "Notes and follow-up" },
@@ -324,6 +325,52 @@ export default function Docs() {
               </div>
             </Section>
 
+            {/* ── brains ───────────────────────────────────────────────── */}
+            <Section
+              id="brains"
+              eyebrow="Presence"
+              title="Two brains: Claude or OpenAI Realtime"
+              intro={
+                <>
+                  Set by <C>AVA_BRAIN</C> in the runner, so both can be tried in real meetings. Either way the captions still
+                  go to the app, which keeps the transcript and writes the notes.
+                </>
+              }
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card tone="emerald" kicker="Default · claude" title="Captions → Claude → ElevenLabs">
+                  <p>
+                    She reads the meeting&apos;s captions, the app decides with Claude when to speak and what to say, and ElevenLabs
+                    turns it into her voice. Everything described under <em>When she talks</em>.
+                  </p>
+                  <p className="mt-2">Hears only what the captions catch, and one step at a time: listen, think, speak.</p>
+                </Card>
+                <Card tone="violet" kicker="Trial · openai" title="OpenAI Realtime, full duplex">
+                  <p>
+                    One model hears the meeting&apos;s sound itself, decides and answers out loud over one live connection — it
+                    keeps listening while she speaks. Her voice streams in as it is made, straight to her microphone or her face.
+                  </p>
+                  <p className="mt-2">The app only listens: it keeps her lines in the transcript and says nothing itself.</p>
+                </Card>
+              </div>
+
+              <div className="mt-6">
+                <Table
+                  head={["OpenAI Realtime detail", "How it works"]}
+                  rows={[
+                    ["What she hears", "The other people’s audio, taken from the meeting page itself — never her own voice or her face’s."],
+                    ["When it starts", "When somebody else is in the meeting; she greets them. Nothing is sent while she is alone."],
+                    ["Interrupted", "She stops the moment somebody talks over her, and remembers only what the room actually heard."],
+                    ["One-on-one", "She answers by herself when the person finishes a thought."],
+                    ["A group", "She answers when her name is said (Ava, Eva, in Arabic script too); otherwise she listens."],
+                    ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
+                    ["Connection drops", "She reconnects and is given the conversation so far; after three quick failures she stays quiet."],
+                    ["Language", "The meeting’s language, and whichever of English, German or Arabic she is spoken to in."],
+                  ]}
+                />
+              </div>
+            </Section>
+
             {/* ── teams ────────────────────────────────────────────────── */}
             <Section
               id="teams"
@@ -541,6 +588,9 @@ export default function Docs() {
                       [<C key="v">AVA_RUNNER_KEY</C>, "Same value as the app"],
                       [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen"],
                       [<C key="v">AVA_MODE</C>, "voice or avatar"],
+                      [<C key="v">AVA_BRAIN</C>, "claude (default) or openai — who hears, thinks and speaks for her"],
+                      [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=openai"],
+                      [<C key="v">OPENAI_REALTIME_MODEL · _VOICE · _TRANSCRIBE_MODEL</C>, "Optional: gpt-realtime, marin, gpt-4o-mini-transcribe"],
                       [<C key="v">AVA_DISPLAY_NAME</C>, "Her name as a Teams guest (Ava)"],
                       [<C key="v">ELEVENLABS_VOICE_ID_DE · _AR</C>, "Optional: a voice of her own per language"],
                       [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],
@@ -591,6 +641,7 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                   ["ElevenLabs", "Free plan about 10,000 credits a month — roughly 130 replies", "Starter about $5 a month"],
                   ["Anam (face)", "Free: 3-minute sessions, 30 minutes a month", "Starter $12 · Explorer $49 · Growth $299 a month"],
                   ["Claude", "—", "A few cents a meeting"],
+                  ["OpenAI Realtime", "Billed by the minute of audio heard and spoken, only while somebody else is there", "Roughly $0.10–0.30 a minute of conversation"],
                   ["Meet captions", "As good as Google’s captions; English", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],

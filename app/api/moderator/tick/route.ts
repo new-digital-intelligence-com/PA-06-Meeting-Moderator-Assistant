@@ -57,6 +57,11 @@ type TickBody = {
   waiting?: boolean;
   /** Email addresses people gave her in the meeting chat: they get the notes. */
   emails?: string[];
+  /**
+   * OpenAI Realtime speaks for her (AVA_BRAIN=openai): keep the transcript and her lines,
+   * say nothing.
+   */
+  listenOnly?: boolean;
 };
 
 /**
@@ -341,6 +346,7 @@ export async function POST(request: Request) {
   if (meeting.status !== "live") return quiet(`meeting is ${meeting.status}`);
   if (body.idle === false) return quiet("she is still speaking");
   if (body.waiting) return quiet("waiting for somebody to arrive");
+  if (body.listenOnly) return quiet("OpenAI Realtime speaks for her");
 
   /* 1 ─ the opening, once */
   const cue = dueCue(meeting);

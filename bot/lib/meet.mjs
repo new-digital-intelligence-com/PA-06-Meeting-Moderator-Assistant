@@ -5,7 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
+import { BRAIN, DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
+import { connectRealtime } from "./realtime.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
 import { CHAT_ASK, langOf } from "./language.mjs";
@@ -22,6 +23,30 @@ const NOBODY_CAP_MS = 15 * 60_000;
 const ALONE_CHECKS = 2;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Her name in captions and transcripts — "Eva" and Arabic script included. */
+const NAME = /(^|[^\p{L}])(ava|eva|iva|eeva|ayva|avah|آفا|أفا|افا|آڤا|ايفا|إيفا|إفا)($|[^\p{L}])/iu;
+const LANGUAGE_NAME = { en: "English", de: "German", ar: "Arabic" };
+
+/** What OpenAI Realtime is told at the start of a meeting: who she is, the briefing, how to behave. */
+function realtimeInstructions(meeting, lang, product) {
+  return [
+    `You are ${DISPLAY_NAME}, NDI's meeting assistant, taking part in a live ${product} meeting as a participant. You hear the meeting's audio; several people may be in it, and notes like "[Helmi is speaking]" tell you who is talking.`,
+    "",
+    `Meeting: ${meeting.title || "Meeting"}`,
+    `What you were told beforehand: ${meeting.context?.trim() || "(nothing)"}`,
+    "",
+    `Speak ${LANGUAGE_NAME[lang]}${lang === "ar" ? " (clear Modern Standard Arabic)" : ""}. If somebody speaks to you in English, German or Arabic, answer in their language.`,
+    "",
+    "How to take part:",
+    "- This is speech: short, natural sentences, usually one to three. No lists.",
+    "- In a one-on-one, talk with the person naturally. In a group, speak when you are addressed — your name may sound like Eva — or clearly asked something; otherwise listen.",
+    "- General questions get a real answer. Facts about this company, these people or this project come only from what you were told or heard; otherwise say you don't know.",
+    "- Confirm an instruction once, then act on it. Greet people once. If they give you a role — interviewer, facilitator — play it fully and keep track of where it stands.",
+    "- You are taking notes; a summary with the actions is emailed after the meeting.",
+    "- If somebody interrupts you, stop, listen, and answer what they said.",
+  ].join("\n");
+}
 
 /**
  * A few seconds of her face at rest, filmed from the live avatar the first time, and
@@ -126,6 +151,24 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let people = null;
   let warmedAt = 0;
 
+  // OpenAI Realtime (AVA_BRAIN=openai): one model hears the meeting and answers out loud.
+  const realtime = BRAIN === "openai";
+  let rt = null;
+  /** Whether she answers by herself (one-on-one) or only when asked (a group). */
+  let rtAuto = null;
+  let rtItem = null;
+  let rtChain = Promise.resolve();
+  let rtGreeted = false;
+  let rtFailures = 0;
+  let rtLastSpeaker = "";
+  let namedAt = 0;
+  /** Her lines as OpenAI transcribes them — reported to the app one per heartbeat. */
+  const said = [];
+  /** The conversation by caption block, to brief a new session after a reconnect. */
+  const recent = new Map();
+  /** Everybody who has spoken, from the captions: two voices make a group. */
+  const voices = new Set();
+
   await context.exposeBinding("__avaLog", (_src, m) => log(`  [meet] ${m}`));
   await context.exposeBinding("__avaHeard", (_src, speaker, text, blockId) => {
     if (!text || platform.isSelf(speaker)) return;
@@ -143,9 +186,22 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     wordsHeard += Math.max(0, words - (wordsIn.get(id) ?? 0));
     wordsIn.set(id, Math.max(words, wordsIn.get(id) ?? 0));
 
+    voices.add(speaker);
+    if (realtime) {
+      recent.set(id, `${speaker}: ${text}`);
+      if (recent.size > 60) recent.delete(recent.keys().next().value);
+      // Sound carries no names; the captions do.
+      if (rt && speaker !== rtLastSpeaker) {
+        rtLastSpeaker = speaker;
+        rt.note(`[${speaker} is speaking]`);
+      }
+      if (NAME.test(text)) namedAt = Date.now();
+    }
+
     // Somebody talked over her: stop, like a person would. Not for Meet correcting a
-    // caption from a moment ago, which used to cut her off at her first word.
-    if (speaking && wordsHeard - wordsWhenSheStarted >= 3) {
+    // caption from a moment ago, which used to cut her off at her first word. (OpenAI
+    // Realtime hears interruptions for itself.)
+    if (!realtime && speaking && wordsHeard - wordsWhenSheStarted >= 3) {
       void page.evaluate(() => window.__ava?.interrupt()).catch(() => {});
       speaking = false;
     }
@@ -169,6 +225,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     const s = await app.anamSession();
     avatarId = s.avatarId;
     return s.sessionToken;
+  });
+  // The meeting's sound, from her page, straight on to OpenAI — only with somebody there.
+  await context.exposeBinding("__avaHear", (_src, b64) => {
+    if (rt && sawOthers && !alone) rt.appendAudio(b64);
   });
   await context.exposeBinding("__avaIdleClip", (_src, frames) => {
     if (!avatarId || !Array.isArray(frames)) return;
@@ -264,14 +324,93 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (over) return;
     over = true;
     log(`  leaving: ${why}`);
+    rt?.close();
+  };
+
+  /** Opens the OpenAI Realtime session: when somebody arrives, and again if it drops. */
+  const startRealtime = (reconnect = false) => {
+    const openedAt = Date.now();
+    rtAuto = (people ?? 2) <= 2 && voices.size <= 1;
+    rt = connectRealtime({
+      instructions: realtimeInstructions(meeting, lang, platform.name),
+      autoRespond: rtAuto,
+      log,
+      // Somebody started talking: if she is speaking she stops, and her memory keeps
+      // only what the room actually heard of her.
+      onSpeechStarted: () => {
+        if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+        const item = rtItem;
+        void page
+          .evaluate((id) => {
+            const was = window.__ava?.speaking?.();
+            const heardMs = window.__ava?.heardMs?.(id) ?? 0;
+            window.__ava?.interrupt();
+            return was ? heardMs : -1;
+          }, item)
+          .then((ms) => {
+            if (ms >= 0 && item) {
+              rt?.truncate(item, ms);
+              log("  (interrupted — she stops)");
+            }
+          })
+          .catch(() => {});
+      },
+      // Her voice, piece by piece, in order.
+      onAudio: (b64, itemId) => {
+        rtItem = itemId;
+        rtChain = rtChain.then(() => page.evaluate(([a, id]) => window.__ava?.feed(a, id), [b64, itemId])).catch(() => {});
+      },
+      onResponseDone: () => {
+        rtChain = rtChain.then(() => page.evaluate(() => window.__ava?.feedDone())).catch(() => {});
+      },
+      onSaid: (text) => {
+        log(`  ▸ ${text}`);
+        said.push({ key: `rt:${Date.now().toString(36)}:${said.length}`, text, at: Date.now() });
+      },
+      // In a group she answers only when asked: her name in what was just said.
+      onHeard: (text) => {
+        if (rtAuto) return;
+        if (NAME.test(text) || Date.now() - namedAt < 10_000) {
+          namedAt = 0;
+          rt?.respond();
+        }
+      },
+      onClose: (why) => {
+        rt = null;
+        if (over) return;
+        rtFailures = Date.now() - openedAt < 15_000 ? rtFailures + 1 : 0;
+        if (rtFailures >= 3) {
+          log(`  OpenAI Realtime keeps closing (${why}) — she stays quiet; check OPENAI_API_KEY`);
+          return;
+        }
+        log(`  OpenAI session closed (${why}) — reconnecting`);
+        setTimeout(() => {
+          if (!over && sawOthers) startRealtime(true);
+        }, 1500);
+      },
+    });
+    if (reconnect) {
+      const recap = [...recent.values()].slice(-30).join("\n");
+      if (recap) rt.note(`(You were briefly disconnected. The conversation so far:\n${recap})`);
+    }
+    void page.evaluate(() => window.__ava?.listen(true)).catch(() => {});
+    if (!rtGreeted) {
+      rtGreeted = true;
+      rt.respond(
+        `Say hello to the room now, in ${LANGUAGE_NAME[lang]}, in one or two short sentences: you are ${DISPLAY_NAME}, NDI's meeting assistant; you'll follow along, take notes and send a summary with the actions afterwards${
+          platform.id === "teams" ? ", and anyone who wants the notes can type their email in the chat" : ""
+        }.`,
+      );
+    }
+    log(`  OpenAI Realtime is her ears, brain and voice (${rtAuto ? "one-on-one: answers by herself" : "group: answers when asked"})`);
   };
   process.once("SIGINT", () => void finish("stopped by you"));
 
   while (!over) {
     await ensureStarted();
     const lines = heard.splice(0);
-    const delivered = pending;
-    pending = null;
+    const delivered = realtime ? said.shift() ?? null : pending;
+    if (!realtime) pending = null;
 
     try {
       const wordsBefore = wordsHeard;
@@ -294,6 +433,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         waiting: !sawOthers || alone,
         // Addresses given in the meeting chat since the last tick.
         emails: newEmails.splice(0),
+        // OpenAI speaks for her: the app keeps the transcript but says nothing.
+        listenOnly: realtime,
       });
 
       // Why she is quiet, whenever that changes — "she stopped talking" should be
@@ -350,7 +491,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
           });
       }
     } catch (e) {
-      if (delivered) pending = delivered;
+      if (delivered) {
+        if (realtime) said.unshift(delivered);
+        else pending = delivered;
+      }
       log(`  tick failed: ${e.message}`);
     }
 
@@ -367,6 +511,14 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     }
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
+    if (rt) {
+      const auto = (people ?? 2) <= 2 && voices.size <= 1;
+      if (auto !== rtAuto) {
+        rtAuto = auto;
+        rt.setAutoRespond(auto);
+        log(auto ? "  one-on-one: she answers by herself" : "  a group now: she answers when asked");
+      }
+    }
 
     // Teams is new to her: a snapshot of the page once she is settled in, to check what
     // she can see — captions, the people count — against what she reads from it.
@@ -385,6 +537,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (!sawOthers && ((state.people ?? 0) >= 2 || heardCount > 0)) {
       sawOthers = true;
       log("  somebody is here");
+      if (realtime && !rt) startRealtime();
       if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
       if (platform.askForEmails) {
         await platform.askForEmails(
@@ -423,6 +576,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         log("  somebody is back");
         void page.evaluate(() => window.__ava?.warm()).catch(() => {});
       }
+    }
+    if (realtime && sawOthers && aloneNow !== alone) {
+      void page.evaluate((on) => window.__ava?.listen(on), !aloneNow).catch(() => {});
     }
     alone = aloneNow;
 
