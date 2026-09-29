@@ -50,6 +50,8 @@ type Meeting = {
   botId?: string;
   joinAt?: number;
   attendedBy?: "self";
+  /** Invited on her calendar (notes emailed) or sent from here (not emailed). */
+  attendedFrom?: "calendar" | "dispatch";
   dispatch?: { at: number; takenAt?: number };
   transcript: TranscriptLine[];
   actions: Action[];
@@ -156,7 +158,6 @@ export default function ControlRoom({
   const [draft, setDraft] = useState({
     title: initialMeeting.title === "Untitled meeting" ? "" : initialMeeting.title,
     meetingUrl: initialMeeting.meetingUrl,
-    recipients: initialMeeting.recipients.join(", "),
     context: initialMeeting.context,
     /** When she should walk in, epoch ms. Null means "as soon as I press the button". */
     joinAt: initialMeeting.joinAt ?? (null as number | null),
@@ -233,7 +234,6 @@ export default function ControlRoom({
           // Where she starts: the briefing's language. She then follows what is spoken.
           language: detectLang(`${draft.title}\n${draft.context}`),
           joinAt: draft.joinAt,
-          recipients: draft.recipients.split(/[,\s;]+/).filter(Boolean),
         }),
       }),
     );
@@ -296,7 +296,7 @@ export default function ControlRoom({
     );
     if (written?.followUp) setFollowUp(written.followUp);
     if (written?.delivered?.sent) say(`Notes sent to ${written.followUp.to}.`);
-    else if (written) say("Notes written — but there were no recipients. Add addresses below and send.");
+    else if (written) say("Notes written — they are below.");
   };
 
   const deliver = async (mode: "draft" | "send") => {
@@ -318,7 +318,7 @@ export default function ControlRoom({
 
   const share = async (file: DriveFile) => {
     if (!meeting.recipients.length) {
-      setError("Add recipient emails first — that is who gets access.");
+      setError("Files are shared with the invite's guests — that works for meetings she is invited to on her calendar.");
       return;
     }
     if (!window.confirm(`Give ${meeting.recipients.length} recipient(s) access to "${file.name}"? They each get a notification email.`)) return;
@@ -433,7 +433,6 @@ export default function ControlRoom({
                       // Picking a meeting from the calendar books her for its start
                       // time — which is the whole reason to pick it from there.
                       joinAt: Date.parse(found.start) || null,
-                      recipients: found.attendees.join(", "),
                     }));
                   }
                 }}
@@ -490,36 +489,11 @@ export default function ControlRoom({
             />
           </label>
 
-          <label className="mt-4 block space-y-1">
-            <span className="text-xs text-white/40">
-              Email the notes to{" "}
-              <span className="text-white/25">— the people in the meeting, not her; she joins on her own.</span>
-            </span>
-            <input
-              className={`${field} w-full`}
-              value={draft.recipients}
-              onChange={(e) => setDraft({ ...draft, recipients: e.target.value })}
-              placeholder="sam@acme.com, priya@acme.com"
-            />
-          </label>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            {config.email && !draft.recipients.toLowerCase().includes(config.email.toLowerCase()) && (
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft((d) => ({ ...d, recipients: [d.recipients.trim(), config.email].filter(Boolean).join(", ") }))
-                }
-                className="rounded-md bg-white/5 px-2 py-1 text-white/60 hover:bg-white/10"
-              >
-                + me ({config.email})
-              </button>
-            )}
-            {!draft.recipients.trim() && (
-              <span className="text-amber-300/80">
-                Nobody yet — she will ask in the meeting chat, and only addresses typed there get the notes.
-              </span>
-            )}
-          </div>
+          <p className="mt-4 rounded-lg bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/50">
+            The notes of a meeting she is sent to from here are not emailed — they appear here when it ends. To have them
+            emailed to everybody, invite {config.avaAccount ?? config.avaExpected ?? "her"} to the meeting in the calendar:
+            she joins by herself and mails the notes to the invite&apos;s guests.
+          </p>
 
           <div className="mt-4 space-y-1">
             <span className="text-xs text-white/40">
@@ -635,7 +609,9 @@ export default function ControlRoom({
                       ? "Cancel booking"
                       : rehearsing
                         ? "Stop rehearsal"
-                        : "End & send notes"}
+                        : meeting.attendedFrom === "dispatch"
+                          ? "End meeting"
+                          : "End & send notes"}
               </button>
             ) : null
           }
@@ -652,7 +628,7 @@ export default function ControlRoom({
                 {platformOf(meeting.meetingUrl) === "teams" ? "Teams" : "Google Meet"} link
               </a>
               <span className="text-xs text-white/35">
-                {meeting.dispatch ? "sent from here" : "from her calendar invite"} ·{" "}
+                {meeting.attendedFrom === "dispatch" || meeting.dispatch ? "sent from here — notes not emailed" : "from her calendar invite"} ·{" "}
                 {LANGUAGES[(meeting.language ?? "en") as Lang].name}
               </span>
             </div>

@@ -8,7 +8,6 @@
  */
 
 import { GoogleClient } from "./google";
-import { normaliseName } from "./meeting";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -279,69 +278,6 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12): Promise
       };
     })
     .filter((e) => /^https:\/\/meet\.google\.com\//.test(e.meetingUrl));
-}
-
-/** What identifies a meeting in a calendar event: Meet's code, or a Teams meeting's id. */
-function meetingKey(meetingUrl: string): string | null {
-  try {
-    const url = new URL(meetingUrl);
-    if (url.hostname === "meet.google.com") return url.pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? null;
-    const decoded = decodeURIComponent(meetingUrl);
-    return decoded.match(/meeting_[A-Za-z0-9_-]{10,}/)?.[0] ?? url.pathname.split("/").filter(Boolean).pop() ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Everybody on the calendar invite of the meeting at this link, from the calendar of
- * whoever sent her: a scheduled meeting carries every participant's address, which the
- * call itself never shows. Rooms and Ava left out. Empty if the link is in no event there.
- */
-export async function guestsOfMeeting(google: GoogleClient, meetingUrl: string, around: number): Promise<string[]> {
-  const key = meetingKey(meetingUrl);
-  if (!key) return [];
-  const params = new URLSearchParams({
-    timeMin: new Date(around - 12 * 60 * 60_000).toISOString(),
-    timeMax: new Date(around + 12 * 60 * 60_000).toISOString(),
-    singleEvents: "true",
-    maxResults: "250",
-  });
-  const data = await google.request<{ items?: (InviteEvent & { location?: string })[] }>(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-  );
-  const event = (data.items ?? []).find((e) =>
-    [e.hangoutLink, e.location, e.description, ...(e.conferenceData?.entryPoints ?? []).map((p) => p.uri)].some((s) =>
-      (s ?? "").toLowerCase().includes(key.toLowerCase()),
-    ),
-  );
-  if (!event) return [];
-  const ava = (process.env.AVA_EMAIL || "").toLowerCase();
-  const emails = (event.attendees ?? []).filter((a) => a.email && !a.resource).map((a) => a.email.toLowerCase());
-  if (!emails.length && event.organizer?.email) emails.push(event.organizer.email.toLowerCase());
-  return [...new Set(emails)].filter((e) => e !== ava);
-}
-
-/**
- * A colleague's address from the name a meeting showed for them, in her organisation's
- * directory — Meet shows names, never addresses. Only one exact match counts: a common
- * name with two people behind it gets nobody rather than the wrong one. Needs her Google
- * connected with the directory permission.
- */
-export async function directoryEmail(google: GoogleClient, name: string): Promise<string | null> {
-  const params = new URLSearchParams({
-    query: name,
-    readMask: "names,emailAddresses",
-    sources: "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE",
-    pageSize: "5",
-  });
-  const data = await google.request<{
-    people?: { names?: { displayName?: string }[]; emailAddresses?: { value?: string }[] }[];
-  }>(`https://people.googleapis.com/v1/people:searchDirectoryPeople?${params}`);
-  const want = normaliseName(name);
-  const exact = (data.people ?? []).filter((p) => (p.names ?? []).some((n) => normaliseName(n.displayName ?? "") === want));
-  if (exact.length !== 1) return null;
-  return exact[0].emailAddresses?.[0]?.value?.toLowerCase() ?? null;
 }
 
 /** Calendar descriptions are often HTML; she wants the words. */

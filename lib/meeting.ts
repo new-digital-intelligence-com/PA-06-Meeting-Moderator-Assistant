@@ -128,12 +128,11 @@ export type Meeting = {
    */
   dispatch?: { at: number; takenAt?: number };
   /**
-   * Who sent her from the control room. They get the notes too if they turn out to be in
-   * the meeting themselves — never just for having sent her.
+   * How she came to be in it: invited on her calendar — its notes are emailed to the
+   * invite's guests — or sent from the control room, whose notes are not emailed and wait
+   * there.
    */
-  sentBy?: { email: string; name?: string };
-  /** Names seen on the call's tiles, other than hers and notetaker bots'. */
-  participants?: string[];
+  attendedFrom?: "calendar" | "dispatch";
   startedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
@@ -240,6 +239,7 @@ function normalise(raw: unknown): Meeting {
       : "draft",
     joinAt: typeof o.joinAt === "number" ? o.joinAt : undefined,
     attendedBy: o.attendedBy === "self" ? "self" : undefined,
+    attendedFrom: o.attendedFrom === "calendar" || o.attendedFrom === "dispatch" ? o.attendedFrom : undefined,
     dispatch: o.dispatch && typeof o.dispatch === "object" ? (o.dispatch as Meeting["dispatch"]) : undefined,
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
@@ -325,25 +325,6 @@ export function elapsed(m: Meeting, now = Date.now()): number {
 /** The transcript as plain text, for the note-taker and the write-up. */
 export function transcriptText(lines: TranscriptLine[]): string {
   return lines.map((l) => `${l.speaker}: ${l.text}`).join("\n");
-}
-
-/** A name as a meeting might show it: no accents, no case, words only. */
-export const normaliseName = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-
-/**
- * Whether somebody with this name was in the meeting: on a tile of the call, or speaking
- * in its captions. The whole name must be there — "Helmi Lakhder", not just a "Helmi".
- */
-export function wasInMeeting(m: Meeting, name?: string): boolean {
-  const want = name ? normaliseName(name) : "";
-  if (!want) return false;
-  return [...(m.participants ?? []), ...speakers(m)].map(normaliseName).some((seen) => ` ${seen} `.includes(` ${want} `));
 }
 
 /** Everyone who actually spoke — useful context the briefing may not mention. */

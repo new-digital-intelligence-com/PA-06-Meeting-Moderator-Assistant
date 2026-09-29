@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { elapsed, getMeeting, updateMeeting, type Meeting } from "@/lib/meeting";
+import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner } from "@/lib/ava";
-import { GoogleClient } from "@/lib/google";
 import { platformOf } from "@/lib/platform";
-import { readSession, type Session } from "@/lib/session";
-import { guestsOfMeeting } from "@/lib/workspace";
+import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,22 +13,6 @@ type Command =
   | "rehearse"  // run her with no bot and no call, to hear her before a room does
   | "attend"    // she is in the room in person, in her own signed-in Chrome
   | "dispatch"; // send her own Chrome to the meeting link from the control room
-
-/**
- * The signed-in person sending her: their address, and their name as Google shows it —
- * the name the meeting shows for them too.
- */
-async function sender(session: Session): Promise<Meeting["sentBy"]> {
-  const email = session.google?.email;
-  if (!email) return undefined;
-  try {
-    const google = GoogleClient.fromSession(session);
-    const me = await google?.request<{ name?: string }>("https://openidconnect.googleapis.com/v1/userinfo");
-    return { email, name: me?.name?.trim() || undefined };
-  } catch {
-    return { email };
-  }
-}
 
 export async function POST(request: Request) {
   let command: Command;
@@ -53,10 +35,13 @@ export async function POST(request: Request) {
     if (!isRunner(request)) {
       return NextResponse.json({ error: "Only her runner can mark her as attending." }, { status: 403 });
     }
-    // From her calendar, nobody sent her: an earlier send's sender does not carry over.
     const meeting = await updateMeeting((m) => {
       m.status = "live";
       m.attendedBy = "self";
+      // Calendar meetings' notes are emailed to the invite's guests; those she was sent to
+      // from the control room are not. A calendar meeting was sent from nowhere.
+      m.attendedFrom = from === "dispatch" ? "dispatch" : "calendar";
+      if (from !== "dispatch") m.dispatch = undefined;
       m.botId = undefined;
       m.startedAt = undefined;
       m.endedAt = undefined;
@@ -64,11 +49,6 @@ export async function POST(request: Request) {
       m.transcript = [];
       m.actions = [];
       m.files = [];
-      m.participants = [];
-      if (from === "calendar") {
-        m.dispatch = undefined;
-        m.sentBy = undefined;
-      }
       m.notedUpTo = 0;
       m.lastSpokeAt = undefined;
       m.lastSaid = undefined;
@@ -91,8 +71,7 @@ export async function POST(request: Request) {
    * a stranger who found the page should not be able to.
    */
   if (command === "dispatch") {
-    const session = await readSession();
-    if (!isRunner(request) && !session.google) {
+    if (!isRunner(request) && !(await readSession()).google) {
       return NextResponse.json({ error: "Sign in with Google in the control room first." }, { status: 401 });
     }
     if (!platformOf(before.meetingUrl)) {
@@ -102,17 +81,12 @@ export async function POST(request: Request) {
       );
     }
     const at = before.joinAt && before.joinAt > Date.now() ? before.joinAt : Date.now();
-    // The notes go to the people in the meeting: those listed here, whoever gives her
-    // their email in the meeting chat — and whoever sent her, if they are in it too (their
-    // name on the call). Never just for having sent her.
-    const sentBy = await sender(session);
-    // A scheduled meeting: everybody on its invite, from the sender's own calendar.
-    const google = GoogleClient.fromSession(session);
-    const guests = google ? await guestsOfMeeting(google, before.meetingUrl, at).catch(() => [] as string[]) : [];
+    // Its notes are not emailed: they wait here, in the control room. Only meetings she
+    // is invited to on her calendar are emailed, to the invite's guests — so an earlier
+    // meeting's guests are not kept.
     const meeting = await updateMeeting((m) => {
       m.dispatch = { at };
-      m.sentBy = sentBy;
-      m.recipients = [...new Set([...m.recipients, ...guests])];
+      m.recipients = [];
       m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
       m.attendedBy = undefined;
       m.botId = undefined;

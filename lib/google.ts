@@ -30,19 +30,13 @@ export function redirectUri() {
   );
 }
 
-/**
- * Hers only: her organisation's directory, to find the address of a colleague the meeting
- * showed by name — Meet shows names, never addresses — so they get the notes.
- */
-export const AVA_EXTRA_SCOPES = ["https://www.googleapis.com/auth/directory.readonly"];
-
-export function buildAuthUrl(state: string, loginHint?: string, extraScopes: string[] = []) {
+export function buildAuthUrl(state: string, loginHint?: string) {
   const { client_id } = creds();
   const params = new URLSearchParams({
     client_id,
     redirect_uri: redirectUri(),
     response_type: "code",
-    scope: [...GOOGLE_SCOPES, ...extraScopes].join(" "),
+    scope: GOOGLE_SCOPES.join(" "),
     access_type: "offline",
     include_granted_scopes: "true",
     // select_account as well as consent: connecting Ava is done from a browser that is

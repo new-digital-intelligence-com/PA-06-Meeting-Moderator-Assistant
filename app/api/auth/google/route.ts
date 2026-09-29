@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { AVA_EXTRA_SCOPES, buildAuthUrl } from "@/lib/google";
+import { buildAuthUrl } from "@/lib/google";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const state = crypto.randomBytes(16).toString("hex");
   const hint = asAva ? process.env.AVA_EMAIL || undefined : undefined;
 
-  const response = NextResponse.redirect(buildAuthUrl(state, asAva ? hint ?? "" : undefined, asAva ? AVA_EXTRA_SCOPES : []));
+  const response = NextResponse.redirect(buildAuthUrl(state, asAva ? hint ?? "" : undefined));
   response.cookies.set(cookie("pa_oauth_state", state));
   response.cookies.set(cookie("pa_oauth_as", asAva ? "ava" : "me"));
   return response;

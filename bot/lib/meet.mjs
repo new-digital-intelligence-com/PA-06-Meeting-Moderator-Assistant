@@ -33,11 +33,11 @@ const BOT = new RegExp(PEOPLE.bots, "i");
  * policies OpenAI's Live prompting guide asks for — backchannels, interruptions, and
  * what to hand over to Claude.
  */
-function liveInstructions(meeting, lang, product) {
+function liveInstructions(meeting, lang, product, emailed) {
   const language = LANGUAGE_NAME[lang];
   return [
     "# Role",
-    `You are ${DISPLAY_NAME}, NDI's meeting assistant, taking part in a live ${product} meeting as one of the participants — a colleague on the call, not a phone agent. You hear the meeting's sound; several people may be in it, and silent notes like "[Helmi is speaking]" tell you who is talking. You are taking notes: after the meeting a summary with the actions is emailed to the participants.`,
+    `You are ${DISPLAY_NAME}, NDI's meeting assistant, taking part in a live ${product} meeting as one of the participants — a colleague on the call, not a phone agent. You hear the meeting's sound; several people may be in it, and silent notes like "[Helmi is speaking]" tell you who is talking. You are taking notes${emailed ? ": after the meeting a summary with the actions is emailed to the participants" : ""}.`,
     "",
     "# This meeting",
     `Title: ${meeting.title || "Meeting"}`,
@@ -109,7 +109,7 @@ const BACKEND_TOOLS = [
   {
     type: "function",
     name: "note_action",
-    description: "Write down an action, a decision or a task somebody asked her to note. It goes into the notes emailed after the meeting.",
+    description: "Write down an action, a decision or a task somebody asked her to note. It goes into the meeting notes.",
     parameters: {
       type: "object",
       properties: {
@@ -182,7 +182,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let lang = langOf(meeting.language);
   // Nobody's email shows in Teams, or in Meet: with no invite guests or addresses from the
   // control room, she asks in the meeting chat — otherwise the notes go to nobody.
-  const askForEmails = platform.id === "teams" || !meeting.recipients?.length;
+  // Only meetings she is invited to on her calendar have their notes emailed — to the
+  // invite's guests. Those she is sent to from the control room do not: their notes wait
+  // there. An invite with nobody on it but her, she asks in the chat instead.
+  const emailed = !briefed;
+  const askForEmails = emailed && !meeting.recipients?.length;
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   if (!briefed) {
@@ -240,8 +244,6 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let pauseTimer = null;
   /** How many people are in the call, her included — two means everything is said to her. */
   let people = null;
-  /** Everybody seen on a tile of the call (not her, not bots), for the app. */
-  const seenNames = new Set();
   let warmedAt = 0;
   /**
    * Her voice session and face are closed because nobody else is here. Rule: neither is
@@ -519,7 +521,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (!rtGreeted) {
       rtGreeted = true;
       rt.say(
-        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, NDI's meeting assistant; you will follow along, take notes and send everyone a summary with the actions afterwards${
+        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, NDI's meeting assistant; you will follow along and take notes${emailed ? " and send everyone a summary with the actions afterwards" : ""}${
           askForEmails ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
         }.`,
       );
@@ -529,7 +531,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
   const openLive = (resume, recap, openedAt) => {
     const session = connectLive({
-      instructions: liveInstructions(meeting, lang, platform.name),
+      instructions: liveInstructions(meeting, lang, platform.name, emailed),
       // What she hands over: to Claude through the app, or to an OpenAI model OpenAI runs.
       delegation:
         DELEGATE === "claude"
@@ -551,7 +553,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         if (name === "note_action") {
           await app.record(args);
           log(`  noted: ${args.text}`);
-          return "Noted — it will be in the notes emailed after the meeting.";
+          return "Noted — it will be in the meeting notes.";
         }
         return "Unknown tool.";
       },
@@ -643,8 +645,6 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         waiting: !sawOthers || alone,
         // Addresses given in the meeting chat since the last tick.
         emails: newEmails.splice(0),
-        // Who was on the call: whoever sent her gets the notes too if they are here.
-        participants: [...seenNames].slice(-50),
         // GPT-Live speaks for her: the app keeps the transcript but says nothing.
         listenOnly: live,
       });
@@ -723,7 +723,6 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     }
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
-    for (const name of state.names ?? []) seenNames.add(name);
     tellRoom();
 
     // The language they actually speak, from what GPT-Live hears: the captions — and so
@@ -861,8 +860,13 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   }
   try {
     const r = await app.sendNotes();
-    log(r.delivered?.sent ? `  notes sent to ${r.followUp?.to}` : "  notes written — nobody to send them to");
-    if (r.directory) log(`  colleagues could not be looked up in the directory: ${r.directory}`);
+    log(
+      r.delivered?.sent
+        ? `  notes sent to ${r.followUp?.to}`
+        : r.notEmailed
+          ? "  notes written — sent from the control room, so not emailed: they are there"
+          : "  notes written — nobody to send them to",
+    );
   } catch (e) {
     log(`  notes not sent: ${e.message}`);
   }

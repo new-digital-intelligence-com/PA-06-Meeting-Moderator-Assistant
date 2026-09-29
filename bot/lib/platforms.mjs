@@ -206,18 +206,11 @@ export const meet = {
     }
     let humans = 0;
     const bots = [];
-    /** Who else is on a tile — its first lines carry the person's name. */
-    const names = [];
     for (const text of tiles.values()) {
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
       const name = lines.find((l) => bot.test(l));
       if (name && !lines.some((l) => me.test(l))) bots.push(name);
-      else {
-        humans++;
-        // Each of its first lines on its own: the name is one of them, beside labels and
-        // icon names that match nobody.
-        if (lines.length && !lines.some((l) => me.test(l))) names.push(...lines.slice(0, 3).map((l) => l.slice(0, 120)));
-      }
+      else humans++;
     }
     // The People button's number counts everybody, bots too; it only matters when there
     // are more people than tiles on screen, and then she is plainly not alone.
@@ -234,7 +227,6 @@ export const meet = {
       alone: /you're the only one here|only one here/i.test(text),
       people: (badge > tiles.size ? badge - bots.length : humans) || null,
       bots,
-      names,
       face: window.__ava?.face?.() ?? null,
     };
   },
@@ -539,7 +531,6 @@ export const teams = {
       alone: /waiting for others to join|you're the only one here|no one else is here/i.test(text),
       people: people || null,
       bots,
-      names: names.filter((n) => !bot.test(n) && !me.test(n)),
       face: window.__ava?.face?.() ?? null,
     };
   },

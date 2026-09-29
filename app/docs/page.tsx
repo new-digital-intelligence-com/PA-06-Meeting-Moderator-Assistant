@@ -446,11 +446,6 @@ export default function Docs() {
                     tone: "amber",
                   },
                   {
-                    title: "She asks for emails in the chat",
-                    body: "Teams shows her nobody’s email address, so once somebody is there she posts in the meeting chat — and says in her hello — that anyone who wants the notes can type their email there. Every address typed in the chat is added to who gets the notes.",
-                    tone: "sky",
-                  },
-                  {
                     title: "Live captions on, and she is in",
                     body: "More → Language and speech → Turn on live captions. From here it is the same brain as Meet.",
                     tone: "emerald",
@@ -484,7 +479,7 @@ export default function Docs() {
                   ["Her replies", "GPT-Live answers in the language she is spoken to in — Arabic dialects understood, answered in Modern Standard Arabic."],
                   ["Her voice", "GPT-Live’s gleam speaks all three. With the Claude brain, ElevenLabs Flash v2.5, told which language it is reading."],
                   ["Her name", "Recognised in Arabic script too — آفا, إيفا."],
-                  ["Hello and chat", "Her opening line and her Teams chat message are in the meeting’s language."],
+                  ["Hello", "Her opening line is in the meeting’s language."],
                   ["The notes", "Always in English, whatever the meeting was held in: the write-up translates what was said, keeping names and quoted terms as they were."],
                 ]}
               />
@@ -504,17 +499,15 @@ export default function Docs() {
                   Summary, decisions, and actions with owners and dates, written from the whole transcript (Sonnet) — always in
                   English, translated if the meeting was held in German or Arabic.
                 </Card>
-                <Card tone="emerald" title="To everybody in the meeting, by themselves">
-                  When the meeting ends the notes go out from Ava’s Gmail, with nothing to press. Meet and Teams show names, never
-                  addresses, so she gathers them: the guests of the calendar invite (hers, or — sent from the control room to a
-                  scheduled meeting — the sender’s); colleagues the call showed by name, found in the organisation’s directory (one
-                  exact match each); whoever sent her, if their Google name was on the call; addresses given when she was sent; and
-                  addresses typed in the meeting chat. Not meeting rooms, not herself; once per meeting.
+                <Card tone="emerald" title="Calendar meetings: emailed to the guests">
+                  A meeting she is invited to on her calendar: when it ends the notes go out from Ava’s Gmail to every guest on the
+                  invite, with nothing to press. Not meeting rooms, not herself; once per meeting. (An invite with nobody on it but
+                  her: she asks in the meeting chat for addresses.)
                 </Card>
-                <Card tone="amber" title="Who she cannot find">
-                  People from outside the organisation who join a meeting that is on nobody’s calendar: Google never shows her
-                  their address. She asks in the meeting chat. If there is still nobody, the notes are written and wait in the
-                  control room.
+                <Card tone="amber" title="Sent from the control room: not emailed">
+                  A meeting she was sent to from the control room — every Teams meeting, and any Meet link pasted there: the notes
+                  are written and wait in the control room, and she does not promise an email in her hello. Meet and Teams show
+                  names, never addresses. To have them emailed, invite her on the calendar.
                 </Card>
                 <Card tone="slate" title="A designed email">
                   NDI-branded HTML — the actions first, each with its owner and due date, then the summary and any files — with the

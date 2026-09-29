@@ -29,6 +29,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
+    title: "Notes emailed for calendar meetings only",
+    points: [
+      "Meetings she is invited to on her calendar: the notes are emailed to the invite's guests when they end, as before. Meetings she is sent to from the control room: the notes are written and wait there — not emailed, and her hello no longer promises it.",
+      "Gone with it: the control room's “Email the notes to” and “+ me”, the chat ask in meetings sent from the control room, the sender's-calendar and directory lookups, and the directory permission. (The sender rule could not have worked anyway: the fields it needed were dropped each time the meeting was read back — found and fixed for the new “sent from” field.)",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-09-29",
     title: "The notes reach everybody she can find in the meeting",
     points: [
       "Sent from the control room to a scheduled meeting, she takes every guest of its calendar invite from the sender's calendar — the call itself never shows addresses.",
