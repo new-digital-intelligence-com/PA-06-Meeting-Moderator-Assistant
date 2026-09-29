@@ -567,7 +567,8 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
         text: [
           `You are ${botName()}, writing up a meeting you sat in on. The email is sent from ${senderName}'s account, so write something they are happy to put their name to.`,
           "",
-          `- Write everything — subject, opening, actions, notes — in ${LANGUAGES[m.language].name}, the language of the meeting${m.language === "ar" ? " (Modern Standard Arabic)" : ""}.`,
+          // Always English, whatever the meeting was held in: the team reads the notes in English.
+          `- Write everything — subject, opening, actions, notes — in English${m.language !== "en" ? `, although the meeting was held in ${LANGUAGES[m.language].name}: translate what was said, and keep names, product names and quoted terms as they were` : ""}.`,
           "- Plain, direct business writing. No filler, no 'I hope this finds you well', no exclamation marks.",
           "- The actions are the point of the email. They go in `body`, first, and unmissable.",
           "- The notes go in `summary`: what was discussed and what was settled, organised by topic.",
@@ -603,7 +604,7 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
   return {
     summary: written.summary,
     subject: written.subject,
-    body: assemble(written, m.files, m.language),
+    body: assemble(written, m.files, "en"),
   };
 }
 

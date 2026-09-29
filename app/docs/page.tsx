@@ -470,19 +470,19 @@ export default function Docs() {
               id="languages"
               eyebrow="English · Deutsch · العربية"
               title="Languages"
-              intro="English, German and Arabic. GPT-Live hears and answers any of them by itself. The captions — which name the speakers and make the transcript and the notes — take one language at a time, and follow what people actually speak."
+              intro="English, German and Arabic. GPT-Live hears and answers any of them by itself. The captions — which name the speakers and make the transcript — take one language at a time, and follow what people actually speak. The notes are always in English."
             >
               <Table
                 head={["Step", "How the language is used"]}
                 rows={[
                   ["Where it starts", "Nothing to choose. Calendar meetings: from the invite — “Language: German” decides, otherwise the language it is written in. Sent from the control room: the language of the title and briefing."],
-                  ["Following the room", "When what she hears is clearly another of the three — twice in a row, and not more than every half minute — she switches the captions to it, and the notes follow."],
+                  ["Following the room", "When what she hears is clearly another of the three — twice in a row, and not more than every half minute — she switches the captions to it."],
                   ["The captions", "Meet’s “Meeting language”, Teams’ spoken language. Arabic uses Maghrebi captions unless AVA_ARABIC_CAPTIONS says otherwise."],
                   ["Her replies", "GPT-Live answers in the language she is spoken to in — Arabic dialects understood, answered in Modern Standard Arabic."],
                   ["Her voice", "GPT-Live’s gleam speaks all three. With the Claude brain, ElevenLabs Flash v2.5, told which language it is reading."],
                   ["Her name", "Recognised in Arabic script too — آفا, إيفا."],
                   ["Hello and chat", "Her opening line and her Teams chat message are in the meeting’s language."],
-                  ["The notes", "Written in the meeting’s language; the email’s labels and dates follow, right to left for Arabic."],
+                  ["The notes", "Always in English, whatever the meeting was held in: the write-up translates what was said, keeping names and quoted terms as they were."],
                 ]}
               />
               <p className="mt-3 text-xs text-white/40">
@@ -498,7 +498,8 @@ export default function Docs() {
                   that down” during the meeting, her backend adds it straight away.
                 </Card>
                 <Card tone="violet" title="The write-up">
-                  Summary, decisions, and actions with owners and dates, written from the whole transcript (Sonnet).
+                  Summary, decisions, and actions with owners and dates, written from the whole transcript (Sonnet) — always in
+                  English, translated if the meeting was held in German or Arabic.
                 </Card>
                 <Card tone="emerald" title="Sent as her, once">
                   Her meetings’ notes go from Ava’s Gmail to the invite’s guests — not meeting rooms, not herself. A second “send”

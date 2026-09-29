@@ -726,7 +726,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
           langSwitchedAt = Date.now();
           langVote = { lang: null, n: 0 };
           lang = spoken;
-          log(`  they are speaking ${LANGUAGE_NAME[spoken]} — the captions and the notes follow`);
+          log(`  they are speaking ${LANGUAGE_NAME[spoken]} — the captions follow`);
           await platform.setLanguage(page, log, spoken).catch((e) => log(`  could not change the caption language: ${e.message}`));
           await app.brief({ language: spoken }).catch(() => {});
         }

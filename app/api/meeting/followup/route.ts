@@ -175,7 +175,8 @@ function designed(m: Meeting, subject: string, body: string) {
       participants: speakers(m).filter((s) => s.toLowerCase() !== botName().toLowerCase()),
     },
     assistant: botName(),
-    language: m.language,
+    // The notes are always in English, whatever the meeting was held in.
+    language: "en",
   });
 }
 

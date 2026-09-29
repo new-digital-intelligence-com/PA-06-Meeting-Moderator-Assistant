@@ -29,6 +29,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
+    title: "The notes email is always in English",
+    points: [
+      "Whatever language the meeting was held in, the summary email — subject, actions, notes, labels — is written in English, translating what was said and keeping names and quoted terms as they were.",
+      "The captions still follow the spoken language, so the transcript it is written from stays accurate.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-09-29",
     title: "GPT-Live in use: clearer voice, nothing open in an empty room, languages by themselves",
     points: [
       "First one-on-one on GPT-Live: she answers almost at once. Her voice now reaches her face at GPT-Live's own 24 kHz — it was being converted down to 16 kHz, which added noise and dulled it — and each reply plays through one path, never switching mid-sentence as the face comes up.",
