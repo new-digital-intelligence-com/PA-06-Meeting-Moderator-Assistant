@@ -63,7 +63,9 @@ export default function Docs() {
               Ava joins your <strong className="font-semibold text-white/85">Google Meet</strong> as a normal member, with her own
               Google account. Invite her like anybody else: she turns up at the start time, listens, answers and joins in out
               loud, takes notes, and emails the write-up to the guests when it ends. She can also be sent into a{" "}
-              <strong className="font-semibold text-white/85">Microsoft Teams</strong> meeting from the control room.
+              <strong className="font-semibold text-white/85">Microsoft Teams</strong> meeting from the control room. She hears
+              and talks through <strong className="font-semibold text-white/85">OpenAI GPT-Live</strong>, which listens while she
+              speaks — so she answers almost at once, and can be interrupted like anybody else.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -82,7 +84,8 @@ export default function Docs() {
                 The invite’s description is what she knows about the meeting; its guests are who gets the notes.
               </Card>
               <Card tone="emerald" kicker="During" title="Talks like a participant">
-                Answers when named, answers everything in a one-on-one, and adds something useful in a group.
+                Converses in a one-on-one, answers when addressed in a group, and hands what needs thought, the web or the
+                meeting’s record to a stronger model.
               </Card>
               <Card tone="violet" kicker="After" title="Sends the notes">
                 A write-up with decisions and actions, from her own Gmail, once.
@@ -122,28 +125,29 @@ export default function Docs() {
                   },
                   {
                     title: "She introduces herself",
-                    body: "Once somebody else is there — not to an empty room. One fixed line: who she is, that she is taking notes. Scripted, so it cannot fail or ramble.",
+                    body: "Once somebody else is there — never to an empty room: that is when her GPT-Live session opens. Briefly, in her own words: who she is, that she takes notes and emails a summary.",
                     tone: "emerald",
                   },
                   {
                     title: "She listens",
-                    body: "Meet’s own live captions, with real speaker names, are her ears. Each caption goes to the brain.",
+                    body: "GPT-Live hears the meeting’s own sound, taken from the page — everybody but her. Meet’s live captions still run: their speaker names tell her who is talking, and they make the transcript the notes are written from.",
                     tone: "emerald",
                   },
                   {
                     title: "She takes her turn",
                     body: (
                       <>
-                        When somebody pauses, the brain decides whether and what to answer (see{" "}
-                        <a href="#talking" className="text-sky-300 underline decoration-sky-400/40">When she talks</a>). The reply is
-                        spoken with her ElevenLabs voice.
+                        GPT-Live holds the conversation itself, with no round trip through the app — so she answers almost at once,
+                        and stops when talked over (see{" "}
+                        <a href="#talking" className="text-sky-300 underline decoration-sky-400/40">When she talks</a>). What needs
+                        thought, the web or the meeting’s record it hands to its backend, gpt-6-luna.
                       </>
                     ),
                     tone: "emerald",
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, five minutes after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the names on the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people — and from its “you're the only one here”. Her face session is closed on the way out.",
+                    body: "When the meeting ends, when she is removed, five minutes after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the names on the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people — and from its “you're the only one here”. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
                     tone: "violet",
                   },
                   {
@@ -160,7 +164,7 @@ export default function Docs() {
               id="architecture"
               eyebrow="Architecture"
               title="How it’s built"
-              intro="Two parts that talk over HTTPS: a brain that decides and remembers, and a body that is in the meeting."
+              intro="Three parts: a body that is in the meeting (her runner), a voice that holds the conversation (OpenAI GPT-Live), and a memory that keeps the meeting and writes the notes (the web app)."
             >
               <div className="grid items-stretch gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
                 <Card tone="slate" kicker="Where it happens" title="Google Meet & Calendar" className="h-full">
@@ -177,37 +181,39 @@ export default function Docs() {
                 <Card tone="sky" kicker="The body · bot/" title="Runner container" className="h-full">
                   <ul className="space-y-1">
                     <li>Chrome signed in as Ava, on a virtual screen</li>
-                    <li>Reads captions, speaks into her mic</li>
+                    <li>Streams the meeting’s sound to GPT-Live and plays her voice into her mic or face</li>
+                    <li>Sends the captions to the app</li>
                     <li>Watches her calendar, joins, leaves</li>
-                    <li>Calls ElevenLabs for her voice</li>
                   </ul>
                 </Card>
                 <div className="flex items-center justify-center text-base text-white/35 lg:flex-col">
                   <span className="lg:hidden">↓ ↑</span>
                   <span className="hidden lg:block">⇄</span>
                 </div>
-                <Card tone="emerald" kicker="The brain · Vercel" title="Next.js web app" className="h-full">
+                <Card tone="emerald" kicker="The memory · Vercel" title="Next.js web app" className="h-full">
                   <ul className="space-y-1">
-                    <li>Decides when and what she says</li>
-                    <li>Keeps the transcript and actions</li>
-                    <li>Writes and sends the notes</li>
+                    <li>Keeps the transcript, actions and working notes</li>
+                    <li>Gives GPT-Live’s backend the meeting’s record</li>
+                    <li>Writes and sends the notes (Claude)</li>
                     <li>Holds her Google access, encrypted</li>
                   </ul>
                 </Card>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <Stat value="Claude" label="Haiku 4.5 live · Sonnet 5 for the write-up" />
-                <Stat value="ElevenLabs" label="Her voice · Flash v2.5" />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Stat value="GPT-Live" label="Her ears and voice · gpt-live-1, voice gleam" />
+                <Stat value="gpt-6-luna" label="GPT-Live’s backend · web search, the meeting’s record" />
+                <Stat value="Claude" label="The notes · Haiku 4.5 and Sonnet 5" />
+                <Stat value="Anam" label="Her face · lip-synced to her voice" />
                 <Stat value="Upstash Redis" label="The meeting state" />
                 <Stat value="Google APIs" label="Calendar, Gmail, Drive" />
-                <Stat value="Anam" label="Her face · Cara, lip-synced" />
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <Callout tone="sky" title="The runner never decides anything">
-                  It sends what it heard to <C>/api/moderator/tick</C> every 1.2 seconds (sooner when somebody pauses) and says
-                  whatever comes back. Swapping the body — Recall bot then, her own Chrome now — did not need a second brain.
+                <Callout tone="sky" title="The conversation does not go through the app">
+                  Her runner holds one live connection to GPT-Live — the meeting’s sound out, her voice back — which is why she
+                  answers almost at once. The app gets the captions every 1.2 seconds (<C>/api/moderator/tick</C>) for the
+                  transcript and the notes, and serves the meeting’s record when GPT-Live’s backend asks for it.
                 </Callout>
                 <Callout tone="emerald" title="Only the runner may act as her">
                   Reading her calendar, marking her as attending and mailing as her need the shared <C>AVA_RUNNER_KEY</C>. A
@@ -221,8 +227,36 @@ export default function Docs() {
               id="talking"
               eyebrow="Turn-taking"
               title="When she talks"
-              intro="She works in turns, like a person on a call. Everything said that she has not dealt with waits in a queue; at each pause she deals with all of it, once. Every heartbeat runs down this list."
+              intro="GPT-Live takes turns the way a person does: it hears pauses, tone and people talking over her for itself. What we set is when she speaks up."
             >
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card tone="emerald" title="One-on-one">
+                  Everything said is said to her: she converses naturally, with the odd “mm-hm”.
+                </Card>
+                <Card tone="sky" title="A group">
+                  She answers when addressed — by name (Ava, often heard as Eva) or as “the assistant” — or asked something she can
+                  clearly answer; otherwise she listens. She is told each time the room turns from one to the other.
+                </Card>
+                <Card title="Interrupted">She stops when somebody talks over her, listens, and answers what they said.</Card>
+                <Card title="Handing over">
+                  Earlier decisions, a recap, the actions so far, something to note, current facts: she says “one moment” and her
+                  backend answers — see <a href="#brains" className="text-sky-300 underline decoration-sky-400/40">Two brains</a>.
+                </Card>
+                <Card title="What she knows">
+                  General questions get a real answer. Facts about this company, these people or this project come only from the
+                  briefing, what was said, or her backend — otherwise she says she does not know.
+                </Card>
+                <Card title="Why is she quiet?">
+                  The control room shows whether her voice session is open, and her face’s state. Her runner logs every line she
+                  says (<C>▸</C>) and every hand-over.
+                </Card>
+              </div>
+
+              <h3 className="mb-3 mt-10 text-sm font-semibold text-white/80">With the Claude brain (AVA_BRAIN=claude)</h3>
+              <p className="mb-4 text-sm leading-6 text-white/55">
+                The app decides instead, in turns: everything said that she has not dealt with waits in a queue, and at each pause
+                she deals with all of it, once. Every heartbeat runs down this list.
+              </p>
               <div>
                 <Decision ask="Is she already speaking?" yes="Wait. Nothing new until she finishes." tone="slate" />
                 <Decision ask="Has she introduced herself yet?" yes="Say the opening line." tone="emerald" />
@@ -287,23 +321,24 @@ export default function Docs() {
               title="Voice and face"
               intro={
                 <>
-                  Set by <C>AVA_MODE</C> in the runner. Her voice is the same in both; avatar mode adds a face.
+                  Set by <C>AVA_MODE</C> in the runner. Her voice is GPT-Live’s gleam in both (ElevenLabs with the Claude brain);
+                  avatar mode adds a face.
                 </>
               }
             >
               <div className="grid gap-4 md:grid-cols-2">
                 <Card tone="emerald" kicker="Default" title="Voice mode">
                   <p>
-                    She joins camera-off with her Google profile photo. Each reply is turned into speech by ElevenLabs and played
-                    into a microphone track that exists only in her browser.
+                    She joins camera-off with her Google profile photo. Her voice streams from GPT-Live straight into a microphone
+                    track that exists only in her browser.
                   </p>
-                  <p className="mt-2">One request per sentence, nothing held open — so nothing can drop mid-meeting.</p>
+                  <p className="mt-2">Played the moment it arrives, a little ahead so a late piece does not click.</p>
                 </Card>
                 <Card tone="violet" kicker="In use" title="Avatar mode">
                   <p>
-                    Her camera is a canvas. While she is in conversation it shows her Anam face, lip-synced to the same
-                    ElevenLabs audio. Otherwise it crossfades to a looping clip of her at rest, filmed once from the live face and
-                    kept for later meetings.
+                    Her camera is a canvas. While she is in conversation it shows her Anam face, lip-synced to her voice as it
+                    streams in — at GPT-Live’s own 24 kHz, untouched. Otherwise it crossfades to a looping clip of her at rest,
+                    filmed once from the live face and kept for later meetings.
                   </p>
                   <p className="mt-2">If the face is not there, she speaks anyway.</p>
                 </Card>
@@ -318,7 +353,8 @@ export default function Docs() {
                     ["Lost mid-sentence", "She finishes the sentence without the face, from where it was cut."],
                     ["Out of minutes", "Anam refuses; she stops retrying for that meeting and carries on with her voice."],
                     ["No face at all", "Her last resting clip — or, before one exists, a card with her name. Never a black tile."],
-                    ["Empty room", "The face connects only once somebody else is in the meeting, and is closed within seconds when everybody leaves; the camera shows her at rest, at no cost. It comes back the moment somebody returns."],
+                    ["Empty room", "Nothing is open while she is the only one there — bots do not count. The face connects only once somebody else is in the meeting and closes within seconds of the room emptying, with her GPT-Live session; the camera shows her at rest, at no cost. Both reopen when somebody is back, seen twice in a row so a tile lingering after somebody left does not reopen them."],
+                    ["One path per reply", "Each reply is heard through the face or straight through her microphone, start to finish — never switching mid-sentence as the face comes up."],
                     ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
                   ]}
                 />
@@ -329,7 +365,7 @@ export default function Docs() {
             <Section
               id="brains"
               eyebrow="Presence"
-              title="Two brains: Claude, or GPT-Live with Claude"
+              title="Two brains: GPT-Live, or Claude"
               intro={
                 <>
                   Set by <C>AVA_BRAIN</C> in the runner, so both can be tried in real meetings. Either way the captions still
@@ -338,23 +374,23 @@ export default function Docs() {
               }
             >
               <div className="grid gap-4 md:grid-cols-2">
-                <Card tone="emerald" kicker="Default · claude" title="Captions → Claude → ElevenLabs">
-                  <p>
-                    She reads the meeting&apos;s captions, the app decides with Claude when to speak and what to say, and ElevenLabs
-                    turns it into her voice. Everything described under <em>When she talks</em>.
-                  </p>
-                  <p className="mt-2">Hears only what the captions catch, and one step at a time: listen, think, speak.</p>
-                </Card>
-                <Card tone="violet" kicker="Trial · live" title="OpenAI GPT-Live, full duplex">
+                <Card tone="violet" kicker="In use · live" title="OpenAI GPT-Live, full duplex">
                   <p>
                     GPT-Live hears the meeting&apos;s sound itself and holds the conversation over one live connection: it listens
                     while she speaks, takes turns, stops when talked over. Her voice streams in as it is made, straight to her
                     microphone or her face.
                   </p>
                   <p className="mt-2">
-                    What needs her memory of the meeting it hands to Claude, which answers from the whole transcript and the
-                    briefing. The app keeps her lines in the transcript and otherwise stays quiet.
+                    What needs thought, the web or her memory of the meeting it hands to its backend — gpt-6-luna, or Claude. The
+                    app keeps her lines in the transcript and otherwise stays quiet.
                   </p>
+                </Card>
+                <Card tone="emerald" kicker="Fallback · claude" title="Captions → Claude → ElevenLabs">
+                  <p>
+                    She reads the meeting&apos;s captions, the app decides with Claude when to speak and what to say, and ElevenLabs
+                    turns it into her voice — the list under <em>When she talks</em>.
+                  </p>
+                  <p className="mt-2">Hears only what the captions catch, and one step at a time: listen, think, speak.</p>
                 </Card>
               </div>
 
@@ -368,9 +404,9 @@ export default function Docs() {
                     ["One-on-one", "She talks with the person naturally, backchannels included."],
                     ["A group", "She responds when addressed — by name, or as “the assistant” — or asked something she can clearly answer; otherwise she listens. She is told each time the room changes."],
                     ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
-                    ["Empty room", "The session is closed while she is alone (it is billed by the minute) and reopened, with the conversation so far, when somebody is back."],
+                    ["Empty room", "Never open while she is alone (it is billed by the minute): it opens when somebody else arrives, closes within seconds of the room emptying, and reopens with the conversation so far when somebody is back."],
                     ["Time limit", "A session runs out after a while; she renews it in a quiet moment beforehand, and reconnects with the conversation so far if it drops. After three quick failures she stays quiet."],
-                    ["Language", "The meeting’s language, and whichever of English, German or Arabic she is spoken to in. German is native quality in GPT-Live; Arabic is understood in dialect (Tunisian, Maghrebi, Egyptian…) and answered in Modern Standard Arabic, where it is strongest."],
+                    ["Language", "Whichever of English, German or Arabic she is spoken to in, by herself; the captions follow what is spoken (see Languages). German is native quality in GPT-Live; Arabic is understood in dialect (Tunisian, Maghrebi, Egyptian…) and answered in Modern Standard Arabic, where it is strongest."],
                     ["Bots", "Notetakers (Fireflies, Otter, Read.ai…) are not counted as people and their captions are ignored: with only bots left she is alone, so her voice session and her face are closed."],
                   ]}
                 />
@@ -434,22 +470,23 @@ export default function Docs() {
               id="languages"
               eyebrow="English · Deutsch · العربية"
               title="Languages"
-              intro="She works in English, German and Arabic — one language per meeting, because Meet and Teams caption a single spoken language, set in their caption settings."
+              intro="English, German and Arabic. GPT-Live hears and answers any of them by itself. The captions — which name the speakers and make the transcript and the notes — take one language at a time, and follow what people actually speak."
             >
               <Table
                 head={["Step", "How the language is used"]}
                 rows={[
-                  ["Choosing it", "In the control room (English / Deutsch / العربية). For calendar meetings, from the invite: “Language: German” decides; otherwise the language the invite is written in."],
-                  ["Her ears", "She switches the meeting’s captions to that language as she joins — Meet’s “Meeting language”, Teams’ spoken language. Arabic uses Maghrebi captions unless AVA_ARABIC_CAPTIONS says otherwise."],
-                  ["Her replies", "Claude answers in the meeting’s language (Modern Standard Arabic for Arabic), or in another if somebody clearly speaks to her in it."],
-                  ["Her voice", "ElevenLabs Flash v2.5 is multilingual and is told which language it is reading; a voice of its own per language is optional."],
+                  ["Where it starts", "Nothing to choose. Calendar meetings: from the invite — “Language: German” decides, otherwise the language it is written in. Sent from the control room: the language of the title and briefing."],
+                  ["Following the room", "When what she hears is clearly another of the three — twice in a row, and not more than every half minute — she switches the captions to it, and the notes follow."],
+                  ["The captions", "Meet’s “Meeting language”, Teams’ spoken language. Arabic uses Maghrebi captions unless AVA_ARABIC_CAPTIONS says otherwise."],
+                  ["Her replies", "GPT-Live answers in the language she is spoken to in — Arabic dialects understood, answered in Modern Standard Arabic."],
+                  ["Her voice", "GPT-Live’s gleam speaks all three. With the Claude brain, ElevenLabs Flash v2.5, told which language it is reading."],
                   ["Her name", "Recognised in Arabic script too — آفا, إيفا."],
                   ["Hello and chat", "Her opening line and her Teams chat message are in the meeting’s language."],
                   ["The notes", "Written in the meeting’s language; the email’s labels and dates follow, right to left for Arabic."],
                 ]}
               />
               <p className="mt-3 text-xs text-white/40">
-                Switching language in the middle of a meeting is not something captions can follow; that would need a speech-to-speech model.
+                A meeting that mixes languages keeps its captions in the one spoken most lately; GPT-Live itself follows every switch.
               </p>
             </Section>
 
@@ -458,7 +495,7 @@ export default function Docs() {
               <div className="grid gap-4 md:grid-cols-3">
                 <Card tone="sky" title="Actions and decisions">
                   When the meeting ends, the transcript is read for who committed to what, and by when (Haiku). Asked to “note
-                  that down” during the meeting, she adds it straight away.
+                  that down” during the meeting, her backend adds it straight away.
                 </Card>
                 <Card tone="violet" title="The write-up">
                   Summary, decisions, and actions with owners and dates, written from the whole transcript (Sonnet).
@@ -479,11 +516,15 @@ export default function Docs() {
             <Section id="brain" eyebrow="Modules" title="The brain — web app" intro="Next.js on Vercel. The meeting lives in Redis, so every serverless instance sees the same one.">
               <div className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/[0.02] px-5">
                 <FileRow path="app/api/moderator/tick" tag={<Chip tone="emerald">the heart</Chip>}>
-                  Takes what was heard, folds it into the transcript, and decides the one thing to say now — the turn-taking above.
+                  Takes what was heard and folds it into the transcript, with her own lines and the state of her voice and face.
+                  With the Claude brain it also decides the one thing to say now.
+                </FileRow>
+                <FileRow path="app/api/moderator/record · ask">
+                  For GPT-Live’s backend: the meeting’s record and noting an action (gpt-6-luna), or a question answered by Claude.
                 </FileRow>
                 <FileRow path="lib/moderator.ts">
-                  Everything that needs Claude: answering, deciding whether to chime in, pulling out actions, writing the follow-up.
-                  Also her speaking style.
+                  Everything that needs Claude: pulling out actions and writing the follow-up — and with the Claude brain,
+                  answering and deciding whether to chime in. Also her speaking style.
                 </FileRow>
                 <FileRow path="lib/script.ts">The lines she says without a model: the opening and the goodbye.</FileRow>
                 <FileRow path="lib/meeting.ts">
@@ -500,8 +541,9 @@ export default function Docs() {
                   Where her runner asks “have I been sent anywhere?” — each meeting sent from the control room is taken once.
                 </FileRow>
                 <FileRow path="components/ControlRoom.tsx">
-                  The page at <C>/</C>: brief her, send her to any Meet or Teams link (or book her for later), see the transcript
-                  and actions live, end a meeting, edit and resend notes.
+                  The page at <C>/</C>: brief her, send her to any Meet or Teams link (or book her for later), see the meeting she
+                  is in — sent from here or from her calendar — with her voice and face live, the transcript and actions, end a
+                  meeting, edit and resend notes.
                 </FileRow>
                 <FileRow path="lib/recall.ts · app/bot · components/Stage.tsx" tag={<Chip>older path</Chip>}>
                   The Recall bot she used before she had her own Chrome. Still works; not the recommended way.
@@ -517,8 +559,8 @@ export default function Docs() {
                   each meeting, remembers which ones she already did.
                 </FileRow>
                 <FileRow path="lib/meet.mjs">
-                  One meeting, on either platform: brief the brain, open Chrome, join, turn captions on, run the heartbeat, speak,
-                  notice the end, leave, send the notes.
+                  One meeting, on either platform: brief the app, open Chrome, join, turn captions on, open GPT-Live when somebody
+                  is there and close it when nobody is, follow the spoken language, notice the end, leave, send the notes.
                 </FileRow>
                 <FileRow path="lib/platforms.mjs">
                   What differs between Google Meet and Teams: getting in, switching captions on, telling the call is over,
@@ -528,7 +570,7 @@ export default function Docs() {
                   Runs inside the Meet or Teams page before its own code: answers its request for a microphone (and camera) with
                   her, reads the captions, plays her voice, draws her face.
                 </FileRow>
-                <FileRow path="lib/voice.mjs">ElevenLabs text-to-speech: mp3 for voice mode, raw audio for the face to lip-sync to.</FileRow>
+                <FileRow path="lib/voice.mjs">With the Claude brain: ElevenLabs text-to-speech, mp3 or raw audio for the face.</FileRow>
                 <FileRow path="lib/live.mjs">
                   AVA_BRAIN=live: the connection to OpenAI GPT-Live — the meeting&apos;s sound out, her voice and what she hands
                   over back in.
@@ -579,7 +621,7 @@ export default function Docs() {
                     head={["Variable", "For"]}
                     rows={[
                       [<C key="v">ANTHROPIC_API_KEY</C>, "Claude"],
-                      [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the live and write-up models"],
+                      [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the notes models (and the Claude brain's)"],
                       [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state — required; the URL is worked out from KV_URL if missing"],
                       [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "Google sign-in"],
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
@@ -600,7 +642,7 @@ export default function Docs() {
                       [<C key="v">AVA_RUNNER_KEY</C>, "Same value as the app"],
                       [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen"],
                       [<C key="v">AVA_MODE</C>, "voice or avatar"],
-                      [<C key="v">AVA_BRAIN</C>, "claude (default) or live — who hears and speaks for her"],
+                      [<C key="v">AVA_BRAIN</C>, "live (in use) or claude — who hears and speaks for her"],
                       [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=live"],
                       [<C key="v">OPENAI_LIVE_MODEL · OPENAI_VOICE</C>, "Optional: gpt-live-1, gleam"],
                       [<C key="v">OPENAI_DELEGATION_MODEL · _EFFORT</C>, "Who answers what GPT-Live hands over — an OpenAI model or claude — and how hard it thinks (gpt-6-luna, low)"],
@@ -653,9 +695,9 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                 rows={[
                   ["ElevenLabs", "Free plan about 10,000 credits a month — roughly 130 replies", "Starter about $5 a month"],
                   ["Anam (face)", "Free: 3-minute sessions, 30 minutes a month", "Starter $12 · Explorer $49 · Growth $299 a month"],
-                  ["Claude", "—", "A few cents a meeting"],
+                  ["Claude", "The notes after each meeting", "A few cents a meeting"],
                   ["OpenAI GPT-Live", "Only while somebody else is there; needs a paid OpenAI account (not the free tier)", "$0.05 a minute, billed by the second, plus its backend model by the token for what it hands over"],
-                  ["Meet captions", "As good as Google’s captions; English", "Free"],
+                  ["Meet captions", "As good as Google’s captions; one language at a time, following what is spoken", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
                 ]}

@@ -9,7 +9,7 @@ import { BRAIN, DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requ
 import { DELEGATE, EFFORT, connectLive } from "./live.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
-import { CHAT_ASK, langOf } from "./language.mjs";
+import { CHAT_ASK, detectLanguage, langOf } from "./language.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -176,7 +176,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   const platform = platformOf(meeting.meetingUrl);
   if (!platform) throw new Error(`Not a Google Meet or Teams link: ${meeting.meetingUrl}`);
   // English, German or Arabic: her captions, her voice, what she types in the chat.
-  const lang = langOf(meeting.language);
+  // With GPT-Live it follows what people actually speak, from what she hears (below).
+  let lang = langOf(meeting.language);
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   if (!briefed) {
@@ -235,6 +236,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   /** How many people are in the call, her included — two means everything is said to her. */
   let people = null;
   let warmedAt = 0;
+  /**
+   * Her voice session and face are closed because nobody else is here. Rule: neither is
+   * open while she is the only one in the meeting — bots do not count.
+   */
+  let resting = false;
 
   // GPT-Live (AVA_BRAIN=live): OpenAI's model hears the meeting and holds the conversation.
   const live = BRAIN === "live";
@@ -255,6 +261,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let rtTurnEnd = null;
   /** What the room said, as she heard it — for what she hands over to Claude. */
   let rtHeard = "";
+  /** How much she has heard in all, and at what point the language was last checked. */
+  let rtHeardTotal = 0;
+  let langCheckedAt = 0;
+  let langVote = { lang: null, n: 0 };
+  let langSwitchedAt = 0;
   /** Her lines as GPT-Live transcribes them — reported to the app one per heartbeat. */
   const said = [];
   /** The conversation by caption block, to brief a new session after a reconnect. */
@@ -305,7 +316,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
     // One-on-one, she answers everything — so have her face connecting while they are
     // still talking, and it is there by the time she replies.
-    if (MODE === "avatar" && (people === null || people <= 2) && Date.now() - warmedAt > 3000) {
+    if (MODE === "avatar" && !resting && (people === null || people <= 2) && Date.now() - warmedAt > 3000) {
       warmedAt = Date.now();
       void page.evaluate(() => window.__ava?.warm()).catch(() => {});
     }
@@ -333,7 +344,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     }
   });
   await context.addInitScript({
-    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME })};`,
+    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? 24000 : 16000 })};`,
   });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 
@@ -403,6 +414,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   /** Whether she is the only one in the call right now, and for how many checks in a row. */
   let alone = false;
   let aloneChecks = 0;
+  /** Checks in a row that found somebody else — two before anything reopens. */
+  let presentChecks = 0;
   /** Checks in a row that found no hang-up button: one alone is Teams hiding its toolbar. */
   let outOfCall = 0;
   const inCallAt = Date.now();
@@ -480,7 +493,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
    * was alone, and again when it drops or runs out — with the conversation so far.
    */
   const startLive = (resume = false) => {
-    if (rtGaveUp) return;
+    if (rtGaveUp || resting) return;
     const openedAt = Date.now();
     const recap = [...recent.values()].join("\n").slice(-16_000);
     rtRoom = null;
@@ -542,6 +555,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       onAudio: playLive,
       onHeard: (piece) => {
         rtHeard = (rtHeard + piece).slice(-4000);
+        rtHeardTotal += piece.length;
       },
       onSaid: (text, at) => {
         log(`  ▸ ${text}`);
@@ -597,7 +611,17 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         deliveredText: delivered?.text,
         deliveredAt: delivered?.at,
         dropped,
-        face: speaking ? "speaking" : faceState,
+        face: resting ? "resting — nobody else here" : speaking ? "speaking" : faceState,
+        // Her GPT-Live session, so the control room shows it is closed when nobody is here.
+        voice: live
+          ? rt
+            ? `GPT-Live open (${lang})`
+            : resting
+              ? "closed — nobody else here"
+              : sawOthers
+                ? "closed"
+                : "not opened — nobody else here yet"
+          : "ElevenLabs",
         captions: {
           socket: true,
           received: heardCount,
@@ -688,6 +712,27 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (state.people !== people && state.people) log(`  ${state.people} in the call`);
     people = state.people;
     tellRoom();
+
+    // The language they actually speak, from what GPT-Live hears: the captions — and so
+    // the transcript and the notes — follow it. Twice in a row, and not more than every
+    // half minute, so one borrowed phrase does not flip the captions.
+    if (live && rtHeardTotal - langCheckedAt >= 120) {
+      langCheckedAt = rtHeardTotal;
+      const spoken = detectLanguage(rtHeard.slice(-300));
+      if (spoken === lang) langVote = { lang: null, n: 0 };
+      else {
+        langVote = langVote.lang === spoken ? { lang: spoken, n: langVote.n + 1 } : { lang: spoken, n: 1 };
+        if (langVote.n >= 2 && Date.now() - langSwitchedAt > 30_000) {
+          langSwitchedAt = Date.now();
+          langVote = { lang: null, n: 0 };
+          lang = spoken;
+          log(`  they are speaking ${LANGUAGE_NAME[spoken]} — the captions and the notes follow`);
+          await platform.setLanguage(page, log, spoken).catch((e) => log(`  could not change the caption language: ${e.message}`));
+          await app.brief({ language: spoken }).catch(() => {});
+        }
+      }
+    }
+
     // Live sessions run out after a while: renew ahead of it, in a quiet moment, rather
     // than be cut off mid-sentence.
     if (rt && rtExpiresAt && Date.now() > rtExpiresAt - 60_000 && Date.now() - rtVoicedAt > 3000 && Date.now() - (lastHeardAt ?? 0) > 2000) {
@@ -740,22 +785,24 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     // join"). See `state` in platforms.mjs for each product.
     const aloneNow = state.alone || state.people === 1;
     aloneChecks = aloneNow ? aloneChecks + 1 : 0;
-
-    // Her face is billed by the minute: put it to rest as soon as the room is empty, and
-    // bring it back the moment somebody returns.
-    if (MODE === "avatar" && sawOthers) {
-      if (aloneChecks === ALONE_CHECKS) {
-        log("  nobody else here — her face rests");
-        void page.evaluate(() => window.__ava?.rest?.()).catch(() => {});
-      } else if (!aloneNow && alone) {
-        log("  somebody is back");
-        void page.evaluate(() => window.__ava?.warm()).catch(() => {});
-      }
-    }
+    presentChecks = aloneNow ? 0 : presentChecks + 1;
     alone = aloneNow;
-    if (live && sawOthers) {
-      if (aloneChecks === ALONE_CHECKS) stopLive("nobody else here");
-      else if (!aloneNow && !rt && !over) startLive(true);
+
+    // Her voice session and her face are billed by the minute: both close as soon as the
+    // room is empty, and reopen when somebody is back — seen twice in a row, so a tile
+    // lingering after somebody left does not bring them back for nothing.
+    if (sawOthers) {
+      if (!resting && aloneChecks >= ALONE_CHECKS) {
+        resting = true;
+        log("  nobody else here — her voice session and face close");
+        if (live) stopLive("nobody else here");
+        if (MODE === "avatar") void page.evaluate(() => window.__ava?.rest?.()).catch(() => {});
+      } else if (resting && presentChecks >= ALONE_CHECKS) {
+        resting = false;
+        log("  somebody is back");
+        if (live && !rt && !over) startLive(true);
+        if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+      }
     }
 
     // Leaving an empty room: five minutes, whether nobody turned up (counted from the

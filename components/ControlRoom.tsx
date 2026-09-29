@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { platformOf } from "@/lib/platform";
-import { LANGUAGES, type Lang } from "@/lib/languages";
+import { LANGUAGES, detectLang, type Lang } from "@/lib/languages";
 
 type Config = {
   googleConnected: boolean;
@@ -60,6 +60,7 @@ type Meeting = {
     detail?: string;
     at: number;
     captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
+    voice?: string;
   };
   summary?: string;
   followUp?: { to: string; subject: string; body: string; sentAt?: number };
@@ -157,8 +158,6 @@ export default function ControlRoom({
     meetingUrl: initialMeeting.meetingUrl,
     recipients: initialMeeting.recipients.join(", "),
     context: initialMeeting.context,
-    activity: initialMeeting.activity ?? "active",
-    language: (initialMeeting.language ?? "en") as Lang,
     /** When she should walk in, epoch ms. Null means "as soon as I press the button". */
     joinAt: initialMeeting.joinAt ?? (null as number | null),
   });
@@ -228,8 +227,8 @@ export default function ControlRoom({
           title: draft.title,
           meetingUrl: draft.meetingUrl,
           context: draft.context,
-          activity: draft.activity,
-          language: draft.language,
+          // Where she starts: the briefing's language. She then follows what is spoken.
+          language: detectLang(`${draft.title}\n${draft.context}`),
           joinAt: draft.joinAt,
           recipients: draft.recipients.split(/[,\s;]+/).filter(Boolean),
         }),
@@ -488,59 +487,6 @@ export default function ControlRoom({
             />
           </label>
 
-          <fieldset className="mt-4">
-            <legend className="text-xs text-white/40">
-              How much does she join in?{" "}
-              <span className="text-white/25">Being asked something directly always gets an answer.</span>
-            </legend>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(
-                [
-                  ["quiet", "Quiet", "Only ever answers when spoken to."],
-                  ["balanced", "Balanced", "Offers something occasionally."],
-                  ["active", "Active", "Joins in like a participant with a view."],
-                ] as const
-              ).map(([value, label, hint]) => (
-                <button
-                  key={value}
-                  type="button"
-                  title={hint}
-                  onClick={() => setDraft({ ...draft, activity: value })}
-                  className={`${button} ${
-                    draft.activity === value
-                      ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40"
-                      : "bg-white/5 text-white/50 hover:bg-white/10"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="mt-4">
-            <legend className="text-xs text-white/40">
-              Language of the meeting{" "}
-              <span className="text-white/25">She switches the captions to it, answers in it and writes the notes in it.</span>
-            </legend>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(Object.keys(LANGUAGES) as Lang[]).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setDraft({ ...draft, language: value })}
-                  className={`${button} ${
-                    draft.language === value
-                      ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40"
-                      : "bg-white/5 text-white/50 hover:bg-white/10"
-                  }`}
-                >
-                  {LANGUAGES[value].native}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
           <label className="mt-4 block space-y-1">
             <span className="text-xs text-white/40">
               Email the notes to{" "}
@@ -673,6 +619,23 @@ export default function ControlRoom({
             ) : null
           }
         >
+          {status !== "scheduled" && meeting.meetingUrl && (
+            <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="text-lg font-medium text-white/90">{meeting.title}</p>
+              <a
+                href={meeting.meetingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-sky-300/80 underline decoration-sky-400/40 hover:text-sky-200"
+              >
+                {platformOf(meeting.meetingUrl) === "teams" ? "Teams" : "Google Meet"} link
+              </a>
+              <span className="text-xs text-white/35">
+                {meeting.dispatch ? "sent from here" : "from her calendar invite"} ·{" "}
+                {LANGUAGES[(meeting.language ?? "en") as Lang].name}
+              </span>
+            </div>
+          )}
           {status === "scheduled" && (
             <div className="mb-4 rounded-lg bg-sky-400/5 px-4 py-3 text-sm text-sky-100/80">
               She will join{" "}
@@ -695,6 +658,14 @@ export default function ControlRoom({
               what it reports about itself, and why she last said nothing, are shown
               here. Without this "she stopped talking" is unanswerable. */}
           <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-black/30 px-3 py-2 text-xs">
+            {meeting.stage?.voice && (
+              <span>
+                <span className="text-white/35">her voice: </span>
+                <span className={meeting.stage.voice.startsWith("GPT-Live open") ? "text-emerald-300" : "text-white/60"}>
+                  {meeting.stage.voice}
+                </span>
+              </span>
+            )}
             <span>
               <span className="text-white/35">her face: </span>
               <span className={meeting.stage?.face === "live" || meeting.stage?.face === "speaking" ? "text-emerald-300" : "text-amber-300"}>
@@ -786,32 +757,6 @@ export default function ControlRoom({
                 <button className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
                   Update
                 </button>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-white/30">Joins in:</span>
-                {(["quiet", "balanced", "active"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={async () => {
-                      setDraft((d) => ({ ...d, activity: value }));
-                      await call("save", () =>
-                        fetch("/api/meeting", {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ activity: value }),
-                        }),
-                      );
-                    }}
-                    className={`rounded-md px-2 py-1 text-xs ${
-                      meeting.activity === value
-                        ? "bg-sky-500/20 text-sky-200"
-                        : "bg-white/5 text-white/40 hover:bg-white/10"
-                    }`}
-                  >
-                    {value}
-                  </button>
-                ))}
               </div>
             </label>
           )}

@@ -35,6 +35,11 @@ type FaceOptions = {
   sessionSeconds: number;
   /** How long the face stays connected after the conversation goes quiet. */
   idleSeconds: number;
+  /**
+   * The rate of the voice her face lip-syncs to: 16 kHz for ElevenLabs, 24 kHz for
+   * GPT-Live — sent as it comes, since converting it down cost her voice its clarity.
+   */
+  pcmRate?: number;
 };
 
 declare global {
@@ -354,7 +359,7 @@ if (window.top === window && platform && !window.__ava) {
         faceSound = audio.createMediaStreamSource(new MediaStream(stream!.getAudioTracks()));
         faceSound.connect(faceGain);
         faceGain.gain.value = 1;
-        faceInput = c.createAgentAudioInputStream({ encoding: "pcm_s16le", sampleRate: PCM_RATE, channels: 1 });
+        faceInput = c.createAgentAudioInputStream({ encoding: "pcm_s16le", sampleRate: options.pcmRate ?? PCM_RATE, channels: 1 });
         faceGonePromise = new Promise<void>((r) => (faceGone = r));
         face = "live";
         sessionAt = Date.now();
@@ -674,6 +679,12 @@ if (window.top === window && platform && !window.__ava) {
 
   const RT_RATE = 24000;
   let rtItem = "";
+  /**
+   * Where this reply is heard: through her face or straight into her microphone. Chosen
+   * at its first piece and kept to the end — switching mid-sentence, as the face came up,
+   * played part of it twice.
+   */
+  let rtVia: "face" | "mic" = "mic";
   /** Voice: when the next piece is due, on the audio clock. */
   let rtNext = 0;
   let rtSources: AudioBufferSourceNode[] = [];
@@ -689,7 +700,7 @@ if (window.top === window && platform && !window.__ava) {
     for (let i = 0; i < n; i++) out[i] = view.getInt16(i * 2, true) / 32768;
     return out;
   };
-  /** 24 kHz → 16 kHz, the rate her face lip-syncs to. */
+  /** 24 kHz → 16 kHz, only if her face was set up for ElevenLabs' rate. */
   const to16k = (samples: Float32Array) => {
     const n = Math.floor((samples.length * 2) / 3);
     const out = new Int16Array(n);
@@ -854,12 +865,16 @@ if (window.top === window && platform && !window.__ava) {
 
     feed(base64, turn) {
       const { audio, mic, faceGain } = ensureAudio();
-      const samples = pcm24(bytesOf(base64));
+      const bytes = bytesOf(base64);
+      const samples = pcm24(bytes);
       lastActive = Date.now();
       if (turn !== rtItem) {
         // A new reply: whatever was muted for an interruption is heard again.
         rtItem = turn;
         faceGain.gain.value = 1;
+        rtVia = mode === "avatar" && face === "live" && faceInput ? "face" : "mic";
+        // A little ahead, so a piece arriving late does not leave a click in the middle.
+        rtNext = Math.max(rtNext, audio.currentTime + 0.15);
       }
       const ms = (samples.length / RT_RATE) * 1000;
       const ahead = (s: number) => {
@@ -868,9 +883,9 @@ if (window.top === window && platform && !window.__ava) {
           log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
         }
       };
-      if (mode === "avatar" && face === "live" && faceInput) {
+      if (rtVia === "face" && face === "live" && faceInput) {
         // Lip-synced: the face plays it back, about FACE_LAG_MS later, in step with the lips.
-        faceInput.sendAudioChunk(to16k(samples));
+        faceInput.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? bytes : to16k(samples));
         const now = Date.now();
         rtFaceEnd = Math.max(rtFaceEnd, now + FACE_LAG_MS) + ms;
         ahead((rtFaceEnd - now - FACE_LAG_MS) / 1000);

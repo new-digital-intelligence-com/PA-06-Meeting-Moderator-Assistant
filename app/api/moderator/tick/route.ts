@@ -50,6 +50,8 @@ type TickBody = {
   /** What the stage sees of her face and voice — the only window we have into it. */
   face?: string;
   faceDetail?: string;
+  /** Her GPT-Live session: open, or closed while nobody else is there. */
+  voice?: string;
   captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
   /** How many people are in the call, her included. Null when the page cannot tell. */
   people?: number | null;
@@ -320,7 +322,7 @@ export async function POST(request: Request) {
       if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(e) && !m.recipients.includes(e)) m.recipients.push(e);
     }
     if (body.face) {
-      m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions, people: body.people };
+      m.stage = { face: body.face, detail: body.faceDetail, at: Date.now(), captions: body.captions, people: body.people, voice: body.voice };
     }
     // The stage only ticks once she is actually in the call.
     if (m.status === "joining" || m.status === "scheduled") m.status = "live";
@@ -346,7 +348,7 @@ export async function POST(request: Request) {
   if (meeting.status !== "live") return quiet(`meeting is ${meeting.status}`);
   if (body.idle === false) return quiet("she is still speaking");
   if (body.waiting) return quiet("waiting for somebody to arrive");
-  if (body.listenOnly) return quiet("OpenAI Realtime speaks for her");
+  if (body.listenOnly) return quiet("GPT-Live speaks for her");
 
   /* 1 ─ the opening, once */
   const cue = dueCue(meeting);

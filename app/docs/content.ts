@@ -10,11 +10,11 @@ export const UPDATED = "2026-09-29";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
-  { label: "Mode", value: "Avatar — Anam face on her ElevenLabs voice", tone: "emerald" },
+  { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
   { label: "Anam", value: "New account, fresh minutes — face live, tested in her container", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
-  { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — switched on, waiting for its first test", tone: "sky" },
+  { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
 ];
 
 export type Change = {
@@ -27,6 +27,19 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-29",
+    title: "GPT-Live in use: clearer voice, nothing open in an empty room, languages by themselves",
+    points: [
+      "First one-on-one on GPT-Live: she answers almost at once. Her voice now reaches her face at GPT-Live's own 24 kHz — it was being converted down to 16 kHz, which added noise and dulled it — and each reply plays through one path, never switching mid-sentence as the face comes up.",
+      "The rule: no voice session and no face while she is the only one in the meeting, bots not counted. Both close within seconds of the room emptying, and reopen only when somebody is seen twice in a row — a lingering tile had reopened them once.",
+      "The control room drops “How much does she join in?” and the language choice. The live view names the meeting — sent from here or from her calendar invite — and shows whether her voice session is open.",
+      "Languages follow the room: the captions, and so the notes, switch to what people actually speak, from what GPT-Live hears. Meetings sent from the control room start in the language of their briefing.",
+      "These docs now describe GPT-Live as how she works, with Claude as the fallback brain and the writer of the notes.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-09-29",
     title: "A second brain to try: OpenAI GPT-Live, with Claude",

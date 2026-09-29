@@ -175,6 +175,8 @@ export type Meeting = {
     captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
     /** How many people are in the call, her included, as her browser counts them. */
     people?: number | null;
+    /** Her voice session: GPT-Live open or closed (closed while nobody else is there). */
+    voice?: string;
   };
   /** Last line index handed to the note-taker, so it only reads what is new. */
   notedUpTo: number;
