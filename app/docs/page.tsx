@@ -370,7 +370,8 @@ export default function Docs() {
                     ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
                     ["Empty room", "The session is closed while she is alone (it is billed by the minute) and reopened, with the conversation so far, when somebody is back."],
                     ["Time limit", "A session runs out after a while; she renews it in a quiet moment beforehand, and reconnects with the conversation so far if it drops. After three quick failures she stays quiet."],
-                    ["Language", "The meeting’s language, and whichever of English, German or Arabic she is spoken to in."],
+                    ["Language", "The meeting’s language, and whichever of English, German or Arabic she is spoken to in. German is native quality in GPT-Live; Arabic is understood in dialect (Tunisian, Maghrebi, Egyptian…) and answered in Modern Standard Arabic, where it is strongest."],
+                    ["Bots", "Notetakers (Fireflies, Otter, Read.ai…) are not counted as people and their captions are ignored: with only bots left she is alone, so her voice session and her face are closed."],
                   ]}
                 />
               </div>
@@ -651,7 +652,7 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                   ["ElevenLabs", "Free plan about 10,000 credits a month — roughly 130 replies", "Starter about $5 a month"],
                   ["Anam (face)", "Free: 3-minute sessions, 30 minutes a month", "Starter $12 · Explorer $49 · Growth $299 a month"],
                   ["Claude", "—", "A few cents a meeting"],
-                  ["OpenAI GPT-Live", "Billed by the second of session, only while somebody else is there; a session has a time limit and is renewed", "About $0.05 a minute as reported at launch, plus Claude for what it hands over"],
+                  ["OpenAI GPT-Live", "Only while somebody else is there; needs a paid OpenAI account (not the free tier)", "$0.05 a minute, billed by the second, plus Claude for what it hands over"],
                   ["Meet captions", "As good as Google’s captions; English", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],

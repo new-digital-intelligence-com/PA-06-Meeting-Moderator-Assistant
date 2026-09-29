@@ -25,6 +25,8 @@ const ALONE_CHECKS = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const LANGUAGE_NAME = { en: "English", de: "German", ar: "Arabic" };
+/** Notetaker bots: what they "say" is not somebody in the room. */
+const BOT = new RegExp(PEOPLE.bots, "i");
 
 /**
  * What GPT-Live is told at the start of a session: who she is, the briefing, and the
@@ -47,6 +49,7 @@ function liveInstructions(meeting, lang, product) {
     "",
     "# Language",
     `Speak ${language}${lang === "ar" ? " — clear Modern Standard Arabic, following the register people use with you" : ""}. If somebody speaks to you in English, German or Arabic, answer in that language.`,
+    "People speaking Arabic may use a dialect — Tunisian, Maghrebi, Egyptian, Levantine — and mix in French or English words. Understand it as it is, and answer in clear Modern Standard Arabic.",
     "",
     "# When to speak",
     "- One-on-one (you and one other person): everything they say is said to you. Talk with them naturally — answer, react, engage with what they bring up.",
@@ -213,7 +216,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
   await context.exposeBinding("__avaLog", (_src, m) => log(`  [meet] ${m}`));
   await context.exposeBinding("__avaHeard", (_src, speaker, text, blockId) => {
-    if (!text || platform.isSelf(speaker)) return;
+    // A notetaker's captions are nobody talking: they must not bring her in, or her face.
+    if (!text || platform.isSelf(speaker) || BOT.test(speaker)) return;
     heardCount++;
     lastHeardAt = Date.now();
     // Meet rewrites a caption as the sentence goes on. Only the latest version of each

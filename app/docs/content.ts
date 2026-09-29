@@ -33,7 +33,8 @@ export const CHANGELOG: Change[] = [
     points: [
       "AVA_BRAIN=live: OpenAI's GPT-Live hears the meeting's sound and holds the conversation over one live connection — it listens while she speaks, takes turns and stops when talked over — instead of captions → Claude → ElevenLabs.",
       "What needs her memory of the meeting — earlier decisions, a recap, the actions, something to note — it hands to Claude, which answers from the whole transcript and the briefing (/api/moderator/ask).",
-      "One-on-one she talks naturally; in a group she responds when addressed. The session closes while she is alone and renews itself before its time limit. Her face lip-syncs to the voice as it streams in.",
+      "One-on-one she talks naturally; in a group she responds when addressed. The session closes while she is alone — notetaker bots never count as people, and their captions are ignored — and renews itself before its time limit. Her face lip-syncs to the voice as it streams in.",
+      "German is native quality in GPT-Live; Arabic is understood in dialect and answered in Modern Standard Arabic. $0.05 a minute, billed by the second.",
       "Built first on OpenAI's Realtime API the same day, then moved to GPT-Live, which OpenAI now recommends for conversation. Claude alone stays the default.",
     ],
     commits: [],
