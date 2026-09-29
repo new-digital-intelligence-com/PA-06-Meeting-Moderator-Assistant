@@ -51,6 +51,10 @@ export const MODE = process.env.AVA_MODE === "avatar" ? "avatar" : "voice";
 export const FACE = {
   sessionSeconds: Number(process.env.ANAM_SESSION_SECONDS || 180),
   idleSeconds: Number(process.env.AVA_FACE_IDLE_SECONDS || 45),
+  // The rate GPT-Live's voice is sent to the face at. 16 kHz is where Anam's lip-sync is
+  // proven (filtered down from 24 kHz); 24000 sends it untouched — its lips did not move
+  // the one time it was tried.
+  pcmRate: Number(process.env.ANAM_PCM_RATE) === 24000 ? 24000 : 16000,
 };
 
 /**

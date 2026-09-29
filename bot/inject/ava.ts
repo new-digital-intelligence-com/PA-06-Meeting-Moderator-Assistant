@@ -36,8 +36,8 @@ type FaceOptions = {
   /** How long the face stays connected after the conversation goes quiet. */
   idleSeconds: number;
   /**
-   * The rate of the voice her face lip-syncs to: 16 kHz for ElevenLabs, 24 kHz for
-   * GPT-Live — sent as it comes, since converting it down cost her voice its clarity.
+   * The rate her face is sent her voice at: 16 kHz (ElevenLabs as it comes; GPT-Live's
+   * 24 kHz filtered down), or 24 kHz to send GPT-Live's voice as it is (ANAM_PCM_RATE).
    */
   pcmRate?: number;
 };
@@ -366,7 +366,10 @@ if (window.top === window && platform && !window.__ava) {
         log(`face live (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
         return true;
       } catch (e) {
-        const why = e instanceof Error ? e.message : String(e);
+        // Anam's own reason rides on `cause` ("…is a persona ID…"); without it the log only
+        // said "Invalid request to start session".
+        const cause = e instanceof Error && e.cause ? ` — ${String(e.cause)}` : "";
+        const why = (e instanceof Error ? e.message : String(e)) + cause;
         if (/usage limit|upgrade your plan|quota/i.test(why)) {
           faceRetryAt = Number.POSITIVE_INFINITY;
           log(`Anam refused: ${why} — she carries on with her voice and her resting face`);
@@ -680,9 +683,11 @@ if (window.top === window && platform && !window.__ava) {
   const RT_RATE = 24000;
   let rtItem = "";
   /**
-   * Where this reply is heard: through her face or straight into her microphone. Chosen
-   * at its first piece and kept to the end — switching mid-sentence, as the face came up,
-   * played part of it twice.
+   * Where her voice is heard right now: through her face (lip-synced) or straight into her
+   * microphone. The face whenever it is up. When it comes up mid-reply, it takes over at
+   * the next pause — the face plays what it is sent about FACE_LAG_MS later, so a switch
+   * leaves a short gap, and in a pause nobody hears it. (Chosen once per reply, it kept a
+   * greeting that began before the face was up — and everything after — off the face.)
    */
   let rtVia: "face" | "mic" = "mic";
   /** Voice: when the next piece is due, on the audio clock. */
@@ -700,18 +705,65 @@ if (window.top === window && platform && !window.__ava) {
     for (let i = 0; i < n; i++) out[i] = view.getInt16(i * 2, true) / 32768;
     return out;
   };
-  /** 24 kHz → 16 kHz, only if her face was set up for ElevenLabs' rate. */
-  const to16k = (samples: Float32Array) => {
-    const n = Math.floor((samples.length * 2) / 3);
-    const out = new Int16Array(n);
+  /**
+   * 24 kHz → 16 kHz for her face, which lip-syncs at 16 kHz. Filtered first: dropping to
+   * 16 kHz without cutting what is above 8 kHz folds it back down as hiss, which is what
+   * made her voice noisy. Up by 2, a windowed-sinc low-pass at 7.2 kHz, down by 3 — with
+   * the filter's history carried from one piece to the next, so no clicks at the joins.
+   */
+  const RS_TAPS = (() => {
+    const n = 64;
+    const fc = 7200 / 48000;
+    const h = new Float32Array(n);
+    const mid = (n - 1) / 2;
+    let sum = 0;
     for (let i = 0; i < n; i++) {
-      const x = i * 1.5;
-      const j = Math.floor(x);
-      const f = x - j;
-      const v = samples[j] * (1 - f) + (samples[Math.min(j + 1, samples.length - 1)] ?? 0) * f;
-      out[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+      const t = i - mid;
+      const sinc = Math.sin(2 * Math.PI * fc * t) / (Math.PI * t);
+      h[i] = sinc * (0.42 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1)) + 0.08 * Math.cos((4 * Math.PI * i) / (n - 1)));
+      sum += h[i];
     }
-    return new Uint8Array(out.buffer);
+    // ×2: every other sample of the doubled stream is a zero.
+    for (let i = 0; i < n; i++) h[i] = (h[i] / sum) * 2;
+    return h;
+  })();
+  let rsTail = new Float32Array(0);
+  let rsBase = 0;
+  let rsOut = 0;
+  const resetResampler = () => {
+    rsTail = new Float32Array(0);
+    rsBase = 0;
+    rsOut = 0;
+  };
+  const to16k = (samples: Float32Array) => {
+    const buf = new Float32Array(rsTail.length + samples.length);
+    buf.set(rsTail);
+    buf.set(samples, rsTail.length);
+    const end = rsBase + buf.length;
+    const out: number[] = [];
+    // Output n sits at 3n on the 48 kHz grid; input j at 2j.
+    while (Math.floor((3 * rsOut) / 2) < end) {
+      const at = 3 * rsOut;
+      let acc = 0;
+      for (let k = at % 2; k < RS_TAPS.length; k += 2) {
+        const j = (at - k) / 2;
+        if (j < rsBase) break;
+        acc += RS_TAPS[k] * buf[j - rsBase];
+      }
+      out.push(acc);
+      rsOut++;
+    }
+    const keep = Math.min(buf.length, RS_TAPS.length);
+    rsTail = buf.slice(buf.length - keep);
+    rsBase = end - keep;
+    const pcm = new Int16Array(out.length);
+    for (let i = 0; i < out.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, Math.round(out[i] * 32767)));
+    return new Uint8Array(pcm.buffer);
+  };
+  /** A piece with no speech in it — a pause, where switching to the face goes unheard. */
+  const quiet = (samples: Float32Array) => {
+    for (let i = 0; i < samples.length; i++) if (samples[i] > 0.025 || samples[i] < -0.025) return false;
+    return true;
   };
   const stopStream = () => {
     for (const s of rtSources) {
@@ -868,13 +920,22 @@ if (window.top === window && platform && !window.__ava) {
       const bytes = bytesOf(base64);
       const samples = pcm24(bytes);
       lastActive = Date.now();
+      const faceReady = mode === "avatar" && face === "live" && Boolean(faceInput);
       if (turn !== rtItem) {
         // A new reply: whatever was muted for an interruption is heard again.
         rtItem = turn;
         faceGain.gain.value = 1;
-        rtVia = mode === "avatar" && face === "live" && faceInput ? "face" : "mic";
+        rtVia = faceReady ? "face" : "mic";
+        resetResampler();
         // A little ahead, so a piece arriving late does not leave a click in the middle.
         rtNext = Math.max(rtNext, audio.currentTime + 0.15);
+      } else if (rtVia === "mic" && faceReady && quiet(samples)) {
+        // The face came up while she was talking: it takes over at this pause.
+        rtVia = "face";
+        resetResampler();
+      } else if (rtVia === "face" && !faceReady) {
+        // The face went away mid-reply (renewing, or lost): carry on through the microphone.
+        rtVia = "mic";
       }
       const ms = (samples.length / RT_RATE) * 1000;
       const ahead = (s: number) => {
@@ -883,9 +944,9 @@ if (window.top === window && platform && !window.__ava) {
           log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
         }
       };
-      if (rtVia === "face" && face === "live" && faceInput) {
+      if (rtVia === "face" && faceInput) {
         // Lip-synced: the face plays it back, about FACE_LAG_MS later, in step with the lips.
-        faceInput.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? bytes : to16k(samples));
+        faceInput.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? base64 : to16k(samples));
         const now = Date.now();
         rtFaceEnd = Math.max(rtFaceEnd, now + FACE_LAG_MS) + ms;
         ahead((rtFaceEnd - now - FACE_LAG_MS) / 1000);

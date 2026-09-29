@@ -11,7 +11,7 @@ export const UPDATED = "2026-09-29";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "New account and a new face — key and avatar checked; first meeting films her resting clip", tone: "sky" },
+  { label: "Anam", value: "New account, avatar Olivia — the ID fixed (it was the persona's); first meeting films her resting clip", tone: "sky" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
@@ -27,6 +27,18 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-29",
+    title: "Her lips move again",
+    points: [
+      "With the new Anam account her face never came up — every attempt was refused, and the camera showed her resting clip, which does not move its lips. The ID set as her avatar was a persona's (\"Olivia\"), not an avatar's. Set right; and a persona ID given by mistake is now turned into its avatar's by itself, and Anam's own reason for refusing is logged.",
+      "Her greeting also began before the face was up, so it went through her microphone — and that choice was kept for the rest of the reply, which with the near-silence GPT-Live streams between turns could be the whole call.",
+      "Now her voice goes through the face whenever it is up, taking over at the next pause if the face arrives mid-sentence; only real speech counts as a reply going on.",
+      "The face is sent 16 kHz again — where Anam's lip-sync is proven — filtered properly from GPT-Live's 24 kHz: the crude conversion was the hiss in her voice. Tested offline: speech passes unchanged, everything above 8 kHz is cut by over 50 dB, and no clicks where pieces join.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-09-29",
     title: "A new face",

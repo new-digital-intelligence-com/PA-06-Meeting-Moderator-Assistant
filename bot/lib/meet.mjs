@@ -128,7 +128,9 @@ function voiced(b64) {
   const buf = Buffer.from(b64, "base64");
   for (let i = 0; i + 1 < buf.length; i += 2) {
     const s = buf.readInt16LE(i);
-    if (s > 300 || s < -300) return true;
+    // About -32 dBFS: speech is well above it; the near-silence Live streams between turns
+    // is not — counting that kept one "reply" open for a whole call.
+    if (s > 800 || s < -800) return true;
   }
   return false;
 }
@@ -344,7 +346,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     }
   });
   await context.addInitScript({
-    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? 24000 : 16000 })};`,
+    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? FACE.pcmRate : 16000 })};`,
   });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 

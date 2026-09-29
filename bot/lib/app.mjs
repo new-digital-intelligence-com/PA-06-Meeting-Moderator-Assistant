@@ -41,8 +41,9 @@ export const attend = () => call("POST", "/api/meeting/control", { command: "att
  */
 export async function anamSession() {
   const key = process.env.ANAM_API_KEY?.trim();
-  const avatarId = process.env.ANAM_AVATAR_ID?.trim();
-  if (!key || !avatarId) return call("POST", "/api/anam", { passthrough: true });
+  const configured = process.env.ANAM_AVATAR_ID?.trim();
+  if (!key || !configured) return call("POST", "/api/anam", { passthrough: true });
+  const avatarId = await avatarOf(key, configured);
 
   const res = await fetch("https://api.anam.ai/v1/auth/session-token", {
     method: "POST",
@@ -55,6 +56,34 @@ export async function anamSession() {
   const { sessionToken } = JSON.parse(text);
   if (!sessionToken) throw new Error("Anam returned no session token");
   return { sessionToken, avatarId };
+}
+
+/**
+ * The avatar to use for ANAM_AVATAR_ID. Anam's dashboard also shows persona IDs, and a
+ * persona's ID given as her avatar made Anam refuse every face ("Invalid request to start
+ * session") — so a persona ID is turned into its avatar's. Looked up once.
+ */
+let resolvedAvatar = null;
+async function avatarOf(key, id) {
+  if (resolvedAvatar?.id === id) return resolvedAvatar.avatarId;
+  let avatarId = id;
+  try {
+    const res = await fetch(`https://api.anam.ai/v1/personas/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.ok) {
+      const persona = await res.json();
+      if (persona?.avatar?.id) {
+        avatarId = persona.avatar.id;
+        console.log(`  ANAM_AVATAR_ID is the persona "${persona.name}" — using its avatar, ${avatarId}`);
+      }
+    }
+  } catch {
+    /* not a persona, or Anam is slow: use it as given */
+  }
+  resolvedAvatar = { id, avatarId };
+  return avatarId;
 }
 
 /**
