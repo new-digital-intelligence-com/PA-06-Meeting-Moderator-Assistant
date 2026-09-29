@@ -11,7 +11,7 @@ export const UPDATED = "2026-09-29";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "New account, avatar Olivia — the ID fixed (it was the persona's); first meeting films her resting clip", tone: "sky" },
+  { label: "Anam", value: "Elena — NDI's own Cara 4 avatar, in the NDI office; her first meeting films her resting clip", tone: "sky" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
@@ -27,6 +27,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-29",
+    title: "Elena, and logs that survive a restart",
+    points: [
+      "Her face is Elena: an avatar made for NDI (Anam's Cara 4 model), in an office with the NDI sign behind her. Anam only moves her lips; her voice stays GPT-Live's.",
+      "Her runner also writes its log to her disk, one file a day, two weeks kept (/data/logs). A new container used to start with an empty log, and twice a test meeting's log went with the old one before anybody read it.",
+    ],
+    commits: [],
+    tone: "violet",
+  },
   {
     date: "2026-09-29",
     title: "Her lips move again",

@@ -671,7 +671,10 @@ export default function Docs() {
                 <CodeBlock title="start, stop, watch">{`docker compose up -d --build   # build and start (after a code change)
 docker compose start           # start again
 docker compose stop            # stop — she will not join meetings
-docker compose logs -f         # follow what she is doing`}</CodeBlock>
+docker compose logs -f         # follow what she is doing
+
+# her log survives restarts: one file a day, two weeks kept
+docker compose exec ava tail -200 /data/logs/$(date +%F).log`}</CodeBlock>
                 <CodeBlock title="her screen">{`# online, over HTTPS (COMPOSE_PROFILES=public)
 https://<AVA_SCREEN_HOST>          user: ava
 

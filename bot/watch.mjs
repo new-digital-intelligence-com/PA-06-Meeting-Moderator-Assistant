@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as app from "./lib/app.mjs";
-import { EARLY_MS, STATE_DIR } from "./lib/config.mjs";
+import { EARLY_MS, IN_CONTAINER, STATE_DIR } from "./lib/config.mjs";
 import { ensureSignedIn } from "./lib/account.mjs";
 import { attend } from "./lib/meet.mjs";
 import { detectLanguage } from "./lib/language.mjs";
@@ -32,7 +32,27 @@ const remember = (id) => {
 };
 
 const stamp = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const log = (m) => console.log(`${stamp()}${m}`);
+
+/**
+ * Also written to her disk, one file a day, two weeks kept: `docker compose logs` starts
+ * empty with every new container, and twice a test meeting's log went with it before
+ * anybody had read it. On the server: docker compose exec ava tail -200 /data/logs/<date>.log
+ */
+const LOG_DIR = IN_CONTAINER ? path.join(STATE_DIR, "logs") : null;
+if (LOG_DIR) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+  for (const f of fs.readdirSync(LOG_DIR).sort().slice(0, -14)) fs.rmSync(path.join(LOG_DIR, f), { force: true });
+}
+const log = (m) => {
+  const line = `${stamp()}${m}`;
+  console.log(line);
+  if (!LOG_DIR) return;
+  try {
+    fs.appendFileSync(path.join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.log`), `${line}\n`);
+  } catch {
+    /* a full disk must not stop her */
+  }
+};
 
 /**
  * Her briefing, from the invite: whatever the organiser wrote in the description, plus
