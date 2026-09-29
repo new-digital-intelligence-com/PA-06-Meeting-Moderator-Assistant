@@ -27,6 +27,17 @@ export type Change = {
 
 export const CHANGELOG: Change[] = [
   {
+    date: "2026-09-29",
+    title: "English, German and Arabic",
+    points: [
+      "Each meeting has a language — chosen in the control room, or read from the invite. She switches the meeting's captions to it, answers in it, speaks it and writes the notes in it.",
+      "Her voice (ElevenLabs Flash v2.5, multilingual) is told the language; her name is recognised in Arabic script; the notes email is right to left in Arabic.",
+      "Meet offers German and five kinds of Arabic for its captions; Arabic defaults to Maghrebi (AVA_ARABIC_CAPTIONS).",
+    ],
+    commits: [],
+    tone: "violet",
+  },
+  {
     date: "2026-09-28",
     title: "Send her to a Google Meet from the control room",
     points: [

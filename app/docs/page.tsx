@@ -23,6 +23,7 @@ const SECTIONS = [
   { id: "talking", label: "When she talks" },
   { id: "voice", label: "Voice and face" },
   { id: "teams", label: "Microsoft Teams" },
+  { id: "languages", label: "Languages" },
   { id: "notes", label: "Notes and follow-up" },
   { id: "brain", label: "Modules: the brain" },
   { id: "runner", label: "Modules: the runner" },
@@ -375,6 +376,30 @@ export default function Docs() {
               </div>
             </Section>
 
+            {/* ── languages ────────────────────────────────────────────── */}
+            <Section
+              id="languages"
+              eyebrow="English · Deutsch · العربية"
+              title="Languages"
+              intro="She works in English, German and Arabic — one language per meeting, because Meet and Teams caption a single spoken language, set in their caption settings."
+            >
+              <Table
+                head={["Step", "How the language is used"]}
+                rows={[
+                  ["Choosing it", "In the control room (English / Deutsch / العربية). For calendar meetings, from the invite: “Language: German” decides; otherwise the language the invite is written in."],
+                  ["Her ears", "She switches the meeting’s captions to that language as she joins — Meet’s “Meeting language”, Teams’ spoken language. Arabic uses Maghrebi captions unless AVA_ARABIC_CAPTIONS says otherwise."],
+                  ["Her replies", "Claude answers in the meeting’s language (Modern Standard Arabic for Arabic), or in another if somebody clearly speaks to her in it."],
+                  ["Her voice", "ElevenLabs Flash v2.5 is multilingual and is told which language it is reading; a voice of its own per language is optional."],
+                  ["Her name", "Recognised in Arabic script too — آفا, إيفا."],
+                  ["Hello and chat", "Her opening line and her Teams chat message are in the meeting’s language."],
+                  ["The notes", "Written in the meeting’s language; the email’s labels and dates follow, right to left for Arabic."],
+                ]}
+              />
+              <p className="mt-3 text-xs text-white/40">
+                Switching language in the middle of a meeting is not something captions can follow; that would need a speech-to-speech model.
+              </p>
+            </Section>
+
             {/* ── notes ────────────────────────────────────────────────── */}
             <Section id="notes" eyebrow="Afterwards" title="Notes and follow-up">
               <div className="grid gap-4 md:grid-cols-3">
@@ -517,6 +542,8 @@ export default function Docs() {
                       [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen"],
                       [<C key="v">AVA_MODE</C>, "voice or avatar"],
                       [<C key="v">AVA_DISPLAY_NAME</C>, "Her name as a Teams guest (Ava)"],
+                      [<C key="v">ELEVENLABS_VOICE_ID_DE · _AR</C>, "Optional: a voice of her own per language"],
+                      [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],
                       [<C key="v">ELEVENLABS_API_KEY · _VOICE_ID</C>, "Her voice"],
                       [<C key="v">AVA_JOIN_EARLY_SECONDS</C>, "How early she opens a meeting (60)"],
                       [<C key="v">ANAM_SESSION_SECONDS</C>, "Your Anam plan’s session limit (180)"],

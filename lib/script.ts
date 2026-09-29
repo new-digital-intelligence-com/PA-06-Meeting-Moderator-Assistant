@@ -31,12 +31,27 @@ export function openingLine(m?: Meeting): string {
   // The title is whatever was typed into a form — "Acme — enterprise tier", "Q3 sync
   // FINAL v2". Reading it out loud lands somewhere between stilted and absurd, and it
   // tells the room nothing it does not already know. Better to skip it.
-  return [
-    `Hi everyone, I'm ${name}.`,
-    `I'll be following along and taking notes, and I'll send round a summary with the actions afterwards.`,
-    `Just say my name if you want me for anything.`,
-    ...(teams ? ["If you'd like the notes, type your email in the chat."] : []),
-  ].join(" ");
+  const lines = {
+    en: [
+      `Hi everyone, I'm ${name}.`,
+      `I'll be following along and taking notes, and I'll send round a summary with the actions afterwards.`,
+      `Just say my name if you want me for anything.`,
+      ...(teams ? ["If you'd like the notes, type your email in the chat."] : []),
+    ],
+    de: [
+      `Hallo zusammen, ich bin ${name}.`,
+      `Ich höre mit, mache Notizen und schicke Ihnen danach eine Zusammenfassung mit den Aufgaben.`,
+      `Sprechen Sie mich einfach mit meinem Namen an, wenn Sie etwas brauchen.`,
+      ...(teams ? ["Wenn Sie die Notizen möchten, schreiben Sie Ihre E-Mail-Adresse in den Chat."] : []),
+    ],
+    ar: [
+      `مرحباً بالجميع، أنا ${name === "Ava" ? "آفا" : name}.`,
+      `سأتابع الاجتماع وأدوّن الملاحظات، وسأرسل لكم بعده ملخصاً بالمهام.`,
+      `نادوني باسمي إذا احتجتم إلى أي شيء.`,
+      ...(teams ? ["إذا أردتم الملاحظات، اكتبوا بريدكم الإلكتروني في الدردشة."] : []),
+    ],
+  };
+  return lines[m?.language ?? "en"].join(" ");
 }
 
 /** Said when you end the meeting from the control room, before she leaves. */

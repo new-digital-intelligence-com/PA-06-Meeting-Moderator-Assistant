@@ -41,6 +41,7 @@ export async function POST(request: Request) {
     recipients: string[];
     platform: string | null;
     startsAt: number;
+    language: string;
   } = null;
   await updateMeeting((m) => {
     if (!due(m)) return;
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       recipients: m.recipients,
       platform: platformOf(m.meetingUrl),
       startsAt: m.dispatch!.at,
+      language: m.language,
     };
   });
   return NextResponse.json({ meeting: taken });

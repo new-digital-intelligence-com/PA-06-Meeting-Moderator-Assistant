@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DISPLAY_NAME, STATE_DIR } from "./config.mjs";
+import { CAPTION_LANGUAGE } from "./language.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -149,6 +150,46 @@ export const meet = {
       await page.keyboard.press("c").catch(() => {});
     }
     log("  captions on");
+  },
+
+  /**
+   * The spoken language the captions listen for — Meet's "Meeting language" picker,
+   * which sits in the captions bar. Pop-ups (Gemini's among them) can cover it, so it is
+   * opened with the keyboard and the option chosen with a direct click event.
+   */
+  async setLanguage(page, log, lang) {
+    const want = CAPTION_LANGUAGE.meet[lang];
+    const picker = page.getByRole("combobox", { name: /meeting language/i }).first();
+    if (!(await picker.isVisible({ timeout: 5000 }).catch(() => false))) {
+      log("  could not find Meet's caption language picker");
+      return false;
+    }
+    if (want.test(((await picker.textContent()) ?? "").replace(/^language/i, "").trim())) {
+      log(`  captions already in ${lang}`);
+      return true;
+    }
+    for (const close of [/^close$/i, /^don't show again$/i]) {
+      const b = page.locator("[role=dialog]").getByRole("button", { name: close }).first();
+      if (await b.isVisible({ timeout: 500 }).catch(() => false)) await b.click().catch(() => {});
+    }
+    await picker.focus();
+    await page.keyboard.press("Enter");
+    await sleep(800);
+    const options = page.getByRole("option");
+    const names = await options.allTextContents();
+    const i = names.findIndex((n) => want.test(n.replace(/BETA$/i, "").trim()));
+    if (i < 0) {
+      await page.keyboard.press("Escape").catch(() => {});
+      log(`  Meet offers no caption language matching ${want}`);
+      return false;
+    }
+    await options.nth(i).evaluate((el) => el.click());
+    await sleep(1500);
+    // Meet can ask to confirm the change for everybody.
+    const confirm = page.locator("[role=dialog]").getByRole("button", { name: /^(change|confirm|ok|continue)/i }).first();
+    if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) await confirm.click().catch(() => {});
+    log(`  captions switched to ${names[i].replace(/BETA$/i, "").trim()}`);
+    return true;
   },
 
   /** Runs inside the page, so it must be self-contained (and an arrow function: Playwright sends its source). */
@@ -300,6 +341,57 @@ export const teams = {
     }
     await keepEvidence(page, "teams-lobby", log);
     throw new Error("Teams: nobody admitted her within twenty minutes");
+  },
+
+  /**
+   * The spoken language Teams' captions listen for: caption settings → language → the
+   * language → confirm. Worked out from Teams' own names; a step that fails leaves a
+   * screenshot, and the captions stay in English.
+   */
+  async setLanguage(page, log, lang) {
+    if (lang === "en") return true;
+    const want = CAPTION_LANGUAGE.teams[lang];
+    const settings = page
+      .locator('[data-tid="closed-captions-settings-menu-trigger-button"], [aria-label*="Caption Settings" i]')
+      .first();
+    if (!(await settings.isVisible({ timeout: 5000 }).catch(() => false))) {
+      await keepEvidence(page, "teams-language", log);
+      log("  could not find Teams' caption settings to change the language");
+      return false;
+    }
+    await settings.click().catch(() => {});
+    await sleep(700);
+    const item = page
+      .getByRole("menuitem", { name: /language|spoken/i })
+      .or(page.getByRole("button", { name: /language settings|spoken language/i }))
+      .first();
+    if (!(await item.isVisible({ timeout: 3000 }).catch(() => false))) {
+      await keepEvidence(page, "teams-language", log);
+      await page.keyboard.press("Escape").catch(() => {});
+      log("  Teams showed no caption language setting");
+      return false;
+    }
+    await item.click().catch(() => {});
+    await sleep(1000);
+    // A dialog with a drop-down of spoken languages.
+    const dropdown = page.locator("[role=dialog]").getByRole("combobox").first();
+    if (await dropdown.isVisible({ timeout: 3000 }).catch(() => false)) await dropdown.click().catch(() => {});
+    await sleep(700);
+    const options = page.getByRole("option");
+    const names = await options.allTextContents();
+    const i = names.findIndex((n) => want.test(n.trim()));
+    if (i < 0) {
+      await keepEvidence(page, "teams-language", log);
+      await page.keyboard.press("Escape").catch(() => {});
+      log(`  Teams offers no caption language matching ${want}`);
+      return false;
+    }
+    await options.nth(i).click().catch(() => options.nth(i).evaluate((el) => el.click()));
+    await sleep(500);
+    const confirm = page.locator("[role=dialog]").getByRole("button", { name: /^(update|save|confirm|ok|apply)/i }).first();
+    if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) await confirm.click().catch(() => {});
+    log(`  captions switched to ${names[i].trim()}`);
+    return true;
   },
 
   /** Her ears are Teams' live captions: More → Language and speech → Turn on live captions. */

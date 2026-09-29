@@ -175,6 +175,7 @@ function designed(m: Meeting, subject: string, body: string) {
       participants: speakers(m).filter((s) => s.toLowerCase() !== botName().toLowerCase()),
     },
     assistant: botName(),
+    language: m.language,
   });
 }
 

@@ -13,6 +13,7 @@
 
 import crypto from "node:crypto";
 import { store } from "./store";
+import { langOf, type Lang } from "./languages";
 
 export type TranscriptLine = {
   id: string;
@@ -134,6 +135,11 @@ export type Meeting = {
   /** Keys of the few scripted lines she has said, so none is repeated. */
   spoken: string[];
   activity: Activity;
+  /**
+   * The language spoken in the meeting — her captions, her replies, her voice and the
+   * notes. One per meeting: Meet and Teams caption a single spoken language.
+   */
+  language: Lang;
   /** When she last said anything, for pacing what she volunteers. */
   lastSpokeAt?: number;
   /** And what it was, so she does not make the same point twice. */
@@ -187,6 +193,7 @@ export function blank(): Meeting {
     recipients: [],
     status: "draft",
     activity: "active",
+    language: "en",
     transcript: [],
     actions: [],
     files: [],
@@ -232,6 +239,7 @@ function normalise(raw: unknown): Meeting {
     actions: arr<ActionItem>(o.actions),
     files: arr<SharedFile>(o.files),
     spoken: arr<string>(o.spoken),
+    language: langOf(o.language),
     activity: (["quiet", "balanced", "active"] as const).includes(o.activity as Activity)
       ? (o.activity as Activity)
       : "active",

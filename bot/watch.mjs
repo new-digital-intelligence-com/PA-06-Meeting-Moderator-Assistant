@@ -13,6 +13,7 @@ import * as app from "./lib/app.mjs";
 import { EARLY_MS, STATE_DIR } from "./lib/config.mjs";
 import { ensureSignedIn } from "./lib/account.mjs";
 import { attend } from "./lib/meet.mjs";
+import { detectLanguage } from "./lib/language.mjs";
 
 /** Her calendar changes slowly; a send from the control room should feel immediate. */
 const POLL_MS = 60_000;
@@ -129,6 +130,8 @@ for (;;) {
           context: briefingFrom(due),
           recipients: due.guests.map((g) => g.email),
           startsAt: due.start,
+          // "Language: German" in the invite, or the language it is written in.
+          language: detectLanguage(`${due.title}\n${due.description}`),
         },
         { log },
       );

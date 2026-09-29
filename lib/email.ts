@@ -10,7 +10,65 @@
  * Email clients are a hostile place for HTML: tables for layout, every style inline, no
  * images (blocked by default, so the NDI mark is type), nothing that needs a stylesheet.
  * No imports, so the control room can render the same preview in the browser.
+ *
+ * In the meeting's language — English, German or Arabic — and right to left for Arabic.
  */
+
+type Lang = "en" | "de" | "ar";
+
+const WORDS: Record<Lang, {
+  kicker: string;
+  actions: string;
+  summary: string;
+  files: string;
+  none: string;
+  due: string;
+  people: (n: number) => string;
+  length: (mins: number) => string;
+  wrote: (name: string) => string;
+  locale: string;
+}> = {
+  en: {
+    kicker: "Meeting notes",
+    actions: "Actions",
+    summary: "Summary",
+    files: "Files",
+    none: "No actions were agreed in this meeting.",
+    due: "Due",
+    people: (n) => `${n} ${n === 1 ? "participant" : "participants"}`,
+    length: (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`),
+    wrote: (name) => `<b>${name}</b>, NDI's meeting assistant, wrote these notes from the live transcript. Captions can mishear — reply to this email to correct anything.`,
+    locale: "en-GB",
+  },
+  de: {
+    kicker: "Besprechungsnotizen",
+    actions: "Aufgaben",
+    summary: "Zusammenfassung",
+    files: "Dateien",
+    none: "In dieser Besprechung wurden keine Aufgaben vereinbart.",
+    due: "Fällig",
+    people: (n) => `${n} ${n === 1 ? "Teilnehmer" : "Teilnehmende"}`,
+    length: (m) => (m >= 60 ? `${Math.floor(m / 60)} Std. ${m % 60} Min.` : `${m} Min.`),
+    wrote: (name) => `<b>${name}</b>, die Besprechungsassistentin von NDI, hat diese Notizen aus dem Live-Transkript erstellt. Untertitel können sich verhören — antworten Sie auf diese E-Mail, um etwas zu korrigieren.`,
+    locale: "de-DE",
+  },
+  ar: {
+    kicker: "ملاحظات الاجتماع",
+    actions: "المهام",
+    summary: "الملخص",
+    files: "الملفات",
+    none: "لم يتم الاتفاق على أي مهام في هذا الاجتماع.",
+    due: "الموعد",
+    people: (n) => `${n} ${n === 1 ? "مشارك" : "مشاركين"}`,
+    length: (m) => (m >= 60 ? `${Math.floor(m / 60)} ساعة و${m % 60} دقيقة` : `${m} دقيقة`),
+    wrote: (name) => `<b>${name}</b>، مساعدة الاجتماعات في NDI، كتبت هذه الملاحظات من النص المباشر للاجتماع. قد تخطئ الترجمة النصية في بعض الكلمات — ردّوا على هذا البريد لتصحيح أي شيء.`,
+    locale: "ar",
+  },
+};
+
+/** The plain-text headings, in any of the three languages — see NOTE_HEADINGS in moderator.ts. */
+const NOTES_HEADING = /^(NOTES|NOTIZEN|الملاحظات)\s*$/m;
+const FILES_HEADING = /^(FILES|DATEIEN|الملفات)\s*$/m;
 
 export type NotesEmail = {
   subject: string;
@@ -25,6 +83,8 @@ export type NotesEmail = {
   };
   /** Her name, for the sign-off. */
   assistant?: string;
+  /** The meeting's language: the labels, the date, and right to left for Arabic. */
+  language?: Lang;
 };
 
 const RED = "#D7141A";
@@ -32,7 +92,7 @@ const INK = "#111827";
 const TEXT = "#374151";
 const MUTED = "#6B7280";
 const LINE = "#E5E7EB";
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, Tahoma, sans-serif";
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -47,7 +107,7 @@ function inline(s: string): string {
 }
 
 /** The small markdown the notes use: headings, bullet and numbered lists, paragraphs. */
-function markdown(md: string): string {
+function markdown(md: string, start: "left" | "right" = "left"): string {
   const out: string[] = [];
   let list: "ul" | "ol" | null = null;
   const close = () => {
@@ -58,7 +118,7 @@ function markdown(md: string): string {
     if (list === kind) return;
     close();
     list = kind;
-    out.push(`<${kind} style="margin:0 0 14px;padding-left:20px;color:${TEXT};font-size:15px;line-height:24px">`);
+    out.push(`<${kind} style="margin:0 0 14px;padding-${start}:20px;color:${TEXT};font-size:15px;line-height:24px">`);
   };
 
   for (const raw of md.split(/\r?\n/)) {
@@ -92,16 +152,18 @@ function markdown(md: string): string {
 /** Splits the plain text back into its parts. */
 function parts(body: string) {
   const text = body.replace(/\r\n/g, "\n");
-  const notesAt = text.search(/^NOTES\s*$/m);
-  const filesAt = text.search(/^FILES\s*$/m);
+  const notesMatch = text.match(NOTES_HEADING);
+  const filesMatch = text.match(FILES_HEADING);
+  const notesAt = notesMatch?.index ?? -1;
+  const filesAt = filesMatch?.index ?? -1;
   const end = (from: number) => [notesAt, filesAt, text.length].filter((i) => i > from).sort((a, b) => a - b)[0];
 
   const opening = text.slice(0, notesAt >= 0 ? notesAt : filesAt >= 0 ? filesAt : text.length).trim();
-  const notes = notesAt >= 0 ? text.slice(notesAt + 5, end(notesAt)).trim() : "";
+  const notes = notesAt >= 0 ? text.slice(notesAt + notesMatch![0].length, end(notesAt)).trim() : "";
   const files =
     filesAt >= 0
       ? text
-          .slice(filesAt + 5, end(filesAt))
+          .slice(filesAt + filesMatch![0].length, end(filesAt))
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean)
@@ -127,7 +189,9 @@ function action(text: string) {
   let rest = text;
   let owner = "";
   let due = "";
-  const by = rest.match(/\s*[(\[]\s*(?:by|due)\s+([^)\]]+)[)\]]\s*\.?$/i) ?? rest.match(/\s+[—–-]\s+(?:by|due)\s+(.+?)\.?$/i);
+  const by =
+    rest.match(/\s*[(\[]\s*(?:by|due|bis|fällig|بحلول|قبل|حتى)\s+([^)\]]+)[)\]]\s*\.?$/i) ??
+    rest.match(/\s+[—–-]\s+(?:by|due|bis|fällig|بحلول|قبل|حتى)\s+(.+?)\.?$/i);
   if (by) {
     due = by[1].trim();
     rest = rest.slice(0, by.index).trim();
@@ -140,15 +204,15 @@ function action(text: string) {
   return { owner, text: rest, due };
 }
 
-function when(m: NotesEmail["meeting"]): string {
+function when(m: NotesEmail["meeting"], locale: string, length: (mins: number) => string): string {
   const bits: string[] = [];
   if (m.startedAt) {
     bits.push(
-      new Date(m.startedAt).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
+      new Date(m.startedAt).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
     );
     if (m.endedAt && m.endedAt > m.startedAt) {
       const mins = Math.max(1, Math.round((m.endedAt - m.startedAt) / 60_000));
-      bits.push(mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`);
+      bits.push(length(mins));
     }
   }
   return bits.join(" · ");
@@ -156,14 +220,17 @@ function when(m: NotesEmail["meeting"]): string {
 
 const section = (title: string, content: string) => `
 <tr><td style="padding:28px 40px 0">
-  <p style="margin:0 0 14px;font-size:12px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:${RED}">${title}</p>
+  <p style="margin:0 0 14px;font-size:12px;line-height:16px;font-weight:700;letter-spacing:${/[\u0600-\u06FF]/.test(title) ? "0" : "1.4px"};text-transform:uppercase;color:${RED}">${title}</p>
   ${content}
 </td></tr>`;
 
-export function renderNotesEmail({ subject, body, meeting, assistant = "Ava" }: NotesEmail): string {
+export function renderNotesEmail({ subject, body, meeting, assistant = "Ava", language = "en" }: NotesEmail): string {
+  const w = WORDS[language];
+  const rtl = language === "ar";
+  const start = rtl ? "right" : "left";
   const { intro, actions, notes, files } = parts(body);
   const people = meeting.participants.filter(Boolean);
-  const meta = [when(meeting), people.length ? `${people.length} ${people.length === 1 ? "participant" : "participants"}` : ""]
+  const meta = [when(meeting, w.locale, w.length), people.length ? w.people(people.length) : ""]
     .filter(Boolean)
     .join(" · ");
 
@@ -183,7 +250,7 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava" }: 
               ? `<p style="margin:6px 0 0;font-size:13px;line-height:18px;color:${MUTED}">${
                   a.owner ? `<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:#F3F4F6;color:${INK};font-weight:600">${esc(a.owner)}</span>` : ""
                 }${a.owner && a.due ? "&nbsp;&nbsp;" : ""}${
-                  a.due ? `<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:#FEF2F2;color:${RED};font-weight:600">Due ${esc(a.due)}</span>` : ""
+                  a.due ? `<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:#FEF2F2;color:${RED};font-weight:600">${w.due} ${esc(a.due)}</span>` : ""
                 }</p>`
               : ""
           }
@@ -191,7 +258,7 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava" }: 
       </tr>`;
         })
         .join("")
-    : `<tr><td style="padding:4px 0;font-size:15px;line-height:22px;color:${MUTED}">No actions were agreed in this meeting.</td></tr>`;
+    : `<tr><td style="padding:4px 0;font-size:15px;line-height:22px;color:${MUTED}">${w.none}</td></tr>`;
 
   const fileList = files
     .map(
@@ -205,38 +272,38 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava" }: 
     .join("");
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${language}" dir="${rtl ? "rtl" : "ltr"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>${esc(subject)}</title>
 </head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:${FONT}">
+<body dir="${rtl ? "rtl" : "ltr"}" style="margin:0;padding:0;background:#F3F4F6;font-family:${FONT};text-align:${start}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(intro[0] ?? `Notes from ${meeting.title}`)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6">
 <tr><td align="center" style="padding:32px 12px">
 
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid ${LINE}">
+<table role="presentation" dir="${rtl ? "rtl" : "ltr"}" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid ${LINE};text-align:${start}">
   <tr><td style="height:6px;background:${RED};font-size:0;line-height:0">&nbsp;</td></tr>
 
   <tr><td style="padding:28px 40px 0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
       <td style="font-size:26px;line-height:28px;font-weight:800;letter-spacing:-0.5px;color:${RED}">NDI</td>
-      <td align="right" style="font-size:12px;line-height:16px;color:${MUTED}">
+      <td align="${rtl ? "left" : "right"}" style="font-size:12px;line-height:16px;color:${MUTED}">
         <span style="font-weight:600;color:${INK}">Meeting Assistant</span><br>New Digital Intelligence · PA-06
       </td>
     </tr></table>
   </td></tr>
 
   <tr><td style="padding:28px 40px 0">
-    <p style="margin:0 0 6px;font-size:12px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:${MUTED}">Meeting notes</p>
+    <p style="margin:0 0 6px;font-size:12px;line-height:16px;font-weight:700;letter-spacing:${rtl ? "0" : "1.4px"};text-transform:uppercase;color:${MUTED}">${w.kicker}</p>
     <h1 style="margin:0;font-size:26px;line-height:32px;font-weight:700;color:${INK}">${esc(meeting.title || subject)}</h1>
     ${meta ? `<p style="margin:8px 0 0;font-size:14px;line-height:20px;color:${MUTED}">${esc(meta)}</p>` : ""}
     ${
       people.length
         ? `<p style="margin:14px 0 0;font-size:13px;line-height:26px">${people
-            .map((p) => `<span style="display:inline-block;margin:0 6px 0 0;padding:2px 10px;border-radius:12px;background:#F3F4F6;color:${TEXT}">${esc(p)}</span>`)
+            .map((p) => `<span style="display:inline-block;margin-${rtl ? "left" : "right"}:6px;padding:2px 10px;border-radius:12px;background:#F3F4F6;color:${TEXT}">${esc(p)}</span>`)
             .join("")}</p>`
         : ""
     }
@@ -251,13 +318,13 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava" }: 
   }
 
   ${section(
-    `Actions${actions.length ? ` · ${actions.length}` : ""}`,
+    `${w.actions}${actions.length ? ` · ${actions.length}` : ""}`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAFAFA;border:1px solid ${LINE};border-radius:12px;padding:4px 16px">${actionRows}</table>`,
   )}
 
-  ${notes ? section("Summary", markdown(notes)) : ""}
+  ${notes ? section(w.summary, markdown(notes, start)) : ""}
 
-  ${files.length ? section("Files", `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${fileList}</table>`) : ""}
+  ${files.length ? section(w.files, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${fileList}</table>`) : ""}
 
   <tr><td style="padding:32px 40px 32px">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE}"><tr>
@@ -265,8 +332,7 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava" }: 
         <div style="width:32px;height:32px;border-radius:16px;background:${RED};color:#ffffff;font-size:15px;line-height:32px;font-weight:700;text-align:center">${esc(assistant.charAt(0).toUpperCase())}</div>
       </td>
       <td valign="top" style="padding:20px 0 0;font-size:13px;line-height:20px;color:${MUTED}">
-        <span style="color:${INK};font-weight:600">${esc(assistant)}</span>, NDI's meeting assistant, wrote these notes from the live transcript.
-        Captions can mishear — reply to this email to correct anything.
+        ${w.wrote(`<span style="color:${INK};font-weight:600">${esc(assistant)}</span>`).replace(/<\/?b>/g, "")}
       </td>
     </tr></table>
   </td></tr>

@@ -13,6 +13,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { speakers, transcriptText, type ActionItem, type Meeting, type TranscriptLine } from "./meeting";
+import { LANGUAGES } from "./languages";
 
 /** Live replies must be quick — a slow answer lands after the moment has passed. */
 const FAST = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4-5";
@@ -36,11 +37,13 @@ export function isAddressed(text: string): boolean {
   // Captions routinely mishear "Ava" — "Eva" most of all; in a real meeting she was asked
   // a direct question as "Okay, Eva…" and never registered it. In a group the model also
   // recognises mishearings this list misses. AVA_ALIASES overrides the list.
-  const names = [botName(), ...(process.env.AVA_ALIASES ?? "Eva,Iva,Eeva,Ayva,Avah").split(",")]
+  // Arabic captions write her name in Arabic script.
+  const names = [botName(), ...(process.env.AVA_ALIASES ?? "Eva,Iva,Eeva,Ayva,Avah,آفا,أفا,افا,آڤا,ايفا,إيفا,إفا").split(",")]
     .map((n) => n.trim())
     .filter(Boolean)
     .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  return new RegExp(`\\b(${names.join("|")})\\b`, "i").test(text);
+  // \b only knows Latin letters, so the edges are "not a letter" in any script.
+  return new RegExp(`(^|[^\\p{L}])(${names.join("|")})($|[^\\p{L}])`, "iu").test(text);
 }
 
 /**
@@ -71,7 +74,7 @@ const VOICE = [
  */
 const HEARING = [
   "What you hear is live machine captions, not a clean transcript:",
-  "- Words are often misheard. Your own name may come through as Eva, Iva, Ever or similar — it is still you. Never correct anyone about your name.",
+  "- Words are often misheard. Your own name may come through as Eva, Iva, Ever, آفا, إيفا or similar — it is still you. Never correct anyone about your name.",
   "- When a sentence is garbled, work out what they most likely meant from the context and respond to that. Ask them to repeat only if you genuinely cannot tell.",
 ].join("\n");
 
@@ -92,6 +95,8 @@ function brief(m: Meeting): string {
     : "(none captured yet)";
   return [
     `Meeting: ${m.title}`,
+    // The captions are in this language, and so is she: they switched them for her.
+    `Language of this meeting: ${LANGUAGES[m.language].name}. Speak ${LANGUAGES[m.language].name} — natural, spoken ${LANGUAGES[m.language].name}${m.language === "ar" ? " (clear Modern Standard Arabic, following the register people use with you)" : ""} — unless somebody clearly speaks to you in another language, then answer in theirs.`,
     "",
     "What you were told before the meeting:",
     m.context.trim() || "(nothing — you were given no briefing)",
@@ -471,10 +476,22 @@ const FOLLOWUP_TOOL: Anthropic.Tool = {
  * put in the summary field. Deterministic joining means the email is complete every
  * time, whatever the model assumed.
  */
-function assemble(parts: { body: string; summary: string }, files: { name: string; link: string }[]): string {
-  const sections = [parts.body.trim(), "", "NOTES", "", parts.summary.trim()];
+/** The plain-text section headings, per language. lib/email.ts reads them back. */
+export const NOTE_HEADINGS = {
+  en: { notes: "NOTES", files: "FILES" },
+  de: { notes: "NOTIZEN", files: "DATEIEN" },
+  ar: { notes: "الملاحظات", files: "الملفات" },
+} as const;
+
+function assemble(
+  parts: { body: string; summary: string },
+  files: { name: string; link: string }[],
+  lang: keyof typeof NOTE_HEADINGS = "en",
+): string {
+  const h = NOTE_HEADINGS[lang];
+  const sections = [parts.body.trim(), "", h.notes, "", parts.summary.trim()];
   if (files.length) {
-    sections.push("", "FILES", "", ...files.map((f) => `${f.name}: ${f.link}`));
+    sections.push("", h.files, "", ...files.map((f) => `${f.name}: ${f.link}`));
   }
   return sections.join("\n");
 }
@@ -500,7 +517,8 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
         text: [
           `You are ${botName()}, writing up a meeting you sat in on. The email is sent from ${senderName}'s account, so write something they are happy to put their name to.`,
           "",
-          "- Plain, direct business English. No filler, no 'I hope this finds you well', no exclamation marks.",
+          `- Write everything — subject, opening, actions, notes — in ${LANGUAGES[m.language].name}, the language of the meeting${m.language === "ar" ? " (Modern Standard Arabic)" : ""}.`,
+          "- Plain, direct business writing. No filler, no 'I hope this finds you well', no exclamation marks.",
           "- The actions are the point of the email. They go in `body`, first, and unmissable.",
           "- The notes go in `summary`: what was discussed and what was settled, organised by topic.",
           "- The two are joined for you. Do not repeat the notes in `body`, and do not promise anything 'below'.",
@@ -535,7 +553,7 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
   return {
     summary: written.summary,
     subject: written.subject,
-    body: assemble(written, m.files),
+    body: assemble(written, m.files, m.language),
   };
 }
 

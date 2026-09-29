@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { platformOf } from "@/lib/platform";
+import { LANGUAGES, type Lang } from "@/lib/languages";
 
 type Config = {
   googleConnected: boolean;
@@ -44,6 +45,7 @@ type Meeting = {
   context: string;
   recipients: string[];
   activity: "quiet" | "balanced" | "active";
+  language?: Lang;
   status: "draft" | "scheduled" | "joining" | "live" | "ended";
   botId?: string;
   joinAt?: number;
@@ -156,6 +158,7 @@ export default function ControlRoom({
     recipients: initialMeeting.recipients.join(", "),
     context: initialMeeting.context,
     activity: initialMeeting.activity ?? "active",
+    language: (initialMeeting.language ?? "en") as Lang,
     /** When she should walk in, epoch ms. Null means "as soon as I press the button". */
     joinAt: initialMeeting.joinAt ?? (null as number | null),
   });
@@ -226,6 +229,7 @@ export default function ControlRoom({
           meetingUrl: draft.meetingUrl,
           context: draft.context,
           activity: draft.activity,
+          language: draft.language,
           joinAt: draft.joinAt,
           recipients: draft.recipients.split(/[,\s;]+/).filter(Boolean),
         }),
@@ -509,6 +513,29 @@ export default function ControlRoom({
                   }`}
                 >
                   {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="mt-4">
+            <legend className="text-xs text-white/40">
+              Language of the meeting{" "}
+              <span className="text-white/25">She switches the captions to it, answers in it and writes the notes in it.</span>
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(Object.keys(LANGUAGES) as Lang[]).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDraft({ ...draft, language: value })}
+                  className={`${button} ${
+                    draft.language === value
+                      ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40"
+                      : "bg-white/5 text-white/50 hover:bg-white/10"
+                  }`}
+                >
+                  {LANGUAGES[value].native}
                 </button>
               ))}
             </div>

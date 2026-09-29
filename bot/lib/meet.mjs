@@ -8,6 +8,7 @@ import * as app from "./app.mjs";
 import { DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
+import { CHAT_ASK, langOf } from "./language.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -64,6 +65,8 @@ function readIdleClip(avatarId) {
 export async function attend(meeting, { log = console.log, briefed = false } = {}) {
   const platform = platformOf(meeting.meetingUrl);
   if (!platform) throw new Error(`Not a Google Meet or Teams link: ${meeting.meetingUrl}`);
+  // English, German or Arabic: her captions, her voice, what she types in the chat.
+  const lang = langOf(meeting.language);
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   if (!briefed) {
@@ -73,10 +76,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       context: meeting.context || "",
       recipients: meeting.recipients || [],
       joinAt: null,
+      language: lang,
     });
   }
   await app.attend();
-  log(`  ${briefed ? "sent from the control room" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name})`);
+  log(`  ${briefed ? "sent from the control room" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
 
   // 2 — her browser.
   const context = await chromium.launchPersistentContext(PROFILE, {
@@ -227,6 +231,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     throw e;
   }
   await platform.captionsOn(page, log);
+  if (lang !== "en") await platform.setLanguage(page, log, lang).catch((e) => log(`  could not change the caption language: ${e.message}`));
   log("  in the meeting");
 
   // 6 — the conversation.
@@ -330,7 +335,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         // Not awaited: the loop keeps listening while she talks, which is what lets
         // somebody interrupt her.
         // Avatar mode sends raw audio, which is what her face lip-syncs to.
-        const spoken = speech(say, MODE === "avatar" ? "pcm_16000" : undefined).then((audio) =>
+        const spoken = speech(say, MODE === "avatar" ? "pcm_16000" : undefined, lang).then((audio) =>
           page.evaluate((a) => window.__ava.play(a), audio),
         );
         void spoken
@@ -385,7 +390,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         await platform.askForEmails(
           page,
           log,
-          `Hi, I'm ${DISPLAY_NAME}, NDI's meeting assistant. I'll email a summary with the actions after the meeting — type your email address here if you'd like it.`,
+          CHAT_ASK[lang](DISPLAY_NAME),
         );
       }
       wake();

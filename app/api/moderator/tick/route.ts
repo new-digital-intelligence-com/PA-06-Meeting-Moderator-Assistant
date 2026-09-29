@@ -83,7 +83,10 @@ const STALE_MS = 60_000;
  */
 function looksLikeAQuestion(text: string): boolean {
   const t = text.trim().toLowerCase();
-  if (t.endsWith("?")) return true;
+  if (t.endsWith("?") || t.endsWith("؟")) return true;
+  // German and Arabic question words too — she works in all three.
+  if (/\b(was|wann|wo|wer|wie|warum|welche[rsn]?|können wir|sollen wir|gibt es)\b/.test(t.split(/[.!?]/).pop() ?? t)) return true;
+  if (/(^|\s)(ما|ماذا|متى|أين|كيف|لماذا|من|هل|كم)(\s|$)/.test(t)) return true;
   return /\b(what|when|where|which|who|why|how|can we|could we|should we|do we|does it|is it|are we|any idea|how long|how much)\b/.test(
     t.split(/[.!?]/).pop() ?? t,
   );
@@ -351,7 +354,7 @@ export async function POST(request: Request) {
   // question put to her while somebody else is still talking is answered at the next
   // pause, not lost.
   const quietFor = body.captions?.secondsSinceLast;
-  const finished = /[.?!…]["')\]]?\s*$/.test(waiting[waiting.length - 1].text);
+  const finished = /[.?!…؟。]["')\]]?\s*$/.test(waiting[waiting.length - 1].text);
   if (quietFor !== null && quietFor !== undefined && quietFor < (finished ? PAUSE_S : PAUSE_UNFINISHED_S)) {
     return quiet("somebody is mid-sentence");
   }

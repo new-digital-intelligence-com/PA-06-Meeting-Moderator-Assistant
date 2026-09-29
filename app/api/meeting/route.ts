@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { elapsed, getMeeting, resetMeeting, updateMeeting, type Activity } from "@/lib/meeting";
+import { langOf } from "@/lib/languages";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 
 export const runtime = "nodejs";
@@ -19,6 +20,7 @@ type Patch = {
   context?: string;
   recipients?: string[];
   activity?: Activity;
+  language?: string;
   /** Epoch ms, or null to clear it and have her join as soon as she is sent. */
   joinAt?: number | null;
 };
@@ -38,6 +40,7 @@ export async function PUT(request: Request) {
     // Kept editable mid-meeting on purpose: if she is missing something, you can tell
     // her about it there and then and the next answer will know it.
     if (patch.context !== undefined) m.context = patch.context;
+    if (patch.language !== undefined) m.language = langOf(patch.language);
     if (patch.activity && ["quiet", "balanced", "active"].includes(patch.activity)) {
       m.activity = patch.activity;
     }
