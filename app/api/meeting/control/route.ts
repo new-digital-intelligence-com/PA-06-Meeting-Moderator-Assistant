@@ -5,6 +5,7 @@ import { isRunner } from "@/lib/ava";
 import { GoogleClient } from "@/lib/google";
 import { platformOf } from "@/lib/platform";
 import { readSession, type Session } from "@/lib/session";
+import { guestsOfMeeting } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -105,9 +106,13 @@ export async function POST(request: Request) {
     // their email in the meeting chat — and whoever sent her, if they are in it too (their
     // name on the call). Never just for having sent her.
     const sentBy = await sender(session);
+    // A scheduled meeting: everybody on its invite, from the sender's own calendar.
+    const google = GoogleClient.fromSession(session);
+    const guests = google ? await guestsOfMeeting(google, before.meetingUrl, at).catch(() => [] as string[]) : [];
     const meeting = await updateMeeting((m) => {
       m.dispatch = { at };
       m.sentBy = sentBy;
+      m.recipients = [...new Set([...m.recipients, ...guests])];
       m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
       m.attendedBy = undefined;
       m.botId = undefined;

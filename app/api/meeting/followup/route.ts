@@ -5,7 +5,7 @@ import { renderNotesEmail } from "@/lib/email";
 import { botName, composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
 import { readSession, sessionCookie, type Session } from "@/lib/session";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
-import { createDraft, sendEmail } from "@/lib/workspace";
+import { createDraft, directoryEmail, sendEmail } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -92,6 +92,21 @@ export async function POST(request: Request) {
     });
   }
 
+  // Colleagues from her organisation who were in it: the meeting showed their names, her
+  // organisation's directory has their addresses.
+  let directory: string | undefined;
+  if (meeting.attendedBy === "self") {
+    const known = meeting.recipients;
+    const found = await colleaguesIn(meeting);
+    directory = found.problem;
+    const colleagues = found.emails.filter((e) => !known.includes(e));
+    if (colleagues.length) {
+      meeting = await updateMeeting((m) => {
+        m.recipients = [...new Set([...m.recipients, ...colleagues])];
+      });
+    }
+  }
+
   const to = meeting.recipients.join(", ");
   meeting = await updateMeeting((m) => {
     m.summary = written.summary;
@@ -105,7 +120,12 @@ export async function POST(request: Request) {
   if (!google) return NextResponse.json({ error: "Google is not connected." }, { status: 401 });
   if (!to) {
     return NextResponse.json(
-      { error: "No recipients — nobody to send the notes to.", summary: written.summary, followUp: meeting.followUp },
+      {
+        error: `No recipients — nobody to send the notes to.${directory ? ` (Colleagues could not be looked up: ${directory}.)` : ""}`,
+        summary: written.summary,
+        followUp: meeting.followUp,
+        directory,
+      },
       { status: 400 },
     );
   }
@@ -122,7 +142,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const response = NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: result });
+    const response = NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: result, directory });
     if (google.dirty && google.current.email === session.google?.email) response.cookies.set(sessionCookie({ ...session, google: google.current }));
     return response;
   } catch (e) {
@@ -187,6 +207,39 @@ function designed(m: Meeting, subject: string, body: string) {
     // The notes are always in English, whatever the meeting was held in.
     language: "en",
   });
+}
+
+/**
+ * The addresses of the people in the meeting who are in her organisation's directory, by
+ * the names the call and its captions showed. Only full names (two words or more), and
+ * only an exact, single match each — see `directoryEmail`. Nothing if her Google is not
+ * connected with the directory permission.
+ */
+async function colleaguesIn(m: Meeting): Promise<{ emails: string[]; problem?: string }> {
+  const hers = await avaGoogle();
+  if (!hers) return { emails: [], problem: "her Google is not connected" };
+  const self = ((await avaEmail()) ?? "").toLowerCase();
+  const names = [...new Set([...(m.participants ?? []), ...speakers(m)].map((n) => n.trim()))]
+    .filter((n) => /^\p{L}[\p{L}' .-]{1,58}\p{L}$/u.test(n) && n.split(/\s+/).length >= 2)
+    .slice(0, 20);
+  const found = await Promise.allSettled(names.map((n) => directoryEmail(hers, n)));
+  const failed = found.find((f): f is PromiseRejectedResult => f.status === "rejected");
+  const reason = failed ? String(failed.reason instanceof Error ? failed.reason.message : failed.reason) : undefined;
+  if (reason) console.warn("[followup] directory lookup failed:", reason);
+  return {
+    emails: [
+      ...new Set(
+        found.map((f) => (f.status === "fulfilled" ? f.value : null)).filter((e): e is string => Boolean(e) && e !== self),
+      ),
+    ],
+    problem: reason
+      ? /insufficient|scope/i.test(reason)
+        ? "reconnect Ava's Google to allow the directory"
+        : /has not been used|disabled|not enabled/i.test(reason)
+          ? "the People API is off in the Google Cloud project"
+          : reason.slice(0, 160)
+      : undefined,
+  };
 }
 
 /**

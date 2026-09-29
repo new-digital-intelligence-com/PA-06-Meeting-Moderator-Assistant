@@ -214,7 +214,9 @@ export const meet = {
       if (name && !lines.some((l) => me.test(l))) bots.push(name);
       else {
         humans++;
-        if (lines.length && !lines.some((l) => me.test(l))) names.push(lines.slice(0, 3).join(" ").slice(0, 120));
+        // Each of its first lines on its own: the name is one of them, beside labels and
+        // icon names that match nobody.
+        if (lines.length && !lines.some((l) => me.test(l))) names.push(...lines.slice(0, 3).map((l) => l.slice(0, 120)));
       }
     }
     // The People button's number counts everybody, bots too; it only matters when there

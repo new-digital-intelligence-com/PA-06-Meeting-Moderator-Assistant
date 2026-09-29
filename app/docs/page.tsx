@@ -504,15 +504,17 @@ export default function Docs() {
                   Summary, decisions, and actions with owners and dates, written from the whole transcript (Sonnet) — always in
                   English, translated if the meeting was held in German or Arabic.
                 </Card>
-                <Card tone="emerald" title="Sent by themselves, as her, once">
-                  When the meeting ends the notes go out from Ava’s Gmail, with nothing to press, to everybody she knows was in
-                  it: the invite’s guests; addresses given when she was sent; addresses typed in the meeting chat; and whoever
-                  sent her from the control room — if their Google name was on the call or in its captions, never just for having
-                  sent her. Not meeting rooms, not herself. A second send for the same meeting is ignored.
+                <Card tone="emerald" title="To everybody in the meeting, by themselves">
+                  When the meeting ends the notes go out from Ava’s Gmail, with nothing to press. Meet and Teams show names, never
+                  addresses, so she gathers them: the guests of the calendar invite (hers, or — sent from the control room to a
+                  scheduled meeting — the sender’s); colleagues the call showed by name, found in the organisation’s directory (one
+                  exact match each); whoever sent her, if their Google name was on the call; addresses given when she was sent; and
+                  addresses typed in the meeting chat. Not meeting rooms, not herself; once per meeting.
                 </Card>
-                <Card tone="amber" title="Nobody to send them to?">
-                  Meet and Teams show her nobody’s email. With no guests and no addresses, she asks in the meeting chat. If there
-                  is still nobody, the notes are written and wait in the control room.
+                <Card tone="amber" title="Who she cannot find">
+                  People from outside the organisation who join a meeting that is on nobody’s calendar: Google never shows her
+                  their address. She asks in the meeting chat. If there is still nobody, the notes are written and wait in the
+                  control room.
                 </Card>
                 <Card tone="slate" title="A designed email">
                   NDI-branded HTML — the actions first, each with its owner and due date, then the summary and any files — with the

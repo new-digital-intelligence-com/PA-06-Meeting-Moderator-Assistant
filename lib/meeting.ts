@@ -328,7 +328,7 @@ export function transcriptText(lines: TranscriptLine[]): string {
 }
 
 /** A name as a meeting might show it: no accents, no case, words only. */
-const normaliseName = (s: string) =>
+export const normaliseName = (s: string) =>
   s
     .normalize("NFD")
     .replace(/\p{M}/gu, "")

@@ -862,6 +862,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   try {
     const r = await app.sendNotes();
     log(r.delivered?.sent ? `  notes sent to ${r.followUp?.to}` : "  notes written — nobody to send them to");
+    if (r.directory) log(`  colleagues could not be looked up in the directory: ${r.directory}`);
   } catch (e) {
     log(`  notes not sent: ${e.message}`);
   }

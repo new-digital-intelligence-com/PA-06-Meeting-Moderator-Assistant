@@ -29,6 +29,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
+    title: "The notes reach everybody she can find in the meeting",
+    points: [
+      "Sent from the control room to a scheduled meeting, she takes every guest of its calendar invite from the sender's calendar — the call itself never shows addresses.",
+      "Colleagues the call showed by name are found in the organisation's directory (people:searchDirectoryPeople), one exact match each. It needs her Google connected once more, for the directory permission; if the lookup cannot run, her log says why.",
+      "Only people from outside the organisation in an unscheduled meeting stay unknown — Google never shows their addresses — and are asked in the chat.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-29",
     title: "The notes go out by themselves; no hiss between sentences",
     points: [
       "The control room is for sending her, not for sending notes. Whoever sends her from it now gets the notes automatically when the meeting ends — if their Google name was on the call or in its captions (tested: exact names, with or without accents or capitals; never somebody else's) — alongside invite guests, addresses given, and addresses typed in the chat.",
