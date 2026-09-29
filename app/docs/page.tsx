@@ -336,9 +336,10 @@ export default function Docs() {
                 </Card>
                 <Card tone="violet" kicker="In use" title="Avatar mode">
                   <p>
-                    Her camera is a canvas. While she is in conversation it shows her Anam face, lip-synced to her voice as it
-                    streams in — filtered from GPT-Live’s 24 kHz to the 16 kHz Anam lip-syncs to. Otherwise it crossfades to a
-                    looping clip of her at rest, filmed once from the live face and kept for later meetings.
+                    Her camera is a canvas. While she is in conversation it shows her Anam face, whose lips move to her voice: the
+                    face is sent a copy (filtered to the 16 kHz it lip-syncs to), but what the meeting hears is GPT-Live’s own audio,
+                    held back by the face’s measured lag so the lips match. Otherwise it crossfades to a looping clip of her at rest,
+                    filmed once from the live face and kept for later meetings.
                   </p>
                   <p className="mt-2">If the face is not there, she speaks anyway.</p>
                 </Card>
@@ -354,8 +355,8 @@ export default function Docs() {
                     ["Out of minutes", "Anam refuses; she stops retrying for that meeting and carries on with her voice."],
                     ["No face at all", "Her last resting clip — or, before one exists, a card with her name. Never a black tile."],
                     ["Empty room", "Nothing is open while she is the only one there — bots do not count. The face connects only once somebody else is in the meeting and closes within seconds of the room emptying, with her GPT-Live session; the camera shows her at rest, at no cost. Both reopen when somebody is back, seen twice in a row so a tile lingering after somebody left does not reopen them."],
-                    ["Face or microphone", "Her voice goes through the face whenever it is up, so her lips move with it. If the face comes up while she is talking, it takes over at the next pause; if it goes away, her microphone carries on."],
-                    ["Silent between sentences", "The face’s sound reaches her microphone only while she speaks through it — from the moment her voice is sent to it until a margin after it has played. Between sentences the face’s stream carries a steady hiss, which Meet’s Studio sound used to hide; its level is logged once per face session."],
+                    ["Her voice, not the face’s", "The meeting hears GPT-Live’s audio straight, never the face’s copy — that copy had been cut to 16 kHz, through Anam and one more codec, and carried a noise on her voice. The face’s lag (sending a sound to it coming back out) is measured each reply, and her voice is held back by it so the lips match; without a face she is heard at once. AVA_FACE_AUDIO=anam hears the face’s copy instead."],
+                    ["The face’s own sound", "Kept out of her microphone. (With AVA_FACE_AUDIO=anam it is let in only while she speaks through the face.) Its level when she is quiet is logged once per session: digital silence, around −105 dBFS."],
                     ["Meet’s own processing, off", "Meet turns on “Studio sound” (Gemini rebuilding a voice to sound studio-recorded) and “Adaptive audio” in every new meeting. On her already-synthetic voice they added an echo, so she switches both off as she joins."],
                     ["Clean audio for the face", "GPT-Live speaks at 24 kHz; the face lip-syncs at 16 kHz. The conversion filters out what is above 8 kHz first (a windowed-sinc low-pass), rather than letting it fold back as hiss. ANAM_PCM_RATE=24000 sends it untouched instead."],
                     ["Meeting over", "She closes the face session herself before leaving, so Anam does not bill until it notices she has gone."],
@@ -660,6 +661,7 @@ export default function Docs() {
                       [<C key="v">AVA_FACE_IDLE_SECONDS</C>, "Quiet seconds before the face rests (45)"],
                       [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face — she asks Anam herself (else the app does). A persona ID works too: she uses its avatar"],
                       [<C key="v">ANAM_PCM_RATE</C>, "The rate her voice is sent to the face at (16000; 24000 untouched)"],
+                      [<C key="v">AVA_FACE_AUDIO</C>, "direct (default): the meeting hears GPT-Live’s audio, lips matched; anam: the face’s copy"],
                       [<C key="v">AVA_SCREEN_PORT</C>, "Port for the web view (8080)"],
                       [<C key="v">AVA_IGNORE_PARTICIPANTS</C>, "More bot names not to count as people, comma-separated"],
                     ]}

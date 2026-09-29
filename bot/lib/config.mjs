@@ -55,6 +55,9 @@ export const FACE = {
   // proven (filtered down from 24 kHz); 24000 sends it untouched — its lips did not move
   // the one time it was tried.
   pcmRate: Number(process.env.ANAM_PCM_RATE) === 24000 ? 24000 : 16000,
+  // Where her voice is heard from while the face is up: "direct" (default) — GPT-Live's own
+  // audio, held back to match the lips — or "anam", the face's copy, which carried noise.
+  faceAudio: process.env.AVA_FACE_AUDIO === "anam" ? "anam" : "direct",
 };
 
 /**

@@ -29,6 +29,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-29",
+    title: "Her voice straight from GPT-Live; the face only moves her lips",
+    points: [
+      "The noise was on her voice itself, not between sentences: the face's stream measured −104 and −112 dBFS when she was quiet, and Meet's Studio sound was already off. What the meeting heard was the face's copy of her voice — cut to 16 kHz, through Anam's servers and one more codec before Meet's own.",
+      "Now the meeting hears GPT-Live's audio straight. The face is still sent a copy to move its lips, and her voice is held back by the face's lag — measured on each reply, from sending a sound to it coming back out — so lips and voice match. No added delay: the face's copy came back just as late.",
+      "The face is no longer renewed in the middle of a reply. AVA_FACE_AUDIO=anam goes back to the face's copy, to compare.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-09-29",
     title: "Notes emailed for calendar meetings only",
     points: [
       "Meetings she is invited to on her calendar: the notes are emailed to the invite's guests when they end, as before. Meetings she is sent to from the control room: the notes are written and wait there — not emailed, and her hello no longer promises it.",

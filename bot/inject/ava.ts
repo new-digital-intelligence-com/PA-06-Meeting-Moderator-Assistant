@@ -40,6 +40,11 @@ type FaceOptions = {
    * 24 kHz filtered down), or 24 kHz to send GPT-Live's voice as it is (ANAM_PCM_RATE).
    */
   pcmRate?: number;
+  /**
+   * Where her voice is heard from while her face is up: "direct" — straight from GPT-Live,
+   * held back to match the lips — or "anam", the face's own copy (AVA_FACE_AUDIO).
+   */
+  faceAudio?: "direct" | "anam";
 };
 
 declare global {
@@ -306,8 +311,36 @@ if (window.top === window && platform && !window.__ava) {
     faceOpenUntil = 0;
     gateFace();
   };
+  /**
+   * How far her face's lips run behind the voice it is sent, measured: from sending the
+   * first sound of a reply to that sound coming back out of the face. Her own voice is
+   * held back by the same amount, so the lips match it. Starts at FACE_LAG_MS.
+   */
+  let faceLagMs = FACE_LAG_MS;
+  let lagProbe: { sentAt: number } | null = null;
+  let lagProbedTurn = "";
+  let lagMeasured = 0;
+  const probeFaceLag = () => {
+    if (!lagProbe || !faceMeter) return;
+    const waited = performance.now() - lagProbe.sentAt;
+    if (waited > 2500) {
+      lagProbe = null;
+      return;
+    }
+    const samples = new Float32Array(faceMeter.fftSize);
+    faceMeter.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (let i = samples.length - 480; i < samples.length; i++) sum += samples[i] * samples[i];
+    if (10 * Math.log10(sum / 480 + 1e-12) < -45) return;
+    lagProbe = null;
+    if (waited < 150 || waited > 2000) return;
+    faceLagMs = lagMeasured ? Math.round(faceLagMs * 0.6 + waited * 0.4) : Math.round(waited);
+    if (lagMeasured++ < 3) log(`her lips run ${Math.round(waited)} ms behind — her voice is held back ${faceLagMs} ms to match`);
+  };
+
   const noteFaceLevel = () => {
     if (faceLevelNoted || !faceMeter || faceGateOpen || face !== "live" || Date.now() - sessionAt < 3000) return;
+    if (rtSources.length > 0 || Date.now() < rtFaceEnd + 500 || isSpeaking) return;
     const samples = new Float32Array(faceMeter.fftSize);
     faceMeter.getFloatTimeDomainData(samples);
     let sum = 0;
@@ -440,19 +473,22 @@ if (window.top === window && platform && !window.__ava) {
     return opening;
   };
 
-  // Her face's sound: shut when she is not speaking through it (see gateFace).
+  // Her face's sound: shut when she is not speaking through it (see gateFace); and how far
+  // its lips run behind (see probeFaceLag), checked often enough to be accurate.
   if (mode === "avatar") {
     setInterval(() => {
       gateFace();
       noteFaceLevel();
     }, 50);
+    setInterval(probeFaceLag, 10);
   }
 
   // Close when the conversation has gone quiet (minutes are billed), and reconnect ahead
   // of Anam's cut-off at a moment she is not speaking, rather than be cut off mid-word.
   if (mode === "avatar") {
     setInterval(() => {
-      if (face !== "live" || isSpeaking) return;
+      // Not mid-reply: renewing then would stop her lips halfway through a sentence.
+      if (face !== "live" || isSpeaking || rtSources.length > 0 || Date.now() < rtFaceEnd) return;
       const age = Date.now() - sessionAt;
       const quiet = Date.now() - lastActive;
       if (quiet > options.idleSeconds * 1000) {
@@ -1003,30 +1039,45 @@ if (window.top === window && platform && !window.__ava) {
           log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
         }
       };
+      /** Into her microphone, each piece after the last, at least `lead` seconds from now. */
+      const schedule = (lead: number) => {
+        const buffer = audio.createBuffer(1, Math.max(1, samples.length), RT_RATE);
+        buffer.getChannelData(0).set(samples);
+        const source = audio.createBufferSource();
+        source.buffer = buffer;
+        source.connect(mic);
+        const at = Math.max(audio.currentTime + lead, rtNext);
+        source.start(at);
+        rtNext = at + buffer.duration;
+        ahead(rtNext - audio.currentTime - lead);
+        rtSources.push(source);
+        source.onended = () => {
+          rtSources = rtSources.filter((s) => s !== source);
+        };
+      };
       if (rtVia === "face" && faceInput) {
-        // Lip-synced: the face plays it back, about FACE_LAG_MS later, in step with the lips.
+        // Her lips: the face is sent her voice and moves them to it, faceLagMs later.
         faceInput.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? base64 : to16k(samples));
         const now = Date.now();
-        rtFaceEnd = Math.max(rtFaceEnd, now + FACE_LAG_MS) + ms;
-        // Heard from now (so no word's start is cut) until a margin after it has played.
-        openFaceSound(rtFaceEnd + FACE_TAIL_MS);
-        ahead((rtFaceEnd - now - FACE_LAG_MS) / 1000);
+        rtFaceEnd = Math.max(rtFaceEnd, now + faceLagMs) + ms;
+        if (options.faceAudio === "anam") {
+          // Heard through the face, from now (so no word's start is cut) to a margin after.
+          openFaceSound(rtFaceEnd + FACE_TAIL_MS);
+          ahead((rtFaceEnd - now - faceLagMs) / 1000);
+          return;
+        }
+        // Heard straight from GPT-Live, held back by the face's lag so her lips match. The
+        // face's own copy of her voice has been cut to 16 kHz, through Anam's servers and
+        // through one more codec: that was the noise on her voice.
+        if (lagProbedTurn !== turn && !quiet(samples)) {
+          lagProbedTurn = turn;
+          lagProbe = { sentAt: performance.now() };
+        }
+        schedule(faceLagMs / 1000);
         return;
       }
-      // No face (or voice mode): straight into her microphone, each piece after the last.
-      const buffer = audio.createBuffer(1, Math.max(1, samples.length), RT_RATE);
-      buffer.getChannelData(0).set(samples);
-      const source = audio.createBufferSource();
-      source.buffer = buffer;
-      source.connect(mic);
-      const at = Math.max(audio.currentTime + 0.05, rtNext);
-      source.start(at);
-      rtNext = at + buffer.duration;
-      ahead(rtNext - audio.currentTime);
-      rtSources.push(source);
-      source.onended = () => {
-        rtSources = rtSources.filter((s) => s !== source);
-      };
+      // No face (or voice mode): straight into her microphone.
+      schedule(0.05);
     },
 
     feedDone() {
