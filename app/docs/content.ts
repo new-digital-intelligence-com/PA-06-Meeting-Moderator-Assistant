@@ -6,12 +6,12 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-09-29";
+export const UPDATED = "2026-09-30";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "Elena — NDI's own Cara 4 avatar, in the NDI office; her first meeting films her resting clip", tone: "sky" },
+  { label: "Anam", value: "New account, with its own copy of Elena — key and avatar checked from her server; first meeting films her resting clip", tone: "sky" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
@@ -27,6 +27,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-09-30",
+    title: "A new Anam account",
+    points: [
+      "Her face now runs on a new Anam account, with that account's own Elena: an avatar belongs to the account it was made in, so the previous ID would not start a face there. Anam accepted the new key and avatar from her server.",
+      "The first meeting films a new resting clip for this avatar.",
+    ],
+    commits: [],
+    tone: "violet",
+  },
   {
     date: "2026-09-29",
     title: "Her voice straight from GPT-Live; the face only moves her lips",
