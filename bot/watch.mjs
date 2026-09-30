@@ -9,6 +9,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import util from "node:util";
 import * as app from "./lib/app.mjs";
 import { EARLY_MS, IN_CONTAINER, STATE_DIR } from "./lib/config.mjs";
 import { ensureSignedIn } from "./lib/account.mjs";
@@ -42,17 +43,21 @@ const LOG_DIR = IN_CONTAINER ? path.join(STATE_DIR, "logs") : null;
 if (LOG_DIR) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
   for (const f of fs.readdirSync(LOG_DIR).sort().slice(0, -14)) fs.rmSync(path.join(LOG_DIR, f), { force: true });
-}
-const log = (m) => {
-  const line = `${stamp()}${m}`;
-  console.log(line);
-  if (!LOG_DIR) return;
-  try {
-    fs.appendFileSync(path.join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.log`), `${line}\n`);
-  } catch {
-    /* a full disk must not stop her */
+  // Everything she prints, not only her own log lines — what the terminal shows is what
+  // the file (and the live log page, logs.mjs) shows.
+  for (const level of ["log", "warn", "error"]) {
+    const print = console[level].bind(console);
+    console[level] = (...args) => {
+      print(...args);
+      try {
+        fs.appendFileSync(path.join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.log`), `${util.format(...args)}\n`);
+      } catch {
+        /* a full disk must not stop her */
+      }
+    };
   }
-};
+}
+const log = (m) => console.log(`${stamp()}${m}`);
 
 /**
  * Her briefing, from the invite: whatever the organiser wrote in the description, plus

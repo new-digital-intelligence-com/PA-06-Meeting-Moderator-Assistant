@@ -39,6 +39,8 @@ services:
       - "443:443"
     environment:
       AVA_SCREEN_HOST: ${AVA_SCREEN_HOST:-}
+      # Set: her screen and live log open with no password (see Caddyfile).
+      AVA_BASIC_AUTH: ${AVA_BASIC_AUTH:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Certificates, kept across restarts so they are not requested again every time.

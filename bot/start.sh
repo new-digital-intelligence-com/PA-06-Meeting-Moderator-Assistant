@@ -32,4 +32,7 @@ websockify --web /usr/share/novnc \
 
 echo "Her screen: https://<this-host>/vnc.html  (user: ava, password: AVA_ADMIN_PASSWORD)"
 
+# Her live log, for the same HTTPS address: /logs, behind the same password.
+node logs.mjs &
+
 exec node watch.mjs

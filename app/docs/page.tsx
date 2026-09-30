@@ -646,7 +646,8 @@ export default function Docs() {
                     rows={[
                       [<C key="v">AVA_APP_URL</C>, "The brain’s address"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Same value as the app"],
-                      [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen"],
+                      [<C key="v">AVA_ADMIN_PASSWORD</C>, "The web view of her screen and her live log"],
+                      [<C key="v">AVA_BASIC_AUTH</C>, "Set: the screen and the live log open with no password (anyone with the address controls her Chrome)"],
                       [<C key="v">AVA_MODE</C>, "voice or avatar"],
                       [<C key="v">AVA_BRAIN</C>, "live (in use) or claude — who hears and speaks for her"],
                       [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=live"],
@@ -681,8 +682,12 @@ docker compose logs -f         # follow what she is doing
 
 # her log survives restarts: one file a day, two weeks kept
 docker compose exec ava tail -200 /data/logs/$(date +%F).log`}</CodeBlock>
-                <CodeBlock title="her screen">{`# online, over HTTPS (COMPOSE_PROFILES=public)
-https://<AVA_SCREEN_HOST>          user: ava
+                <CodeBlock title="her screen and live log">{`# online, over HTTPS (COMPOSE_PROFILES=public)
+https://<AVA_SCREEN_HOST>          her screen
+https://<AVA_SCREEN_HOST>/logs     her log, live, as it is written
+
+# no password with AVA_BASIC_AUTH set; otherwise user ava,
+# password AVA_ADMIN_PASSWORD
 
 # or privately, through an SSH tunnel
 ssh -L 8080:localhost:8080 ubuntu@<server>

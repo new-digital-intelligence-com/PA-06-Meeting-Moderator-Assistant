@@ -7,11 +7,27 @@
 # screen cannot be read on the way.
 
 {$AVA_SCREEN_HOST} {
+	# Open, with no password to type: Caddy signs every visitor in as "ava" (AVA_BASIC_AUTH,
+	# worked out from AVA_ADMIN_PASSWORD in .env). Anyone who has this address can use her
+	# screen — her signed-in Chrome — and read her log. Leave AVA_BASIC_AUTH empty to have
+	# the password asked again.
+	request_header Authorization "Basic {$AVA_BASIC_AUTH}"
+
 	# The address alone opens her screen, connected and scaled to the window.
 	@home path /
 	redir @home /vnc.html?autoconnect=true&resize=scale 302
 
-	reverse_proxy ava:8080
+	# Her live log (logs.mjs): same user and password as the screen. Streamed, so nothing
+	# is held back in a buffer.
+	handle /logs* {
+		reverse_proxy ava:8081 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy ava:8080
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000"

@@ -29,6 +29,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-30",
+    title: "Her live log in the browser — and no password on her screen",
+    points: [
+      "https://<her screen's address>/logs shows her log and streams every new line as she writes it (logs.mjs, in her container, reading /data/logs). Everything her runner prints now goes into that file, not only her own log lines.",
+      "At the request of her operator, her screen and the live log open with no password: Caddy signs every visitor in (AVA_BASIC_AUTH). Anyone who has the address can control her signed-in Chrome — her Gmail, Drive and Calendar. Clear AVA_BASIC_AUTH to have the password asked again.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
+  {
+    date: "2026-09-30",
     title: "Her face moves to another Anam account when one runs out",
     points: [
       "Anam's free minutes run out mid-month. When Anam refuses her face for its usage limit, spend cap or plan, that account rests 24 hours (kept on her disk across restarts) and the face reconnects at once on the next account — ANAM_API_KEY_2 up to _5. Her voice carries on meanwhile; with every account used up, she carries on with it alone.",
