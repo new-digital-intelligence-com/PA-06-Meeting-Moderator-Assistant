@@ -339,6 +339,12 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     avatarId = s.avatarId;
     return s.sessionToken;
   });
+  // Anam refused her face for being out of minutes: the next account takes over, if any.
+  await context.exposeBinding("__avaAnamUsedUp", () => {
+    const next = app.anamUsedUp();
+    log(next ? `  that Anam account is out of minutes — her face moves to account ${next}` : "  every Anam account is out of minutes — she carries on with her voice");
+    return next;
+  });
   // The meeting's sound, from her page, straight on to OpenAI — only with somebody there.
   await context.exposeBinding("__avaHear", (_src, b64) => {
     if (rt && !alone) rt.appendAudio(b64);

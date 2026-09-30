@@ -1,7 +1,9 @@
 // Talks to the deployed app. The runner is only her body — deciding what to say, keeping
 // the transcript and writing the notes all happen there, exactly as they did when Recall
 // was the body. Swapping one body for another did not require a second brain.
-import { requireApp } from "./config.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { STATE_DIR, requireApp } from "./config.mjs";
 
 async function call(method, path, body) {
   const res = await fetch(`${requireApp()}${path}`, {
@@ -31,58 +33,124 @@ export const brief = (meeting) => call("PUT", "/api/meeting", meeting);
 export const attend = (from) => call("POST", "/api/meeting/control", { command: "attend", from });
 
 /**
- * A short-lived session for her face: `{ sessionToken, avatarId }`. The face lip-syncs to
- * her own voice, which is sent to it, so it has no voice of its own.
+ * Her Anam accounts, in order: ANAM_API_KEY, then ANAM_API_KEY_2 … _5. Free plans run out
+ * of minutes, so when one does she carries on with the next. Each has its own avatar
+ * (ANAM_AVATAR_ID, ANAM_AVATAR_ID_2 …) — an avatar belongs to the account it was made in.
+ * A backup's avatar can be left out: she finds the one that account made itself with the
+ * first account's avatar's name.
+ */
+const ANAM_SUFFIXES = ["", "_2", "_3", "_4", "_5"];
+export function anamAccounts() {
+  const accounts = [];
+  for (const suffix of ANAM_SUFFIXES) {
+    const key = process.env[`ANAM_API_KEY${suffix}`]?.trim();
+    if (key) accounts.push({ n: accounts.length + 1, key, avatar: process.env[`ANAM_AVATAR_ID${suffix}`]?.trim() || null });
+  }
+  return accounts;
+}
+
+/** An account out of minutes is left alone this long, then tried again. Kept on disk. */
+const USED_UP_REST_MS = 24 * 60 * 60_000;
+const usedUpFile = path.join(STATE_DIR, ".anam-used-up.json");
+const usedUp = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(usedUpFile, "utf8"));
+  } catch {
+    return {};
+  }
+})();
+const resting = (account) => (usedUp[account.n] ?? 0) > Date.now();
+/** The account the last face session came from: the one to blame if Anam refuses it. */
+let lastAccount = null;
+
+/**
+ * A short-lived session for her face: `{ sessionToken, avatarId, account }`, from the first
+ * of her Anam accounts with minutes left. The face lip-syncs to her own voice, which is
+ * sent to it, so it has no voice of its own.
  *
- * With ANAM_API_KEY and ANAM_AVATAR_ID in bot/.env she asks Anam herself, next to where
- * her ElevenLabs key already lives; otherwise the app asks for her. Her first Teams call
- * showed a black tile because the key on the app's side was wrong — this way her face
- * depends on one file on her own server.
+ * With keys in bot/.env she asks Anam herself; otherwise the app asks for her. Her first
+ * Teams call showed a black tile because the key on the app's side was wrong — this way
+ * her face depends on one file on her own server.
  */
 export async function anamSession() {
-  const key = process.env.ANAM_API_KEY?.trim();
-  const configured = process.env.ANAM_AVATAR_ID?.trim();
-  if (!key || !configured) return call("POST", "/api/anam", { passthrough: true });
-  const avatarId = await avatarOf(key, configured);
+  const accounts = anamAccounts();
+  if (!accounts.length || !accounts[0].avatar) return call("POST", "/api/anam", { passthrough: true });
+  const account = accounts.find((a) => !resting(a));
+  if (!account) throw new Error("Usage limit reached on every Anam account");
+  const avatarId = await avatarFor(account, accounts[0]);
 
   const res = await fetch("https://api.anam.ai/v1/auth/session-token", {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${account.key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ personaConfig: { name: "Ava", avatarId, enableAudioPassthrough: true } }),
     signal: AbortSignal.timeout(20_000),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`Anam refused the session: ${text.slice(0, 200)}`);
+  if (!res.ok) throw new Error(`Anam account ${account.n} refused the session: ${text.slice(0, 200)}`);
   const { sessionToken } = JSON.parse(text);
   if (!sessionToken) throw new Error("Anam returned no session token");
-  return { sessionToken, avatarId };
+  lastAccount = account.n;
+  return { sessionToken, avatarId, account: account.n };
 }
 
 /**
- * The avatar to use for ANAM_AVATAR_ID. Anam's dashboard also shows persona IDs, and a
- * persona's ID given as her avatar made Anam refuse every face ("Invalid request to start
- * session") — so a persona ID is turned into its avatar's. Looked up once.
+ * Anam refused her face for having no minutes left: that account rests for a day. Returns
+ * the number of the account that takes over, or null when every one is used up.
  */
-let resolvedAvatar = null;
-async function avatarOf(key, id) {
-  if (resolvedAvatar?.id === id) return resolvedAvatar.avatarId;
-  let avatarId = id;
+export function anamUsedUp() {
+  if (lastAccount === null) return null;
+  usedUp[lastAccount] = Date.now() + USED_UP_REST_MS;
   try {
-    const res = await fetch(`https://api.anam.ai/v1/personas/${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (res.ok) {
-      const persona = await res.json();
-      if (persona?.avatar?.id) {
-        avatarId = persona.avatar.id;
-        console.log(`  ANAM_AVATAR_ID is the persona "${persona.name}" — using its avatar, ${avatarId}`);
-      }
-    }
+    fs.writeFileSync(usedUpFile, JSON.stringify(usedUp));
   } catch {
-    /* not a persona, or Anam is slow: use it as given */
+    /* kept in memory at least */
   }
-  resolvedAvatar = { id, avatarId };
+  return anamAccounts().find((a) => !resting(a))?.n ?? null;
+}
+
+const anamGet = async (key, url) => {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`Anam ${res.status}: ${(await res.text()).slice(0, 120)}`);
+  return res.json();
+};
+
+/** Avatars found once per account. */
+const avatars = new Map();
+
+/**
+ * The avatar an account's face uses. Given: as is — or, if Anam's dashboard gave a
+ * persona's ID (which made Anam refuse every face, "Invalid request to start session"),
+ * that persona's avatar. Not given (a backup account): the avatar that account made itself
+ * with the same name as the first account's.
+ */
+async function avatarFor(account, first) {
+  if (avatars.has(account.n)) return avatars.get(account.n);
+  let avatarId = account.avatar;
+  if (avatarId) {
+    try {
+      const persona = await anamGet(account.key, `https://api.anam.ai/v1/personas/${encodeURIComponent(avatarId)}`);
+      if (persona?.avatar?.id) {
+        console.log(`  Anam account ${account.n}: that ID is the persona "${persona.name}" — using its avatar, ${persona.avatar.id}`);
+        avatarId = persona.avatar.id;
+      }
+    } catch {
+      /* not a persona: an avatar, as given */
+    }
+  } else {
+    const firstId = await avatarFor(first, first);
+    const name = (await anamGet(first.key, `https://api.anam.ai/v1/avatars/${firstId}`)).displayName;
+    const own = [];
+    for (let page = 1; page <= 10; page++) {
+      const list = (await anamGet(account.key, `https://api.anam.ai/v1/avatars?perPage=50&page=${page}`)).data ?? [];
+      own.push(...list.filter((a) => a.createdByOrganizationId && a.displayName === name));
+      if (list.length < 50) break;
+    }
+    own.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    if (!own[0]) throw new Error(`Anam account ${account.n} has no avatar of its own called "${name}" — upload the same photo there`);
+    avatarId = own[0].id;
+    console.log(`  Anam account ${account.n}: its own "${name}" is ${avatarId}`);
+  }
+  avatars.set(account.n, avatarId);
   return avatarId;
 }
 

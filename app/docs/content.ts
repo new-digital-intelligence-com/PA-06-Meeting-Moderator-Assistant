@@ -29,6 +29,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-30",
+    title: "Her face moves to another Anam account when one runs out",
+    points: [
+      "Anam's free minutes run out mid-month. When Anam refuses her face for its usage limit, spend cap or plan, that account rests 24 hours (kept on her disk across restarts) and the face reconnects at once on the next account — ANAM_API_KEY_2 up to _5. Her voice carries on meanwhile; with every account used up, she carries on with it alone.",
+      "An avatar belongs to the account it was made in, so each account needs its own copy of Elena. Its ID can be left out: she finds the avatar that account made itself with the first avatar's name (Anam marks those with the account's organisation). Tested with free token requests: account 1, then 2 with its avatar found, then “every account used up”.",
+    ],
+    commits: [],
+    tone: "violet",
+  },
+  {
+    date: "2026-09-30",
     title: "A new Anam account",
     points: [
       "Her face now runs on a new Anam account, with that account's own Elena: an avatar belongs to the account it was made in, so the previous ID would not start a face there. Anam accepted the new key and avatar from her server.",

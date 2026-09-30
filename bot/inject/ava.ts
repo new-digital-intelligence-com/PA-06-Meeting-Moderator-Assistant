@@ -60,6 +60,8 @@ declare global {
     __avaAnamToken?: () => Promise<string>;
     /** Keeps her idle clip for next time (JPEG frames, base64). */
     __avaIdleClip?: (frames: string[]) => void;
+    /** Her face's account ran out of minutes: the number of the account taking over, or null. */
+    __avaAnamUsedUp?: () => Promise<number | null>;
     /** GPT-Live: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
     __avaHear?: (base64: string) => void;
   }
@@ -456,9 +458,19 @@ if (window.top === window && platform && !window.__ava) {
         // said "Invalid request to start session".
         const cause = e instanceof Error && e.cause ? ` — ${String(e.cause)}` : "";
         const why = (e instanceof Error ? e.message : String(e)) + cause;
-        if (/usage limit|upgrade your plan|quota/i.test(why)) {
-          faceRetryAt = Number.POSITIVE_INFINITY;
-          log(`Anam refused: ${why} — she carries on with her voice and her resting face`);
+        if (/usage limit|spend cap|upgrade your plan|sign up for a plan|quota/i.test(why)) {
+          // Out of minutes on this account: the next one takes over, straight away.
+          const next = await window.__avaAnamUsedUp?.().catch(() => null);
+          if (next) {
+            faceRetryAt = 0;
+            log(`Anam refused: ${why} — trying her next Anam account (${next})`);
+            setTimeout(() => {
+              if (face === "down" && Date.now() - lastActive < options.idleSeconds * 1000) void openFace();
+            }, 300);
+          } else {
+            faceRetryAt = Number.POSITIVE_INFINITY;
+            log(`Anam refused: ${why} — she carries on with her voice and her resting face`);
+          }
         } else {
           faceRetryAt = Date.now() + 30_000;
         }
