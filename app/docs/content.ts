@@ -11,7 +11,7 @@ export const UPDATED = "2026-09-30";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "New account, with its own copy of Elena — key and avatar checked from her server; first meeting films her resting clip", tone: "sky" },
+  { label: "Anam", value: "Two accounts, each with its own Elena: the second takes over when the first runs out of minutes (checked from her server)", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
