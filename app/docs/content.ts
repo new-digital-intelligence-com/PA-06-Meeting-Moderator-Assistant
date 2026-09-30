@@ -29,6 +29,19 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-09-30",
+    title: "She leaves a minute after she is alone — and never sits in silence",
+    points: [
+      "In a meeting sent from the control room, everybody left at 11:15 but she stayed until the meeting was ended by hand at 12:34, with GPT-Live open the whole time. Fireflies, the notetaker, stayed in the call and was never recognised as a bot — not one “not counting” line all day — so she counted two and thought she was in a one-on-one. Her count could also read the chat button's unread-messages number as people (“Chat with everyone” matched “everyone”).",
+      "Now: one minute alone and she leaves (it was five). The chat button is never read as a head count (tested: her and a Fireflies tile with three unread messages counts one).",
+      "A notetaker she does not know by name no longer keeps her: she matches the names on the tiles with the names in the captions, and once everybody who has spoken has gone and what is left — two at most — has not said a word for a minute, she leaves. She only does this once tiles and captions have been seen to name people alike in that meeting, and she matches loosely, so a person who has spoken is never taken for a stranger.",
+      "After three minutes with nobody — her included — saying anything, GPT-Live closes and reopens at the first words anybody says; after ten, she leaves: whatever is left in the call is not a conversation.",
+      "Each change of count is logged with how it was made — tiles on screen, the people button, notetakers not counted.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-09-30",
     title: "Her live log in the browser — and no password on her screen",
     points: [
       "https://<her screen's address>/logs shows her log and streams every new line as she writes it (logs.mjs, in her container, reading /data/logs). Everything her runner prints now goes into that file, not only her own log lines.",

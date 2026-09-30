@@ -206,17 +206,26 @@ export const meet = {
     }
     let humans = 0;
     const bots = [];
+    // Everybody else's tile, as its lines: she matches them with who has spoken.
+    const others = [];
     for (const text of tiles.values()) {
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
       const name = lines.find((l) => bot.test(l));
-      if (name && !lines.some((l) => me.test(l))) bots.push(name);
-      else humans++;
+      const mine = lines.some((l) => me.test(l));
+      if (name && !mine) bots.push(name);
+      else {
+        humans++;
+        if (!mine) others.push(lines);
+      }
     }
     // The People button's number counts everybody, bots too; it only matters when there
-    // are more people than tiles on screen, and then she is plainly not alone.
+    // are more people than tiles on screen, and then she is plainly not alone. Never the
+    // chat button: "Chat with everyone" matched "everyone", and its number is unread
+    // messages — it once had her count a second person in an empty call.
     let badge = 0;
     for (const b of document.querySelectorAll("button[aria-label]")) {
-      if (!/people|everyone|participants/i.test(b.getAttribute("aria-label") ?? "")) continue;
+      const label = b.getAttribute("aria-label") ?? "";
+      if (/chat|message/i.test(label) || !/people|participants|show everyone/i.test(label)) continue;
       const n = (b.textContent ?? "").match(/\d+/);
       if (n) badge = Math.max(badge, Number(n[0]));
     }
@@ -227,6 +236,10 @@ export const meet = {
       alone: /you're the only one here|only one here/i.test(text),
       people: (badge > tiles.size ? badge - bots.length : humans) || null,
       bots,
+      others,
+      // How the count was made, for her log.
+      tiles: tiles.size,
+      badge,
       face: window.__ava?.face?.() ?? null,
     };
   },
@@ -531,6 +544,9 @@ export const teams = {
       alone: /waiting for others to join|you're the only one here|no one else is here/i.test(text),
       people: people || null,
       bots,
+      others: names.filter((n) => !me.test(n) && !bots.includes(n)).map((n) => [n]),
+      tiles: names.length,
+      badge: roster,
       face: window.__ava?.face?.() ?? null,
     };
   },

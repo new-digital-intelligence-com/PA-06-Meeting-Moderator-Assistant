@@ -147,7 +147,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, five minutes after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the names on the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people — and from its “you're the only one here”. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
+                    body: "When the meeting ends, when she is removed, one minute after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people, and the chat button's unread count is never taken for a head count — and from its “you're the only one here”. A bot she does not know by name cannot keep her either (one kept her in an empty meeting for over an hour): once everybody who has spoken has gone and whoever is left — two at most — has not said a word for a minute, she leaves; and after ten minutes in which nobody has said anything, she leaves whoever is on screen. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
                     tone: "violet",
                   },
                   {
@@ -409,6 +409,7 @@ export default function Docs() {
                     ["A group", "She responds when addressed — by name, or as “the assistant” — or asked something she can clearly answer; otherwise she listens. She is told each time the room changes."],
                     ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
                     ["Empty room", "Never open while she is alone (it is billed by the minute): it opens when somebody else arrives, closes within seconds of the room emptying, and reopens with the conversation so far when somebody is back."],
+                    ["Silence", "Billed while open, even when nobody talks. After three minutes in which nobody — her included — has said anything, the session closes (AVA_HUSH_SECONDS); the first words anybody says open it again, with the conversation so far. After ten minutes of silence she leaves (AVA_SILENT_LEAVE_MINUTES)."],
                     ["Time limit", "A session runs out after a while; she renews it in a quiet moment beforehand, and reconnects with the conversation so far if it drops. After three quick failures she stays quiet."],
                     ["Language", "Whichever of English, German or Arabic she is spoken to in, by herself; the captions follow what is spoken (see Languages). German is native quality in GPT-Live; Arabic is understood in dialect (Tunisian, Maghrebi, Egyptian…) and answered in Modern Standard Arabic, where it is strongest."],
                     ["Bots", "Notetakers (Fireflies, Otter, Read.ai…) are not counted as people and their captions are ignored: with only bots left she is alone, so her voice session and her face are closed."],
@@ -658,6 +659,7 @@ export default function Docs() {
                       [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],
                       [<C key="v">ELEVENLABS_API_KEY · _VOICE_ID</C>, "Her voice"],
                       [<C key="v">AVA_JOIN_EARLY_SECONDS</C>, "How early she opens a meeting (60)"],
+                      [<C key="v">AVA_HUSH_SECONDS · AVA_SILENT_LEAVE_MINUTES</C>, "Silence: GPT-Live closes after (180 s), she leaves after (10 min)"],
                       [<C key="v">ANAM_SESSION_SECONDS</C>, "Your Anam plan’s session limit (180)"],
                       [<C key="v">AVA_FACE_IDLE_SECONDS</C>, "Quiet seconds before the face rests (45)"],
                       [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face — she asks Anam herself (else the app does). A persona ID works too: she uses its avatar"],

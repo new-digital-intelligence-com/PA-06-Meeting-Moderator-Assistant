@@ -13,10 +13,38 @@ import { CHAT_ASK, detectLanguage, langOf } from "./language.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
-/** How long she stays once everybody else has left, in case they are coming back. */
-const ALONE_MS = 5 * 60_000;
+/** How long she stays once everybody else has left: a minute, for a dropped connection. */
+const ALONE_MS = 60_000;
+/**
+ * Nobody has said anything for this long: her GPT-Live session — billed every second it is
+ * open, silence included — is closed, and opened again the moment somebody speaks.
+ */
+const HUSH_MS = Number(process.env.AVA_HUSH_SECONDS || 180) * 1000;
+/**
+ * Nobody has said anything for this long: she leaves. Whatever is still in the call is not
+ * a conversation — a notetaker bot she did not recognise kept her in an empty meeting for
+ * over an hour, one-on-one with Fireflies.
+ */
+const SILENT_LEAVE_MS = Number(process.env.AVA_SILENT_LEAVE_MINUTES || 10) * 60_000;
 /** How long after the start time she waits for anybody to turn up. */
 const NOBODY_MS = 5 * 60_000;
+/** The most tiles left in the call that "only silent strangers are left" is judged on. */
+const SILENT_OTHERS_MAX = 2;
+
+/**
+ * Which of the tiles in `others` (each as its lines) belong to somebody who has spoken. The
+ * captions name a speaker as the tile does; matched loosely, both ways ("Ricardo" and
+ * "Ricardo Silva (Host)"), so that a tile is taken for a speaker's whenever it might be —
+ * missing one would have her leave people in the middle of a meeting.
+ */
+function spokeHere(others, speakers) {
+  const names = [...speakers].map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const same = (line, name) => line === name || (name.length >= 3 && line.includes(name)) || (line.length >= 3 && name.includes(line));
+  return others.filter((lines) => lines.some((l) => names.some((n) => same(l.toLowerCase(), n))));
+}
+
+/** The name on a tile: its longest line that is not one of Meet's icon names ("mic_off"). */
+const tileName = (lines) => [...lines].filter((l) => !l.includes("_")).sort((a, b) => b.length - a.length)[0] ?? lines[0] ?? "?";
 /** The same, when the page cannot tell whether she is alone: never longer than this. */
 const NOBODY_CAP_MS = 15 * 60_000;
 /** Checks in a row (about 2.5 s) that find her alone before her face is put to rest. */
@@ -250,6 +278,13 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
    * open while she is the only one in the meeting — bots do not count.
    */
   let resting = false;
+  /** Her GPT-Live session is closed because nobody has said anything for a while. */
+  let hushed = false;
+  /**
+   * The names on the tiles and in the captions agree in this meeting: a tile has been
+   * matched to somebody who spoke. Until then, who has spoken says nothing about who is left.
+   */
+  let namesAgree = false;
 
   // GPT-Live (AVA_BRAIN=live): OpenAI's model hears the meeting and holds the conversation.
   const live = BRAIN === "live";
@@ -267,6 +302,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let rtTurn = 0;
   let rtInTurn = false;
   let rtVoicedAt = 0;
+  /** When GPT-Live last heard somebody (its own transcript): speech even if captions fail. */
+  let rtHeardAt = 0;
   let rtTurnEnd = null;
   /** What the room said, as she heard it — for what she hands over to Claude. */
   let rtHeard = "";
@@ -304,6 +341,13 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (live) {
       recent.set(id, `${speaker}: ${text}`);
       if (recent.size > 80) recent.delete(recent.keys().next().value);
+      // Somebody spoke while her voice session was closed for the silence: open it again,
+      // with what they are saying in its recap.
+      if (hushed && !resting && !over) {
+        hushed = false;
+        log("  somebody spoke — GPT-Live back");
+        startLive(true);
+      }
       // Sound carries no names; the captions do.
       if (rt && speaker !== rtLastSpeaker) {
         rtLastSpeaker = speaker;
@@ -423,6 +467,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let aloneSince = null;
   /** Whether anybody else has been in the call — until then, being alone is just early. */
   let sawOthers = false;
+  /** When somebody else was first there: silence is counted from then at the earliest. */
+  let sawOthersAt = 0;
   /** Nobody else ever arrived: there is nothing to write up. */
   let nobodyCame = false;
   /** Email addresses typed in the meeting chat — every one seen, and those not yet sent on. */
@@ -574,6 +620,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       onHeard: (piece) => {
         rtHeard = (rtHeard + piece).slice(-4000);
         rtHeardTotal += piece.length;
+        if (piece.trim()) rtHeardAt = Date.now();
       },
       onSaid: (text, at) => {
         log(`  ▸ ${text}`);
@@ -687,6 +734,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
       if (out.say && !speaking) {
         speaking = true;
+        rtVoicedAt = Date.now();
         wordsWhenSheStarted = wordsHeard;
         const { say, key } = out;
         const at = Date.now();
@@ -727,7 +775,14 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       seenBots.add(b);
       log(`  not counting ${b} — a notetaker, not a person`);
     }
-    if (state.people !== people && state.people) log(`  ${state.people} in the call`);
+    if (state.people !== people && state.people) {
+      const how = [
+        `${state.tiles ?? "?"} on screen`,
+        state.badge > (state.tiles ?? 0) ? `${state.badge} by the people button` : "",
+        state.bots?.length ? `${state.bots.length} notetaker${state.bots.length > 1 ? "s" : ""} not counted` : "",
+      ].filter(Boolean);
+      log(`  ${state.people} in the call (${how.join(", ")})`);
+    }
     people = state.people;
     tellRoom();
 
@@ -774,6 +829,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     // Somebody else is here: say hello, and bring her face up for them.
     if (!sawOthers && ((state.people ?? 0) >= 2 || heardCount > 0)) {
       sawOthers = true;
+      sawOthersAt = Date.now();
       log("  somebody is here");
       if (live && !rt) startLive();
       if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
@@ -818,14 +874,47 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       } else if (resting && presentChecks >= ALONE_CHECKS) {
         resting = false;
         log("  somebody is back");
-        if (live && !rt && !over) startLive(true);
+        if (live && !rt && !over && !hushed) startLive(true);
         if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
       }
     }
 
-    // Leaving an empty room: five minutes, whether nobody turned up (counted from the
-    // start time — she may have come early) or everybody has gone (in case they come
-    // back). Her face session is closed on the way out either way.
+    // Silence: nobody — her included — has said anything for a while. GPT-Live is closed
+    // (it reopens when somebody speaks), and after longer she leaves.
+    if (sawOthers && !aloneNow && !over) {
+      const quietFor = Date.now() - Math.max(lastHeardAt ?? 0, rtVoicedAt, rtHeardAt, sawOthersAt);
+      // Everybody who has spoken has gone, and what is left has never said a word — a
+      // notetaker she does not know by name, most likely (Fireflies kept her in an empty
+      // meeting for over an hour). As good as alone: she leaves after a minute of silence.
+      // Only with every tile on screen and at most two left, and once tiles and captions
+      // have been seen to name people alike.
+      const others = state.others ?? [];
+      const speakersHere = spokeHere(others, voices.keys());
+      if (speakersHere.length) namesAgree = true;
+      if (
+        namesAgree &&
+        others.length &&
+        others.length <= SILENT_OTHERS_MAX &&
+        !speakersHere.length &&
+        !(state.badge > state.tiles) &&
+        quietFor > ALONE_MS
+      ) {
+        await finish(`everybody who spoke has left — ${others.map(tileName).join(", ")} never said a word`);
+        break;
+      }
+      if (live && rt && !hushed && quietFor > HUSH_MS) {
+        hushed = true;
+        stopLive(`nobody has said anything for ${Math.round(quietFor / 60_000)} min — back when somebody speaks`);
+      }
+      if (quietFor > SILENT_LEAVE_MS) {
+        await finish(`nobody has said anything for ${Math.round(quietFor / 60_000)} minutes`);
+        break;
+      }
+    }
+
+    // Leaving an empty room: five minutes from the start time if nobody turned up (she
+    // may have come early; people join late); one minute once everybody has gone. Her
+    // voice session and face are closed on the way out either way.
     if (!sawOthers) {
       const deadline = Math.max(inCallAt, meeting.startsAt ?? 0) + NOBODY_MS;
       if ((aloneNow && Date.now() > deadline) || Date.now() - inCallAt > NOBODY_CAP_MS) {
