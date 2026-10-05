@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { isRunner } from "@/lib/ava";
 import { getMeeting, updateMeeting, type TranscriptLine } from "@/lib/meeting";
 import { answerForVoice, mergeActions } from "@/lib/moderator";
+import { hasDb } from "@/lib/db";
+import { canEmbed } from "@/lib/embed";
+import { passagesText, searchKnowledge } from "@/lib/knowledge";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -31,8 +34,16 @@ export async function POST(request: Request) {
   }
   recent.reverse();
 
+  // Attending for a client: what they wrote down about it, found by meaning.
+  let documents: string | undefined;
+  if (meeting.client && hasDb() && canEmbed() && String(asked).trim()) {
+    documents = await searchKnowledge(meeting.client.id, meeting.client.meetingId, String(asked).slice(-1000), 5)
+      .then((found) => (found.length ? passagesText(found) : undefined))
+      .catch(() => undefined);
+  }
+
   try {
-    const reply = await answerForVoice(meeting, recent, String(asked).slice(-2000));
+    const reply = await answerForVoice(meeting, recent, String(asked).slice(-2000), documents);
     if (reply.add_actions?.length || reply.memory?.trim()) {
       await updateMeeting((m) => {
         if (reply.add_actions?.length) m.actions.push(...mergeActions(m.actions, reply.add_actions));

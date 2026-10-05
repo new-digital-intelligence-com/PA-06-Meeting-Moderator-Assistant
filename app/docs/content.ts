@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-09-30";
+export const UPDATED = "2026-10-05";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -15,6 +15,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
+  { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
 ];
 
 export type Change = {
@@ -27,6 +28,20 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-05",
+    title: "Clients: one Ava, each company with its own knowledge",
+    points: [
+      "Everything is behind sign-in now, except signing in and these docs. NDI — every address on ADMIN_DOMAIN — signs in with Google and sees the control room and every client. A client's people sign in with Google or a link by email (15 minutes, once) and see only their own page. Nobody signs up: an admin adds them.",
+      "/admin: set up a client — name, company domains or exact addresses, who signs in — and Ava emails them an invitation from her Gmail. Invites from organisers who are nobody's client are listed there; she no longer goes to them. NDI is client number one, so NDI's own meetings go on as before.",
+      "/client: their meetings, each with an optional preparation — goal, agenda, people, what to avoid, notes, documents for that meeting — from which she writes her brief, shown back to them; their documents (uploads up to 4 MB, Google Drive through Google's picker, links) and “What Ava knows about” them; how she should work for them; and the notes of past meetings.",
+      "In the meeting: the runner gets the app's briefing for the client — their instructions, her brief, the invite and what she knows — and her backend can search their documents (search_knowledge). Which client's is decided by the meeting she is in.",
+      "Kept: files in NDI's Drive (CLIENTS_DRIVE_FOLDER), one folder per client; passages, vectors, summaries, briefs and notes in Postgres with pgvector (DATABASE_URL). OpenAI only turns passages into vectors — nothing is stored there.",
+      "The older Recall stage (/bot) is behind sign-in too, out of reach of Recall's browser: that path is retired.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-09-30",
     title: "She leaves a minute after she is alone — and never sits in silence",

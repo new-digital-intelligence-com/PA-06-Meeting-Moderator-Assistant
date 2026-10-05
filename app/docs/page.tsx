@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: "teams", label: "Microsoft Teams" },
   { id: "languages", label: "Languages" },
   { id: "notes", label: "Notes and follow-up" },
+  { id: "clients", label: "Clients and their knowledge" },
   { id: "brain", label: "Modules: the brain" },
   { id: "runner", label: "Modules: the runner" },
   { id: "api", label: "API routes" },
@@ -81,7 +82,8 @@ export default function Docs() {
 
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               <Card tone="sky" kicker="Before" title="Reads her briefing">
-                The invite’s description is what she knows about the meeting; its guests are who gets the notes.
+                The invite’s description — and, for a client, their documents and the preparation they gave her — is what she
+                knows about the meeting; its guests are who gets the notes.
               </Card>
               <Card tone="emerald" kicker="During" title="Talks like a participant">
                 Converses in a one-on-one, answers when addressed in a group, and hands what needs thought, the web or the
@@ -113,7 +115,9 @@ export default function Docs() {
                     body: (
                       <>
                         It reads her calendar every 60 seconds. Declined meetings, all-day entries and anything without a Meet link
-                        are ignored. It opens the meeting a minute before the start (<C>AVA_JOIN_EARLY_SECONDS</C>).
+                        are ignored, and so is a meeting whose organiser is nobody’s client (see{" "}
+                        <a href="#clients" className="text-sky-300 underline decoration-sky-400/40">Clients</a>). It opens the
+                        meeting a minute before the start (<C>AVA_JOIN_EARLY_SECONDS</C>), with the app’s briefing for that client.
                       </>
                     ),
                     tone: "sky",
@@ -193,9 +197,10 @@ export default function Docs() {
                 <Card tone="emerald" kicker="The memory · Vercel" title="Next.js web app" className="h-full">
                   <ul className="space-y-1">
                     <li>Keeps the transcript, actions and working notes</li>
-                    <li>Gives GPT-Live’s backend the meeting’s record</li>
+                    <li>Gives GPT-Live’s backend the meeting’s record and the client’s documents</li>
                     <li>Writes and sends the notes (Claude)</li>
                     <li>Holds her Google access, encrypted</li>
+                    <li>Clients’ pages: their documents, preparation, notes</li>
                   </ul>
                 </Card>
               </div>
@@ -207,6 +212,8 @@ export default function Docs() {
                 <Stat value="Anam" label="Her face · lip-synced to her voice" />
                 <Stat value="Upstash Redis" label="The meeting state" />
                 <Stat value="Google APIs" label="Calendar, Gmail, Drive" />
+                <Stat value="Supabase Postgres" label="Clients, their documents (pgvector), meetings and notes" />
+                <Stat value="OpenAI embeddings" label="Clients’ documents, searchable by meaning · text-embedding-3-small" />
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -216,8 +223,9 @@ export default function Docs() {
                   transcript and the notes, and serves the meeting’s record when GPT-Live’s backend asks for it.
                 </Callout>
                 <Callout tone="emerald" title="Only the runner may act as her">
-                  Reading her calendar, marking her as attending and mailing as her need the shared <C>AVA_RUNNER_KEY</C>. A
-                  stranger who finds the URL gets none of that.
+                  Reading her calendar, marking her as attending and mailing as her need the shared <C>AVA_RUNNER_KEY</C>.
+                  Everything else needs signing in — NDI, or a client’s invited people, each to their own page — except
+                  signing in itself and these docs. A stranger who finds the URL gets none of it.
                 </Callout>
               </div>
             </Section>
@@ -516,6 +524,89 @@ export default function Docs() {
                   plain text alongside for mail apps that do not show HTML. Built from the text you can edit, so edits show up too.
                   Nobody came, no email.
                 </Card>
+                <Card tone="sky" title="Kept for the client">
+                  A client’s meeting: the notes are also filed with it, and the client reads them back on their page under
+                  “Past 30 days”.
+                </Card>
+              </div>
+            </Section>
+
+            {/* ── clients ──────────────────────────────────────────────── */}
+            <Section
+              id="clients"
+              eyebrow="One Ava, many companies"
+              title="Clients and their knowledge"
+              intro="Every client has the same Ava — the same face, voice and Google account. What differs is what she knows: NDI sets a client up, the client signs in, gives her their documents and prepares her for their meetings, and she walks into each of their meetings knowing it."
+            >
+              <Steps
+                items={[
+                  {
+                    title: "NDI sets the client up (/admin)",
+                    body: "Name, company domains — or exact addresses for personal accounts, since gmail.com is everybody — and who may sign in for them. Ava emails each an invitation from her own Gmail.",
+                    tone: "sky",
+                  },
+                  {
+                    title: "The client signs in (/client)",
+                    body: "With Google, or a link by email that works once for 15 minutes — no passwords. Only the addresses NDI added get in; nobody signs up.",
+                    tone: "sky",
+                  },
+                  {
+                    title: "They give her what she should know",
+                    body: "Files from their computer (up to 4 MB), files from their Google Drive through Google’s own picker (bigger ones too), and links. She reads each one there and then, and rewrites “What Ava knows about <client>” from all of them.",
+                    tone: "emerald",
+                  },
+                  {
+                    title: "They invite her to a meeting",
+                    body: "From their calendar, like a colleague. Within a minute it is on their page, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only. Saving writes her brief, which they read back.",
+                    tone: "emerald",
+                  },
+                  {
+                    title: "She walks in knowing it",
+                    body: "Her instructions carry the client’s own “how she works for you”, her brief, the invite, and what she knows about them. For anything more specific she searches their documents mid-meeting.",
+                    tone: "violet",
+                  },
+                  {
+                    title: "The notes",
+                    body: "Emailed to the guests as always, and filed with the meeting on the client’s page.",
+                    tone: "violet",
+                  },
+                ]}
+              />
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Card tone="sky" title="Whose meeting is it?">
+                  The organiser’s: an exact address first, then the company domain — never a guest, or anybody could put one
+                  client’s employee on an invite and have her for free. An invite from nobody’s client is skipped: she does not
+                  go, and admins see it under “Invites she skipped”, with one click to make that company a client. NDI is a
+                  client too, so NDI’s own meetings go on as before.
+                </Card>
+                <Card tone="emerald" title="Who sees what">
+                  Admins — every address on <C>ADMIN_DOMAIN</C> — see every client, the control room and these docs. A client’s
+                  people see their own page and nothing else; every request is checked against who may sign in for whom, at
+                  that moment, so removing somebody locks them out at once. A paused client’s meetings are skipped and nobody
+                  signs in for it; its preparation is kept.
+                </Card>
+                <Card tone="violet" title="Reading documents">
+                  PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
+                  Docs, Sheets and Slides as they are stored, and are read as text (every tab of a sheet). Pages are fetched with
+                  care: only public addresses, redirects checked, 8 MB at most. Up to 400,000 characters per document, 300
+                  documents per client.
+                </Card>
+                <Card tone="amber" title="Her homework">
+                  Each document is summarised as it arrives (Haiku). From the summaries she writes “What Ava knows about
+                  &lt;client&gt;” (Sonnet), again whenever documents are added or removed. Her brief for a meeting (Sonnet) is
+                  written when they prepare her, and again in the 45 minutes before it starts if anything changed since.
+                </Card>
+                <Card tone="sky" title="Searching in the meeting">
+                  Her backend calls <C>search_knowledge</C>; the app looks up the passages closest in meaning — from the
+                  client’s documents and that meeting’s own. Which client is decided by the meeting she is in, never by what the
+                  model asks for. With the Claude brain, the closest passages come with each question instead.
+                </Card>
+                <Card tone="slate" title="Where it is kept">
+                  The files: NDI’s Drive, one folder per client inside <C>CLIENTS_DRIVE_FOLDER</C>, written by Ava’s account.
+                  The passages, their vectors, summaries, briefs and notes: Postgres with pgvector (Supabase, Frankfurt). OpenAI
+                  only turns passages into vectors — nothing is stored there.
+                </Card>
               </div>
             </Section>
 
@@ -552,8 +643,32 @@ export default function Docs() {
                   is in — sent from here or from her calendar — with her voice and face live, the transcript and actions, end a
                   meeting, edit and resend notes.
                 </FileRow>
-                <FileRow path="lib/recall.ts · app/bot · components/Stage.tsx" tag={<Chip>older path</Chip>}>
-                  The Recall bot she used before she had her own Chrome. Still works; not the recommended way.
+                <FileRow path="proxy.ts · lib/auth.ts · lib/seal.ts" tag={<Chip tone="emerald">the door</Chip>}>
+                  Nothing opens without signing in — or the runner’s key — except signing in and these docs. Who is an admin, who
+                  signs in for which client (checked again on every request), and the encryption of the session cookie.
+                </FileRow>
+                <FileRow path="app/login · app/api/auth/login · email · email/verify · logout">
+                  Signing in with Google (who you are, nothing more) or with a link by email: 15 minutes, once, stored only as a
+                  hash, and used by a button — mail scanners open links, and would spend it.
+                </FileRow>
+                <FileRow path="lib/clients.ts">Clients, who signs in for them, matching an organiser to a client, the invitation email.</FileRow>
+                <FileRow path="lib/schedule.ts">
+                  Her calendar copied into Postgres, each meeting given to a client by its organiser — or skipped. Preparation and
+                  notes are kept on those rows.
+                </FileRow>
+                <FileRow path="lib/knowledge.ts · extract.ts · drive.ts · embed.ts">
+                  Adding a document: keep it in Drive, read its text, cut it into overlapping passages, embed them, store them;
+                  and the search she uses in a meeting.
+                </FileRow>
+                <FileRow path="lib/prepare.ts">Her homework: each document’s summary, the client’s digest, a meeting’s brief, the briefing she is handed.</FileRow>
+                <FileRow path="components/portal · components/admin">
+                  The client’s page (meetings and preparation, documents, how she works for you) and NDI’s (clients, who signs
+                  in, invites she skipped). Admins open any client’s page as the client sees it.
+                </FileRow>
+                <FileRow path="db/schema.sql · db/migrate.mjs">The tables, and the one command that creates them: npm run db:migrate.</FileRow>
+                <FileRow path="lib/recall.ts · app/bot · components/Stage.tsx" tag={<Chip>retired</Chip>}>
+                  The Recall bot she used before she had her own Chrome. Its stage is behind sign-in now, where Recall’s browser
+                  cannot reach it, so this path no longer works.
                 </FileRow>
               </div>
             </Section>
@@ -563,11 +678,12 @@ export default function Docs() {
               <div className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/[0.02] px-5">
                 <FileRow path="watch.mjs" tag={<Chip tone="sky">entry point</Chip>}>
                   On duty: checks she is signed in, reads her calendar every minute and the control room every 10 seconds, attends
-                  each meeting, remembers which ones she already did.
+                  each meeting — with the app’s briefing for its client — and remembers which ones she already did.
                 </FileRow>
                 <FileRow path="lib/meet.mjs">
                   One meeting, on either platform: brief the app, open Chrome, join, turn captions on, open GPT-Live when somebody
-                  is there and close it when nobody is, follow the spoken language, notice the end, leave, send the notes.
+                  is there and close it when nobody is, follow the spoken language, notice the end, leave, send the notes. For a
+                  client’s meeting her backend also gets <C>search_knowledge</C>.
                 </FileRow>
                 <FileRow path="lib/platforms.mjs">
                   What differs between Google Meet and Teams: getting in, switching captions on, telling the call is over,
@@ -605,14 +721,21 @@ export default function Docs() {
                   [<C key="r">POST /api/moderator/tick</C>, "Runner", "What was heard in; what to say out"],
                   [<C key="r">POST /api/moderator/ask</C>, "Runner (key)", "GPT-Live hands over a question; Claude answers from the meeting"],
                   [<C key="r">POST /api/moderator/record</C>, "Runner (key)", "The meeting so far for GPT-Live’s OpenAI backend; note an action"],
-                  [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her invites for the next hours"],
+                  [<C key="r">POST /api/moderator/knowledge</C>, "Runner (key)", "search_knowledge: passages from the documents of the client whose meeting she is in"],
+                  [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her clients’ invites for the next hours, each with its briefing (every invite when no clients are set up)"],
                   [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from the control room"],
                   [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, control room", "Read, brief or clear the meeting"],
                   [<C key="r">POST /api/meeting/control</C>, "Runner, control room", "attend · dispatch · stop · rehearse"],
                   [<C key="r">POST · PUT /api/meeting/followup</C>, "Runner, control room", "Write the notes; send or re-send them"],
                   [<C key="r">POST · PUT /api/moderator/notes</C>, "Recall stage", "Pull actions from new transcript as it goes; edit them"],
                   [<C key="r">POST /api/anam</C>, "Runner", "A short-lived token for her face"],
-                  [<C key="r">GET /api/auth/google</C>, "You", "Connect Google (?as=ava for her account)"],
+                  [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
+                  [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
+                  [<C key="r">/api/admin/clients · [id] · [id]/members</C>, "Admins", "List, create, edit, pause or delete clients; who signs in; invitations"],
+                  [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
+                  [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link) or remove one"],
+                  [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting; save its preparation and write her brief"],
+                  [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
                   [<C key="r">/api/calendar · /api/drive</C>, "Control room", "Your meetings; find and share files"],
                   [<C key="r">POST /api/meeting/start</C>, "Control room", "Send the Recall bot (older path)"],
                 ]}
@@ -636,7 +759,13 @@ export default function Docs() {
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
                       [<C key="v">AVA_ALIASES</C>, "Other spellings of her name (default Eva, Iva, Eeva, Ayva, Avah)"],
                       [<C key="v">BOT_NAME</C>, "Her name"],
-                      [<C key="v">RECALL_API_KEY · RECALL_REGION</C>, "Only the Send button on a Google Meet link (the older Recall bot)"],
+                      [<C key="v">DATABASE_URL</C>, "Clients, documents, meetings — Postgres with pgvector (Supabase transaction pooler)"],
+                      [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
+                      [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
+                      [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],
+                      [<C key="v">NEXT_PUBLIC_GOOGLE_API_KEY · _APP_ID · _CLIENT_ID</C>, "Google’s file picker on a client’s page"],
+                      [<C key="v">APP_URL</C>, "The address in invitations and sign-in links"],
+                      [<C key="v">RECALL_API_KEY · RECALL_REGION</C>, "The older Recall bot (retired)"],
                     ]}
                   />
                 </div>
@@ -695,6 +824,14 @@ https://<AVA_SCREEN_HOST>/logs     her log, live, as it is written
 ssh -L 8080:localhost:8080 ubuntu@<server>
 http://localhost:8080/vnc.html`}</CodeBlock>
               </div>
+              <div className="mt-4">
+                <CodeBlock title="clients: once, from the repository">{`# DATABASE_URL in .env.local (Supabase → Connect → Transaction pooler)
+npm run db:migrate             # creates the tables; NDI is client number one
+
+# then, signed in as anybody @new-digital-intelligence.com:
+/admin                         # set up a client, invite their people
+/admin/clients/<id>            # their setup, and their page as they see it`}</CodeBlock>
+              </div>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <Card title="Signed out?">She stops and opens a Google sign-in window. Sign her in on her screen and close it.</Card>
                 <Card title="Test without a meeting">
@@ -719,6 +856,8 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                   ["Meet captions", "As good as Google’s captions; one language at a time, following what is spoken", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
+                  ["Clients’ documents", "4 MB per upload (Vercel’s limit; bigger through Google Drive), 400,000 characters each, 300 per client", "Embeddings $0.02 per million tokens — a 100-page document is about a tenth of a cent; its summary a cent or two"],
+                  ["Supabase Postgres", "Free: 500 MB, paused after a week unused", "Pro $25 a month"],
                 ]}
               />
               <p className="mt-3 text-xs text-white/35">Prices as last checked; providers change them.</p>

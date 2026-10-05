@@ -170,6 +170,9 @@ export const ask = (asked) => call("POST", "/api/moderator/ask", { asked });
 /** The meeting so far — transcript, actions, notes — for GPT-Live's OpenAI backend; `note` adds an action first. */
 export const record = (note) => call("POST", "/api/moderator/record", note ? { note } : {});
 
+/** Passages from the client's documents about `query` — for the meeting she is in, decided by the app. */
+export const knowledge = async (query) => (await call("POST", "/api/moderator/knowledge", { query })).results;
+
 /** She has left the call. */
 export const stop = () => call("POST", "/api/meeting/control", { command: "stop" });
 

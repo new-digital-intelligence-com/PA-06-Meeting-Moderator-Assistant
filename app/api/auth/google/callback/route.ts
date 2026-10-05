@@ -1,41 +1,79 @@
 import { NextResponse } from "next/server";
-import { exchangeCode } from "@/lib/google";
+import { exchangeCode, exchangeLoginCode } from "@/lib/google";
 import { readSession, sessionCookie } from "@/lib/session";
 import { saveAvaGoogle } from "@/lib/ava";
+import { roleFor, safeNext } from "@/lib/auth";
 
 export const runtime = "nodejs";
+
+function cookieOf(request: Request, name: string): string | undefined {
+  const raw = request.headers
+    .get("cookie")
+    ?.split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+  if (raw === undefined) return undefined;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function done(response: NextResponse) {
+  response.cookies.delete("pa_oauth_state");
+  response.cookies.delete("pa_oauth_as");
+  response.cookies.delete("pa_login_next");
+  return response;
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const home = new URL("/", url.origin);
+  const as = cookieOf(request, "pa_oauth_as");
+
+  /**
+   * Signing in to the portal goes back to /login when anything is wrong — "/" would only
+   * bounce a signed-out visitor there anyway, without the reason.
+   */
+  const fail = (reason: string) => {
+    if (as !== "login") {
+      home.searchParams.set("google", `error:${reason}`);
+      return done(NextResponse.redirect(home));
+    }
+    const login = new URL("/login", url.origin);
+    login.searchParams.set("error", reason);
+    return done(NextResponse.redirect(login));
+  };
 
   const error = url.searchParams.get("error");
-  if (error) {
-    home.searchParams.set("google", `error:${error}`);
-    return NextResponse.redirect(home);
-  }
+  if (error) return fail(error === "access_denied" ? "Sign-in was cancelled." : error);
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const expectedState = request.headers
-    .get("cookie")
-    ?.split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith("pa_oauth_state="))
-    ?.slice("pa_oauth_state=".length);
-
-  if (!code || !state || state !== expectedState) {
-    home.searchParams.set("google", "error:invalid_state");
-    return NextResponse.redirect(home);
+  if (!code || !state || state !== cookieOf(request, "pa_oauth_state")) {
+    return fail(as === "login" ? "That sign-in link has expired. Try again." : "invalid_state");
   }
 
-  const asAva =
-    request.headers
-      .get("cookie")
-      ?.split(";")
-      .map((c) => c.trim())
-      .find((c) => c.startsWith("pa_oauth_as="))
-      ?.slice("pa_oauth_as=".length) === "ava";
+  /**
+   * Signing in to the portal: an NDI admin, or an address an admin invited for a client.
+   * Anybody else is turned away here — nobody signs up on their own.
+   */
+  if (as === "login") {
+    try {
+      const { email, name } = await exchangeLoginCode(code);
+      const user = await roleFor(email, name);
+      if (!user) return fail(`${email} has no access to Ava yet. Ask NDI to invite it.`);
+      const target = new URL(safeNext(cookieOf(request, "pa_login_next")), url.origin);
+      const session = await readSession();
+      const response = NextResponse.redirect(target);
+      response.cookies.set(sessionCookie({ ...session, user }));
+      return done(response);
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : "Sign-in failed.");
+    }
+  }
 
   try {
     const tokens = await exchangeCode(code);
@@ -49,22 +87,15 @@ export async function GET(request: Request) {
      * in as, and saving the wrong one would have her reading your calendar and mailing
      * people as you.
      */
-    if (asAva) {
+    if (as === "ava") {
       const want = process.env.AVA_EMAIL?.trim().toLowerCase();
       const got = tokens.email?.toLowerCase();
       if (want && got !== want) {
-        home.searchParams.set("google", `error:signed in as ${got ?? "an unknown account"}, not ${want}. Try again and pick her account.`);
-        const response = NextResponse.redirect(home);
-        response.cookies.delete("pa_oauth_state");
-        response.cookies.delete("pa_oauth_as");
-        return response;
+        return fail(`signed in as ${got ?? "an unknown account"}, not ${want}. Try again and pick her account.`);
       }
       await saveAvaGoogle(tokens);
       home.searchParams.set("google", "ava-connected");
-      const response = NextResponse.redirect(home);
-      response.cookies.delete("pa_oauth_state");
-      response.cookies.delete("pa_oauth_as");
-      return response;
+      return done(NextResponse.redirect(home));
     }
 
     const session = await readSession();
@@ -76,11 +107,8 @@ export async function GET(request: Request) {
     home.searchParams.set("google", "connected");
     const response = NextResponse.redirect(home);
     response.cookies.set(sessionCookie(merged));
-    response.cookies.delete("pa_oauth_state");
-    response.cookies.delete("pa_oauth_as");
-    return response;
+    return done(response);
   } catch (e) {
-    home.searchParams.set("google", `error:${e instanceof Error ? e.message : "unknown"}`);
-    return NextResponse.redirect(home);
+    return fail(e instanceof Error ? e.message : "unknown");
   }
 }

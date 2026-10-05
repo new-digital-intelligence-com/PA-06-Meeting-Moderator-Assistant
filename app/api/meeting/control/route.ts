@@ -42,6 +42,8 @@ export async function POST(request: Request) {
       // from the control room are not. A calendar meeting was sent from nowhere.
       m.attendedFrom = from === "dispatch" ? "dispatch" : "calendar";
       if (from !== "dispatch") m.dispatch = undefined;
+      // Sent from the control room: nobody's client (her runner names it for calendar meetings).
+      if (from === "dispatch") m.client = undefined;
       m.botId = undefined;
       m.startedAt = undefined;
       m.endedAt = undefined;
@@ -71,7 +73,8 @@ export async function POST(request: Request) {
    * a stranger who found the page should not be able to.
    */
   if (command === "dispatch") {
-    if (!isRunner(request) && !(await readSession()).google) {
+    const session = await readSession();
+    if (!isRunner(request) && !session.google && session.user?.role !== "admin") {
       return NextResponse.json({ error: "Sign in with Google in the control room first." }, { status: 401 });
     }
     if (!platformOf(before.meetingUrl)) {
@@ -87,6 +90,7 @@ export async function POST(request: Request) {
     const meeting = await updateMeeting((m) => {
       m.dispatch = { at };
       m.recipients = [];
+      m.client = undefined;
       m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
       m.attendedBy = undefined;
       m.botId = undefined;

@@ -6,6 +6,8 @@ import { botName, composeFollowUp, extractNotes, mergeActions } from "@/lib/mode
 import { readSession, sessionCookie, type Session } from "@/lib/session";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
 import { createDraft, sendEmail } from "@/lib/workspace";
+import { hasDb } from "@/lib/db";
+import { saveNotes } from "@/lib/schedule";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -88,6 +90,13 @@ export async function POST(request: Request) {
     m.summary = written.summary;
     m.followUp = { to, subject: written.subject, body: written.body };
   });
+  // A client's meeting: the notes are filed with it, for the client to read back.
+  const filed = meeting.client?.meetingId && hasDb() ? meeting.client.meetingId : null;
+  if (filed) {
+    await saveNotes(filed, { to, subject: written.subject, body: written.body, summary: written.summary, actions: meeting.actions }).catch((e) =>
+      console.warn("[followup] notes not filed:", e instanceof Error ? e.message : e),
+    );
+  }
 
   if (mode === "compose") {
     return NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: null });
@@ -114,9 +123,11 @@ export async function POST(request: Request) {
         : { sent: false, ...(await createDraft(google, to, written.subject, written.body, designed(meeting, written.subject, written.body))) };
 
     if (mode === "send") {
+      const sentAt = Date.now();
       await updateMeeting((m) => {
-        if (m.followUp) m.followUp.sentAt = Date.now();
+        if (m.followUp) m.followUp.sentAt = sentAt;
       });
+      if (filed) await saveNotes(filed, { sentAt }).catch(() => undefined);
     }
 
     const response = NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: result });

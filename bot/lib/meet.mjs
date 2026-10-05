@@ -110,8 +110,9 @@ function liveInstructions(meeting, lang, product, emailed) {
  * itself it reads with our tools rather than guessing.
  */
 function backendInstructions(meeting, lang) {
+  const client = meeting.client?.name;
   return [
-    `You are the backend of ${DISPLAY_NAME}, NDI's meeting assistant, who is taking part in a live meeting by voice. Her voice model hands you what needs thought, the meeting's record or the web; your answer is spoken aloud by her, in her own words.`,
+    `You are the backend of ${DISPLAY_NAME}, NDI's meeting assistant, who is taking part in a live meeting by voice${client ? ` for ${client}` : ""}. Her voice model hands you what needs thought, the meeting's record${client ? `, ${client}'s documents` : ""} or the web; your answer is spoken aloud by her, in her own words.`,
     "",
     `Meeting: ${meeting.title || "Meeting"}`,
     "What she was told beforehand:",
@@ -120,7 +121,10 @@ function backendInstructions(meeting, lang) {
     "How to answer:",
     "- Anything about this meeting — what was said, agreed or decided, a recap, the actions so far, who said what — call meeting_record first and answer only from it. Never invent a decision, a commitment or a deadline.",
     "- Asked to note down an action, a decision or a task: call note_action, then confirm in a few words.",
-    "- Current or public facts: search the web. Facts about this company, these people or this project come only from the briefing and the record; if they are not there, say so.",
+    ...(client
+      ? [`- Facts about ${client} — their products, prices, people, projects, policies, numbers — that the briefing does not settle: call search_knowledge first, with a short query in the language of their documents, and answer from what it finds. If it finds nothing that answers it, say you don't have that.`]
+      : []),
+    `- Current or public facts: search the web. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
     `- Answer in ${LANGUAGE_NAME[lang]} unless the request is in another language, then in that one.`,
     "- Short and speakable: the answer itself in one to three sentences. No lists, no markdown, no links; say numbers the way they are spoken.",
   ].join("\n");
@@ -150,6 +154,19 @@ const BACKEND_TOOLS = [
     },
   },
 ];
+
+/** For a client's meeting: their documents, searched by meaning. Which client is the app's call, not the model's. */
+const SEARCH_TOOL = {
+  type: "function",
+  name: "search_knowledge",
+  description: "Search the documents the client gave her — their company, products, prices, people, projects — for passages about something. Returns the closest passages with the document each comes from.",
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string", description: "What to look for, in a few words." } },
+    required: ["query"],
+    additionalProperties: false,
+  },
+};
 
 /** Whether a piece of her voice has any sound in it — Live may stream silence between turns. */
 function voiced(b64) {
@@ -197,8 +214,9 @@ function readIdleClip(avatarId) {
 /**
  * Attends one meeting from start to finish, then writes and sends the notes.
  *
- * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[], startsAt?: number }} meeting
+ * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[], startsAt?: number, client?: { id: string, name: string, meetingId: string } | null }} meeting
  *   `startsAt`: when the meeting is due to start — she may be early, and waits for people from then.
+ *   `client`: the client she attends for — their documents become searchable to her.
  * @param {{ log?: (m: string) => void, briefed?: boolean }} options `briefed`: sent from the
  *   control room, whose briefing is already on the server and must not be overwritten.
  */
@@ -225,6 +243,8 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       recipients: meeting.recipients || [],
       joinAt: null,
       language: lang,
+      // Whose meeting: whose documents she searches, and where her notes are filed.
+      client: meeting.client ?? null,
     });
   }
   await app.attend(briefed ? "dispatch" : "calendar");
@@ -595,7 +615,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
                 instructions: backendInstructions(meeting, lang),
                 reasoning: { effort: EFFORT },
                 text: { verbosity: "low" },
-                tools: [{ type: "web_search" }, ...BACKEND_TOOLS],
+                tools: [{ type: "web_search" }, ...BACKEND_TOOLS, ...(meeting.client ? [SEARCH_TOOL] : [])],
                 tool_choice: "auto",
                 parallel_tool_calls: false,
               },
@@ -606,6 +626,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
           await app.record(args);
           log(`  noted: ${args.text}`);
           return "Noted — it will be in the meeting notes.";
+        }
+        if (name === "search_knowledge") {
+          log(`  looking up: ${args.query}`);
+          return app.knowledge(args.query);
         }
         return "Unknown tool.";
       },

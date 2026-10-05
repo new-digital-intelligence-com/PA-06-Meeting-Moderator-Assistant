@@ -133,6 +133,11 @@ export type Meeting = {
    * there.
    */
   attendedFrom?: "calendar" | "dispatch";
+  /**
+   * The client she is attending for, from her calendar: whose documents she searches,
+   * and the meeting (in Postgres) her notes are filed under afterwards.
+   */
+  client?: { id: string; name: string; meetingId: string };
   startedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
@@ -241,6 +246,7 @@ function normalise(raw: unknown): Meeting {
     attendedBy: o.attendedBy === "self" ? "self" : undefined,
     attendedFrom: o.attendedFrom === "calendar" || o.attendedFrom === "dispatch" ? o.attendedFrom : undefined,
     dispatch: o.dispatch && typeof o.dispatch === "object" ? (o.dispatch as Meeting["dispatch"]) : undefined,
+    client: clientOf(o.client),
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
     endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,
@@ -267,6 +273,14 @@ function normalise(raw: unknown): Meeting {
         ? (o.followUp as Meeting["followUp"])
         : undefined,
   };
+}
+
+/** A client as her runner sends it — all three ids, or none. */
+export function clientOf(v: unknown): Meeting["client"] {
+  const c = (v ?? {}) as Record<string, unknown>;
+  return typeof c.id === "string" && typeof c.name === "string" && typeof c.meetingId === "string"
+    ? { id: c.id, name: c.name, meetingId: c.meetingId }
+    : undefined;
 }
 
 function parse(raw: string | null): Meeting | null {

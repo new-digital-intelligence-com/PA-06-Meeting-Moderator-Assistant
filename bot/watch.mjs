@@ -146,13 +146,16 @@ for (;;) {
     }
 
     if (due) {
-      log(`  → ${due.title} (${new Date(due.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`);
+      log(`  → ${due.title} (${new Date(due.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})${due.client ? ` for ${due.client.name}` : ""}`);
       remember(due.id);
       await attend(
         {
           meetingUrl: due.meetingUrl,
           title: due.title,
-          context: briefingFrom(due),
+          // The app's briefing for a client's meeting: their instructions, what she knows
+          // about them and her brief for this one. Otherwise the invite alone.
+          context: due.briefing || briefingFrom(due),
+          client: due.client ?? null,
           recipients: due.guests.map((g) => g.email),
           startsAt: due.start,
           // "Language: German" in the invite, or the language it is written in.

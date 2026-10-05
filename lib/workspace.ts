@@ -229,6 +229,8 @@ export type Invite = {
   /** The invite's own description, which becomes her briefing. */
   description: string;
   organizer: string;
+  /** The organiser's address: which client the meeting belongs to. */
+  organizerEmail: string;
   /** Real people on the invite, not rooms and not her. The notes go to them. */
   guests: { email: string; name?: string }[];
 };
@@ -242,7 +244,7 @@ export type Invite = {
  * must be left alone, and the guest list must exclude meeting rooms and herself or the
  * notes get mailed to a conference room.
  */
-export async function avaInvites(google: GoogleClient, hoursAhead = 12): Promise<Invite[]> {
+export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResults = 25): Promise<Invite[]> {
   const now = Date.now();
   const params = new URLSearchParams({
     // A little into the past, so a meeting that started a few minutes ago — or that
@@ -251,7 +253,7 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12): Promise
     timeMax: new Date(now + hoursAhead * 60 * 60_000).toISOString(),
     singleEvents: "true",
     orderBy: "startTime",
-    maxResults: "25",
+    maxResults: String(maxResults),
   });
   const data = await google.request<{ items?: InviteEvent[] }>(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
@@ -272,6 +274,7 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12): Promise
         meetingUrl: e.hangoutLink ?? video ?? "",
         description: stripHtml(e.description ?? ""),
         organizer: e.organizer?.displayName || e.organizer?.email || "",
+        organizerEmail: (e.organizer?.email ?? "").toLowerCase(),
         guests: (e.attendees ?? [])
           .filter((a) => !a.self && !a.resource && a.email)
           .map((a) => ({ email: a.email.toLowerCase(), name: a.displayName })),

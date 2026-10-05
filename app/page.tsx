@@ -1,4 +1,6 @@
 import ControlRoom from "@/components/ControlRoom";
+import TopBar from "@/components/TopBar";
+import { requireAdminPage } from "@/lib/auth";
 import { elapsed, getMeeting } from "@/lib/meeting";
 import { isConfigured as recallConfigured, signedIn } from "@/lib/recall";
 import { avaEmail } from "@/lib/ava";
@@ -20,6 +22,8 @@ export default async function Home({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // NDI only: clients have their own page.
+  const user = await requireAdminPage();
   const [meeting, session, params] = await Promise.all([getMeeting(), readSession(), searchParams]);
   const publicUrl = process.env.PUBLIC_URL || process.env.APP_URL || "";
 
@@ -27,6 +31,8 @@ export default async function Home({
   const oauthError = google?.startsWith("error:") ? google.slice("error:".length) : null;
 
   return (
+    <>
+    <TopBar user={user} active="room" />
     <ControlRoom
       initialMeeting={meeting}
       initialElapsed={elapsed(meeting)}
@@ -54,5 +60,6 @@ export default async function Home({
           process.env.GOOGLE_REDIRECT_URI ?? `${publicUrl || "http://localhost:3000"}/api/auth/google/callback`,
       }}
     />
+    </>
   );
 }

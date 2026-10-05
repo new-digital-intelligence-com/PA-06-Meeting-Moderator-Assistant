@@ -46,7 +46,7 @@ export async function avaGoogle(): Promise<GoogleClient | null> {
   return new Proxy(client, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
-      if (prop !== "request" || typeof value !== "function") return value;
+      if ((prop !== "request" && prop !== "token") || typeof value !== "function") return value;
       return async (...args: unknown[]) => {
         const out = await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
         if (target.dirty) await saveAvaGoogle(target.current).catch(() => undefined);

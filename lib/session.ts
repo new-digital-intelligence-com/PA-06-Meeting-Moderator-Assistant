@@ -1,8 +1,9 @@
-import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import { decrypt, encrypt } from "./seal";
 
-const COOKIE = "pa_session";
-const ALG = "aes-256-gcm";
+export { decrypt, encrypt };
+
+export const COOKIE = "pa_session";
 
 export type GoogleTokens = {
   access_token: string;
@@ -13,38 +14,24 @@ export type GoogleTokens = {
   email?: string;
 };
 
-export type Session = {
-  google?: GoogleTokens;
+/**
+ * Who is signed in to the portal: an NDI admin, or a member of one client. Decided once,
+ * at sign-in; client routes check the membership again on every request.
+ */
+export type PortalUser = {
+  email: string;
+  name?: string;
+  role: "admin" | "client";
+  clientId?: string;
 };
 
-function key(): Buffer {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) throw new Error("SESSION_SECRET is not set (see .env.example)");
-  return crypto.createHash("sha256").update(secret).digest();
-}
+export type Session = {
+  google?: GoogleTokens;
+  user?: PortalUser;
+};
 
-export function encrypt(value: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv(ALG, key(), iv);
-  const ct = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), ct]).toString("base64url");
-}
-
-export function decrypt(value: string): string | null {
-  try {
-    const raw = Buffer.from(value, "base64url");
-    const iv = raw.subarray(0, 12);
-    const tag = raw.subarray(12, 28);
-    const decipher = crypto.createDecipheriv(ALG, key(), iv);
-    decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString("utf8");
-  } catch {
-    return null;
-  }
-}
-
-export async function readSession(): Promise<Session> {
-  const raw = (await cookies()).get(COOKIE)?.value;
+/** The session in a cookie value, or an empty one when it is missing or tampered with. */
+export function sessionFrom(raw: string | undefined): Session {
   if (!raw) return {};
   const plain = decrypt(raw);
   if (!plain) return {};
@@ -53,6 +40,10 @@ export async function readSession(): Promise<Session> {
   } catch {
     return {};
   }
+}
+
+export async function readSession(): Promise<Session> {
+  return sessionFrom((await cookies()).get(COOKIE)?.value);
 }
 
 /** Serialised cookie value — set it on a NextResponse. */

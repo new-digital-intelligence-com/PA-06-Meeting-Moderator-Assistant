@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { elapsed, getMeeting, resetMeeting, updateMeeting, type Activity } from "@/lib/meeting";
+import { clientOf, elapsed, getMeeting, resetMeeting, updateMeeting, type Activity } from "@/lib/meeting";
+import { isRunner } from "@/lib/ava";
 import { langOf } from "@/lib/languages";
 import { isConfigured as recallConfigured } from "@/lib/recall";
 
@@ -23,6 +24,8 @@ type Patch = {
   language?: string;
   /** Epoch ms, or null to clear it and have her join as soon as she is sent. */
   joinAt?: number | null;
+  /** Her runner, from her calendar: the client she attends for, or null for nobody's. */
+  client?: { id: string; name: string; meetingId: string } | null;
 };
 
 /** The briefing. Editable right up until she is in the room. */
@@ -34,6 +37,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  const runner = isRunner(request);
   const meeting = await updateMeeting((m) => {
     if (patch.title !== undefined) m.title = patch.title.trim() || "Untitled meeting";
     if (patch.meetingUrl !== undefined) m.meetingUrl = patch.meetingUrl.trim();
@@ -47,6 +51,8 @@ export async function PUT(request: Request) {
     if (patch.joinAt !== undefined) {
       m.joinAt = typeof patch.joinAt === "number" && patch.joinAt > 0 ? patch.joinAt : undefined;
     }
+    // Only her runner says whose meeting it is: it decides whose documents she searches.
+    if (patch.client !== undefined && runner) m.client = clientOf(patch.client);
     if (patch.recipients) {
       m.recipients = Array.from(
         new Set(patch.recipients.map((p) => p.trim().toLowerCase()).filter((p) => p.includes("@"))),

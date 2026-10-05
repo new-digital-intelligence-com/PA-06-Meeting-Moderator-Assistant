@@ -16,9 +16,9 @@ import { speakers, transcriptText, type ActionItem, type Meeting, type Transcrip
 import { LANGUAGES } from "./languages";
 
 /** Live replies must be quick — a slow answer lands after the moment has passed. */
-const FAST = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4-5";
+export const FAST = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4-5";
 /** The write-up happens once, off the clock, so quality wins over speed. */
-const WRITER = process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-5";
+export const WRITER = process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-5";
 
 const client = () => new Anthropic();
 
@@ -382,12 +382,18 @@ export async function groupTurn(
  * earlier, the actions so far, something to note down, facts from the briefing. Claude
  * answers from the whole transcript and the briefing; GPT-Live says it.
  */
-export async function answerForVoice(m: Meeting, recent: TranscriptLine[], asked: string): Promise<ModeratorReply> {
+export async function answerForVoice(
+  m: Meeting,
+  recent: TranscriptLine[],
+  asked: string,
+  /** Passages from the client's documents that match what was asked, when she attends for one. */
+  documents?: string,
+): Promise<ModeratorReply> {
   const system = [
     `You are the thinking half of ${botName()}, an AI assistant taking part in a live video meeting. Her voice — a live speech model — holds the conversation, and has just handed you something that needs your knowledge of this meeting: what was said or decided earlier, a recap, the actions so far, something to note down, or facts from the briefing.`,
     "",
     "Give her what to say back: the answer itself, as she would say it out loud. She says it in her own words.",
-    "- Facts about this company, these people or this project come only from the briefing and the transcript. If they are not there, say so plainly.",
+    "- Facts about this company, these people or this project come only from the briefing, the transcript and the client's documents below. If they are not there, say so plainly.",
     "- Asked to note something down: record it with add_actions and confirm in a few words.",
     "- Asked for a recap or the actions: only what was actually said. Never invent a decision, a commitment or a deadline.",
     "- If what was handed over is not clear, give your best reading of what they want; an empty say only if there is truly nothing to answer.",
@@ -413,6 +419,7 @@ export async function answerForVoice(m: Meeting, recent: TranscriptLine[], asked
           "The meeting so far (live captions):",
           transcriptText(recent) || "(nothing yet)",
           "",
+          ...(documents ? [`From ${m.client?.name ?? "the client"}'s documents, the passages closest to what was asked:`, documents, ""] : []),
           "What her voice just heard, as it heard it:",
           asked.trim() || "(unclear)",
         ].join("\n"),

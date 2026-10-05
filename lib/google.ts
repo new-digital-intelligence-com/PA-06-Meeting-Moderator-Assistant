@@ -48,6 +48,23 @@ export function buildAuthUrl(state: string, loginHint?: string) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
+/**
+ * Signing in to the portal: who you are, and nothing else. Admins and clients get no
+ * access to anything of theirs through this — Ava's own account is connected separately.
+ */
+export function buildLoginUrl(state: string) {
+  const { client_id } = creds();
+  const params = new URLSearchParams({
+    client_id,
+    redirect_uri: redirectUri(),
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    state,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
 type TokenResponse = {
   access_token: string;
   refresh_token?: string;
@@ -56,14 +73,32 @@ type TokenResponse = {
   id_token?: string;
 };
 
-function emailFromIdToken(idToken?: string): string | undefined {
-  if (!idToken) return undefined;
+function idClaims(idToken?: string): { email?: string; email_verified?: boolean; name?: string } {
+  if (!idToken) return {};
   try {
-    const payload = JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString("utf8"));
-    return typeof payload.email === "string" ? payload.email : undefined;
+    return JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString("utf8"));
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+function emailFromIdToken(idToken?: string): string | undefined {
+  const { email } = idClaims(idToken);
+  return typeof email === "string" ? email : undefined;
+}
+
+/**
+ * Who signed in, from the ID token Google returned straight to us over TLS (not a token
+ * a browser handed over, so it needs no signature check). Unverified addresses are refused.
+ */
+export async function exchangeLoginCode(code: string): Promise<{ email: string; name?: string }> {
+  const { client_id, client_secret } = creds();
+  const t = await tokenRequest({ code, client_id, client_secret, redirect_uri: redirectUri(), grant_type: "authorization_code" });
+  const claims = idClaims(t.id_token);
+  if (typeof claims.email !== "string" || claims.email_verified === false) {
+    throw new Error("Google did not confirm that email address.");
+  }
+  return { email: claims.email.toLowerCase(), name: typeof claims.name === "string" ? claims.name : undefined };
 }
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
@@ -133,6 +168,11 @@ export class GoogleClient {
     };
     this.dirty = true;
     return this.tokens.access_token;
+  }
+
+  /** A current access token, for requests `request` cannot make (uploads, downloads). */
+  token(): Promise<string> {
+    return this.accessToken();
   }
 
   async request<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
