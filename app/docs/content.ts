@@ -30,6 +30,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "A client's page in three tabs, and what she knows as a README",
+    points: [
+      "A client's page has a tab bar — Meetings · What she knows · How she works for you — with a count beside the first two. All three stay loaded, so an upload in progress or unsaved text survives a switch.",
+      "“What Ava knows about …” is shown like a README under the list of documents: headings, bullet lists, bold, tables. She is asked to write it that way — a short opening, then a section each for what they offer, people, facts and figures, names, what not to share — and her meeting briefs too (Purpose, Agenda, People, Facts she may need, Avoid). Press Update to rewrite an existing one in the new form.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "Clearer: what each status means, and the two halves of a client",
     points: [
       "The control room's coloured pills are now four cards that say what they are: Ava's Google account, Ava's server, meeting storage, and your own Google account — marked optional, grey when off, as it only fills a meeting from your calendar and shares Drive files from there. Red only for what stops her.",

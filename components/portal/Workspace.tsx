@@ -8,6 +8,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
+import Markdown from "./Markdown";
 import { Chip, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
 type Doc = {
@@ -73,6 +74,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   const [version, setVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [digesting, setDigesting] = useState(false);
+  const [tab, setTab] = useState<Tab>("meetings");
   // Which meetings are past and which are about to start: read with the data, and each minute.
   const [now, setNow] = useState(() => Date.now());
 
@@ -122,6 +124,11 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   const past = data.meetings.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() <= now).reverse();
   const ava = data.ava ?? "Ava";
   const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: "meetings", label: "Meetings", count: upcoming.length },
+    { id: "knowledge", label: "What she knows", count: data.documents.filter((d) => d.status === "ready").length },
+    { id: "instructions", label: "How she works for you" },
+  ];
 
   return (
     <PickerContext.Provider value={picker}>
@@ -142,12 +149,36 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         </p>
       </header>
 
+      {/* One part at a time. All three stay loaded, so a file uploading or a note being typed survives a switch. */}
+      <nav role="tablist" aria-label={`Ava for ${client.name}`} className="flex gap-1 overflow-x-auto border-b border-slate-200">
+        {tabs.map((t) => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(t.id)}
+              className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                on ? "border-blue-600 text-slate-900" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900"
+              }`}
+            >
+              {t.label}
+              {t.count !== undefined && (
+                <span className={`rounded-full px-2 py-0.5 text-xs ${on ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
       {error && (
         <Notice tone="error" onClose={() => setError(null)}>
           {error}
         </Notice>
       )}
 
+      <div role="tabpanel" hidden={tab !== "meetings"}>
       <Section title="Meetings" aside={<span className="text-xs text-slate-400">{upcoming.length} coming up</span>}>
         {upcoming.length === 0 ? (
           <p className="text-sm text-slate-500">
@@ -171,10 +202,12 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
           </div>
         )}
       </Section>
+      </div>
 
+      <div role="tabpanel" hidden={tab !== "knowledge"} className="space-y-5">
       <Section
-        title="What she knows"
-        aside={<span className="text-xs text-slate-400">{data.documents.filter((d) => d.status === "ready").length} documents</span>}
+        title="Her documents"
+        aside={<span className="text-xs text-slate-400">{data.documents.filter((d) => d.status === "ready").length} read</span>}
       >
         <p className="mb-4 max-w-3xl text-sm text-slate-500">
           Your documents, pages and files: she reads them now, and in a meeting she looks up what she needs. Kept in NDI&apos;s Google Drive; never shared.
@@ -196,29 +229,44 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
           }}
           onError={setError}
         />
-        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-slate-700">What Ava knows about {client.name}</h3>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-400">{digesting ? "Reading your documents…" : client.digest_at ? `Updated ${ago(client.digest_at)}` : ""}</span>
-              <button className={quiet} onClick={() => void rebuildDigest()} disabled={digesting}>
-                {digesting ? "Updating…" : "Update"}
-              </button>
-            </div>
+      </Section>
+
+      {/* What she took from them, shown like a project's README under its files. */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800">
+            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 shrink-0 text-slate-500" fill="currentColor">
+              <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z" />
+            </svg>
+            <span className="truncate">What Ava knows about {client.name}</span>
           </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400">{digesting ? "Reading your documents…" : client.digest_at ? `Updated ${ago(client.digest_at)}` : ""}</span>
+            <button className={quiet} onClick={() => void rebuildDigest()} disabled={digesting}>
+              {digesting ? "Updating…" : "Update"}
+            </button>
+          </div>
+        </div>
+        <div className="px-5 py-5 sm:px-8 sm:py-6">
           {client.digest ? (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{client.digest}</p>
+            <Markdown>{client.digest}</Markdown>
           ) : (
             <p className="text-sm text-slate-500">Nothing yet. Add documents and she writes down what she takes from them.</p>
           )}
         </div>
-      </Section>
+      </section>
+      </div>
 
-      <Instructions key={client.id} initial={client.instructions} name={client.name} q={q} onError={setError} />
+      <div role="tabpanel" hidden={tab !== "instructions"}>
+        <Instructions key={client.id} initial={client.instructions} name={client.name} q={q} onError={setError} />
+      </div>
     </div>
     </PickerContext.Provider>
   );
 }
+
+/** The page's three parts, one shown at a time. */
+type Tab = "meetings" | "knowledge" | "instructions";
 
 /* ------------------------------------------------------------ documents */
 
@@ -617,7 +665,7 @@ function PrepPanel({
             <h4 className="text-sm font-medium text-emerald-800">What she will walk in with</h4>
             <span className="text-xs text-slate-400">{brief.at ? `Written ${ago(brief.at)}` : ""}</span>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{brief.text}</p>
+          <Markdown>{brief.text}</Markdown>
         </div>
       )}
     </div>

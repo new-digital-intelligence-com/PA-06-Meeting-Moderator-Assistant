@@ -99,7 +99,7 @@ export async function rebuildDigest(clientId: string): Promise<string> {
         "- the facts and figures people are most likely to ask about;",
         "- names and terms to get right;",
         "- anything the documents say must not be shared.",
-        "Plain text, short headings, short lines, at most 600 words. Only what the documents say. Where two documents disagree, keep the newer and mention the difference.",
+        "Write it in Markdown, like a README: no title (the page shows one); open with two or three sentences on who they are; then a ## section for each of the rest, with - bullet points, **bold** for names, prices and numbers, and a table where it reads better (models and prices, contacts). At most 600 words. Only what the documents say. Where two documents disagree, keep the newer and mention the difference.",
       ].join("\n"),
       1800,
     );
@@ -190,7 +190,7 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
       "- who is attending and what to know about each, where known;",
       "- the facts she is most likely to need;",
       "- what to avoid.",
-      "Plain text, short headings, at most 450 words, in the language their preparation is written in (English if there is none). Only what you were given; nothing invented.",
+      "Write it in Markdown, no title: ## Purpose, ## Agenda, ## People, ## Facts she may need, ## Avoid — short - bullet points, **bold** for names and numbers. At most 450 words, in the language their preparation is written in (English if there is none). Only what you were given; nothing invented.",
     ].join("\n"),
     1500,
   );

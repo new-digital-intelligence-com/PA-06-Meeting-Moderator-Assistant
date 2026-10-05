@@ -670,7 +670,7 @@ export default function Docs() {
                 </FileRow>
                 <FileRow path="lib/prepare.ts">Her homework: each document’s summary, the client’s digest, a meeting’s brief, the briefing she is handed.</FileRow>
                 <FileRow path="components/portal · components/admin">
-                  The client’s page (meetings and preparation, documents, how she works for you) and NDI’s (clients, who signs
+                  The client’s page, in three tabs — meetings and preparation, what she knows (documents, and her digest shown as a README), how she works for you — and NDI’s (clients, who signs
                   in, invites she skipped). Admins open any client’s page as the client sees it.
                 </FileRow>
                 <FileRow path="lib/db.ts · db/schema.sql">
