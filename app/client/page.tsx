@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import Workspace from "@/components/portal/Workspace";
+import { pickerConfig } from "@/lib/google";
 import { accessFor, requireUserPage } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
 import { hasDb } from "@/lib/db";
@@ -32,7 +33,7 @@ export default async function ClientPage() {
   return (
     <>
       <TopBar user={user} clientName={client.name} />
-      <Workspace />
+      <Workspace picker={pickerConfig()} />
     </>
   );
 }

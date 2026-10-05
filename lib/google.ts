@@ -24,15 +24,15 @@ function creds() {
 }
 
 /**
- * The site's own "Sign in with Google": its own OAuth client when one is set — in a project
- * open to outside accounts (ava-avatar), so clients can use it — else the main one. Ava's
- * own connection (calendar, Gmail, Drive) always stays on the main client.
+ * What Google's file picker needs in the browser — all of it public: the client ID, the
+ * project number (the digits the client ID starts with) and a browser API key restricted
+ * to the Picker API and this site. Null until GOOGLE_API_KEY is set.
  */
-function loginCreds() {
-  const client_secret = process.env.GOOGLE_LOGIN_CLIENT_SECRET?.trim();
-  // The Drive picker's web client, unless a different one is named.
-  const client_id = process.env.GOOGLE_LOGIN_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
-  return client_id && client_secret ? { client_id, client_secret } : creds();
+export function pickerConfig(): { clientId: string; apiKey: string; appId: string } | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const apiKey = process.env.GOOGLE_API_KEY?.trim();
+  const appId = clientId?.split("-")[0];
+  return clientId && apiKey && appId && /^\d+$/.test(appId) ? { clientId, apiKey, appId } : null;
 }
 
 export function redirectUri() {
@@ -65,7 +65,7 @@ export function buildAuthUrl(state: string, loginHint?: string) {
  * access to anything of theirs through this — Ava's own account is connected separately.
  */
 export function buildLoginUrl(state: string) {
-  const { client_id } = loginCreds();
+  const { client_id } = creds();
   const params = new URLSearchParams({
     client_id,
     redirect_uri: redirectUri(),
@@ -104,7 +104,7 @@ function emailFromIdToken(idToken?: string): string | undefined {
  * a browser handed over, so it needs no signature check). Unverified addresses are refused.
  */
 export async function exchangeLoginCode(code: string): Promise<{ email: string; name?: string }> {
-  const { client_id, client_secret } = loginCreds();
+  const { client_id, client_secret } = creds();
   const t = await tokenRequest({ code, client_id, client_secret, redirect_uri: redirectUri(), grant_type: "authorization_code" });
   const claims = idClaims(t.id_token);
   if (typeof claims.email !== "string" || claims.email_verified === false) {

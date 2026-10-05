@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import ClientSettings from "@/components/admin/ClientSettings";
 import Workspace from "@/components/portal/Workspace";
+import { pickerConfig } from "@/lib/google";
 import { isUuid, requireAdminPage } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
 
@@ -18,7 +19,7 @@ export default async function AdminClientPage({ params }: { params: Promise<{ id
     <>
       <TopBar user={user} active="clients" />
       <ClientSettings id={id} />
-      <Workspace clientId={id} />
+      <Workspace clientId={id} picker={pickerConfig()} />
     </>
   );
 }

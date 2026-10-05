@@ -18,11 +18,8 @@ declare global {
   }
 }
 
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-const APP_ID = process.env.NEXT_PUBLIC_GOOGLE_APP_ID;
-const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-
-export const pickerConfigured = Boolean(API_KEY && APP_ID && CLIENT_ID);
+/** What the picker needs, handed down by the page (lib/google.ts pickerConfig): all public. */
+export type PickerConfig = { clientId: string; apiKey: string; appId: string };
 
 const loaded = new Map<string, Promise<void>>();
 function script(src: string): Promise<void> {
@@ -48,14 +45,13 @@ function script(src: string): Promise<void> {
 export type Picked = { token: string; files: { id: string; name: string; mimeType: string }[] };
 
 /** Opens the picker; resolves with the chosen files, or null if they closed it. */
-export async function pickFromDrive(): Promise<Picked | null> {
-  if (!pickerConfigured) throw new Error("Google Drive is not set up for this site yet.");
+export async function pickFromDrive(config: PickerConfig): Promise<Picked | null> {
   await Promise.all([script("https://apis.google.com/js/api.js"), script("https://accounts.google.com/gsi/client")]);
   await new Promise<void>((resolve) => window.gapi.load("picker", { callback: () => resolve() }));
 
   const token = await new Promise<string>((resolve, reject) => {
     const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
+      client_id: config.clientId,
       scope: "https://www.googleapis.com/auth/drive.file",
       callback: (r: { access_token?: string; error?: string; error_description?: string }) =>
         r.access_token ? resolve(r.access_token) : reject(new Error(r.error_description || r.error || "Google sign-in failed.")),
@@ -70,9 +66,9 @@ export async function pickFromDrive(): Promise<Picked | null> {
     const files = new g.DocsView(g.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(false).setMode(g.DocsViewMode.LIST);
     const shared = new g.DocsView(g.ViewId.DOCS).setEnableDrives(true).setIncludeFolders(true).setSelectFolderEnabled(false);
     const picker = new g.PickerBuilder()
-      .setAppId(APP_ID)
+      .setAppId(config.appId)
       .setOAuthToken(token)
-      .setDeveloperKey(API_KEY)
+      .setDeveloperKey(config.apiKey)
       .addView(files)
       .addView(shared)
       .addView(new g.DocsUploadView())

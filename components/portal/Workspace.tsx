@@ -6,8 +6,8 @@
  * admin sees any client's (`clientId`), the same page.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { pickFromDrive, pickerConfigured } from "./drivePicker";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { pickFromDrive, type PickerConfig } from "./drivePicker";
 import { Chip, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
 type Doc = {
@@ -67,7 +67,7 @@ const ACCEPT =
 
 /* ----------------------------------------------------------------- page */
 
-export default function Workspace({ clientId }: { clientId?: string }) {
+export default function Workspace({ clientId, picker = null }: { clientId?: string; picker?: PickerConfig | null }) {
   const q = clientId ? `?client=${clientId}` : "";
   const [data, setData] = useState<Data | null>(null);
   const [version, setVersion] = useState(0);
@@ -124,6 +124,7 @@ export default function Workspace({ clientId }: { clientId?: string }) {
   const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
 
   return (
+    <PickerContext.Provider value={picker}>
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-24 sm:p-6">
       <header className="space-y-2 pt-2">
         <h1 className="text-2xl font-semibold">
@@ -215,10 +216,14 @@ export default function Workspace({ clientId }: { clientId?: string }) {
 
       <Instructions key={client.id} initial={client.instructions} name={client.name} q={q} onError={setError} />
     </div>
+    </PickerContext.Provider>
   );
 }
 
 /* ------------------------------------------------------------ documents */
+
+/** Google's file picker settings, from the page — null hides "From Google Drive". */
+const PickerContext = createContext<PickerConfig | null>(null);
 
 function AddDocuments({
   q,
@@ -237,6 +242,7 @@ function AddDocuments({
   const [linking, setLinking] = useState(false);
   const [link, setLink] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const picker = useContext(PickerContext);
 
   /** One at a time, each in its own request: every file gets the server's whole time limit. */
   async function run(jobs: { label: string; send: () => Promise<{ document: Doc }> }[]) {
@@ -278,8 +284,9 @@ function AddDocuments({
   }
 
   async function fromDrive() {
+    if (!picker) return;
     try {
-      const picked = await pickFromDrive();
+      const picked = await pickFromDrive(picker);
       if (!picked) return;
       void run(
         picked.files.map((f) => ({
@@ -321,7 +328,7 @@ function AddDocuments({
         <button className={quiet} onClick={() => input.current?.click()}>
           Upload files
         </button>
-        {pickerConfigured && (
+        {picker && (
           <button className={quiet} onClick={() => void fromDrive()}>
             From Google Drive
           </button>
@@ -347,7 +354,7 @@ function AddDocuments({
       )}
       <p className="text-xs text-slate-400">
         PDF, Word, Excel, PowerPoint, Google Docs, Sheets and Slides, images and text — up to 4 MB here
-        {pickerConfigured ? "; bigger files through Google Drive (its Upload tab takes them from your computer)." : "."}
+        {picker ? "; bigger files through Google Drive (its Upload tab takes them from your computer)." : "."}
       </p>
       {pending.length > 0 && (
         <ul className="space-y-1">

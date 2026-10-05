@@ -30,6 +30,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "One Google client for everything",
+    points: [
+      "Ava's own account, the site's “Sign in with Google” and the Drive button now all use GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET — one OAuth client, in the ava-avatar project, open to outside accounts. GOOGLE_LOGIN_CLIENT_SECRET and the NEXT_PUBLIC_GOOGLE_ settings are gone.",
+      "The Drive button gets its settings from the page: the client ID, its project number (the digits the client ID starts with) and GOOGLE_API_KEY, a browser key restricted to the Picker API and this site.",
+      "Moving GOOGLE_CLIENT_ID to a new client means connecting Ava's Google again from the control room: her stored access belongs to the client that issued it.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
+  {
+    date: "2026-10-05",
     title: "Clients can sign in with Google",
     points: [
       "The site's “Sign in with Google” can run on the Drive picker's web client, in a Google project open to outside accounts — ava-avatar: set GOOGLE_LOGIN_CLIENT_SECRET (its ID is NEXT_PUBLIC_GOOGLE_CLIENT_ID; GOOGLE_LOGIN_CLIENT_ID only for a different client). Ava's own connection to her calendar, Gmail and Drive stays on GOOGLE_CLIENT_ID; without the secret, sign-in uses it as before.",

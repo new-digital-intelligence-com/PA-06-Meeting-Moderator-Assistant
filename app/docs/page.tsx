@@ -767,8 +767,7 @@ export default function Docs() {
                       [<C key="v">ANTHROPIC_API_KEY</C>, "Claude"],
                       [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the notes models (and the Claude brain's)"],
                       [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state — required; the URL is worked out from KV_URL if missing"],
-                      [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "Google: Ava's own account (calendar, Gmail, Drive) — and the site's sign-in when the two below are not set"],
-                      [<C key="v">GOOGLE_LOGIN_CLIENT_SECRET</C>, "The site's “Sign in with Google” on the Drive picker's web client (ava-avatar, open to outside accounts), so clients can use it; GOOGLE_LOGIN_CLIENT_ID only for a different client"],
+                      [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "One Google OAuth client (project ava-avatar) for Ava's own account, the site's sign-in and the Drive button"],
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
@@ -778,7 +777,7 @@ export default function Docs() {
                       [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
                       [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
                       [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],
-                      [<C key="v">NEXT_PUBLIC_GOOGLE_API_KEY · _APP_ID · _CLIENT_ID</C>, "Google’s file picker on a client’s page — an API key, the project number and a web OAuth client, all from one Google Cloud project of their own (not the sign-in’s)"],
+                      [<C key="v">GOOGLE_API_KEY</C>, "The Drive button's browser key (Google Picker API, this site only); its client and project number come from GOOGLE_CLIENT_ID"],
                       [<C key="v">APP_URL</C>, "The address in invitations and sign-in links"],
                       [<C key="v">RECALL_API_KEY · RECALL_REGION</C>, "The older Recall bot (retired)"],
                     ]}
