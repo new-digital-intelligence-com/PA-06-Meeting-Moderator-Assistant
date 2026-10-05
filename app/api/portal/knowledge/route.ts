@@ -27,7 +27,9 @@ export async function GET(request: Request) {
  *   a form with `file` (and `meeting`)          an upload from their computer;
  *   { kind: "link", url, meeting }               a web page, PDF or public Google file;
  *   { kind: "drive", token, fileId, meeting }   a file picked in Google's picker, read
- *                                                with the token the picker gave them.
+ *                                                with the token the picker gave them;
+ *   { kind: "text", title, text, meeting }      text written on the page — the title is
+ *                                                its first line when none is given.
  */
 export async function POST(request: Request) {
   return handle(async () => {
@@ -52,8 +54,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ document });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { kind?: string; url?: string; token?: string; fileId?: string; meeting?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      kind?: string;
+      url?: string;
+      token?: string;
+      fileId?: string;
+      title?: string;
+      text?: string;
+      meeting?: string;
+    };
     const meeting = await meetingOf(client, body.meeting ?? null);
+    if (body.kind === "text") {
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) throw new HttpError(400, "Write something for her first.");
+      const first = text.split("\n", 1)[0].trim();
+      const title = (typeof body.title === "string" && body.title.trim()) || (first.length > 80 ? `${first.slice(0, 79)}…` : first);
+      const document = await addDocument({ client, meeting, by: user.email, source: { kind: "text", title, text } });
+      return NextResponse.json({ document });
+    }
     if (body.kind === "link") {
       if (!body.url?.trim()) throw new HttpError(400, "Paste a link.");
       const document = await addDocument({ client, meeting, by: user.email, source: { kind: "link", url: body.url.trim() } });
@@ -70,7 +88,7 @@ export async function POST(request: Request) {
       const document = await addDocument({ client, meeting, by: user.email, source: { kind: "drive", ...picked } });
       return NextResponse.json({ document });
     }
-    throw new HttpError(400, "Send a file, a link or a Drive file.");
+    throw new HttpError(400, "Send a file, a link, a Drive file or some text.");
   });
 }
 

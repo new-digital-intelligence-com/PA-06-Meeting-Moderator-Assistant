@@ -1,6 +1,6 @@
 /**
- * A client's knowledge: the documents and links they give Ava, cut into passages she can
- * search by meaning during a meeting.
+ * A client's knowledge: the documents and links they give Ava, and text they write for her,
+ * cut into passages she can search by meaning during a meeting.
  *
  * Adding one: keep the file in NDI's Drive (lib/drive.ts), read its text (lib/extract.ts),
  * cut it into overlapping passages, turn each into a vector (lib/embed.ts), store them in
@@ -44,7 +44,11 @@ export function chunk(text: string, size = 1200, overlap = 200): string[] {
 export type Source =
   | { kind: "upload"; name: string; mime: string; data: Buffer }
   | { kind: "drive"; name: string; mime: string; data: Buffer; convertTo?: string; link?: string }
-  | { kind: "link"; url: string };
+  | { kind: "link"; url: string }
+  | { kind: "text"; title: string; text: string };
+
+/** Text written on the page up to this long is its own summary. */
+const OWN_SUMMARY = 1500;
 
 /**
  * Adds one document and reads it, start to finish. Returns its row — "ready", or "failed"
@@ -60,7 +64,7 @@ export async function addDocument(input: {
   const n = await count(db().from("knowledge").select("id", { count: "exact", head: true }).eq("client_id", client.id));
   if (n >= MAX_DOCUMENTS) throw new Error(`${client.name} already has ${MAX_DOCUMENTS} documents. Remove some first.`);
 
-  const title = source.kind === "link" ? source.url : source.name;
+  const title = source.kind === "link" ? source.url : source.kind === "text" ? source.title : source.name;
   const row = asKnowledge(
     await rows<Record<string, unknown>>(
       db()
@@ -70,7 +74,7 @@ export async function addDocument(input: {
           meeting_id: meeting?.id ?? null,
           kind: source.kind,
           title: title.slice(0, 300),
-          mime: source.kind === "link" ? "text/html" : source.mime,
+          mime: source.kind === "link" ? "text/html" : source.kind === "text" ? "text/plain" : source.mime,
           source: source.kind === "link" ? source.url : source.kind === "drive" ? (source.link ?? null) : null,
           created_by: by,
         })
@@ -82,7 +86,8 @@ export async function addDocument(input: {
   try {
     const read = await readSource(client, meeting ?? null, source);
     let text = read.text.replace(/\u0000/g, "").trim();
-    if (text.length < 20) throw new Error("No text could be read from it.");
+    // What they wrote themselves may be one line; what was read from a file has to be more.
+    if (!text || (source.kind !== "text" && text.length < 20)) throw new Error("No text could be read from it.");
     const cut = text.length > MAX_CHARS;
     if (cut) text = text.slice(0, MAX_CHARS);
 
@@ -101,12 +106,14 @@ export async function addDocument(input: {
       await rows(db().from("chunks").insert(batch));
     }
 
-    let summary: string;
-    try {
-      summary = await summarise(client.name, read.title, text);
-    } catch (e) {
-      console.warn("[knowledge] summary failed", e instanceof Error ? e.message : e);
-      summary = text.slice(0, 800);
+    let summary = source.kind === "text" && text.length <= OWN_SUMMARY ? text : "";
+    if (!summary) {
+      try {
+        summary = await summarise(client.name, read.title, text);
+      } catch (e) {
+        console.warn("[knowledge] summary failed", e instanceof Error ? e.message : e);
+        summary = text.slice(0, 800);
+      }
     }
     if (cut) summary += `\n(Only the first ${MAX_CHARS.toLocaleString("en")} characters were read.)`;
 
@@ -149,6 +156,8 @@ async function readSource(
     const page = await linkText(source.url);
     return { title: page.title || source.url, text: page.text };
   }
+  // Written on their page: nothing to keep in Drive, nothing to read.
+  if (source.kind === "text") return { title: source.title, text: source.text };
 
   const { name, mime, data } = source;
   const convertTo = source.kind === "drive" && source.convertTo ? source.convertTo : OFFICE[extension(name)];

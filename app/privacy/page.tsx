@@ -46,8 +46,8 @@ export default function Privacy() {
 
         <h2 className={h2}>What you give Ava</h2>
         <p className={p}>
-          Documents, links and files from Google Drive that you add, the instructions you write, and the preparation for
-          a meeting. A copy of each file is kept in NDI&apos;s Google Drive; its text, cut into passages, and a short
+          Documents, links, files from Google Drive and text that you add, the instructions you write, and the preparation
+          for a meeting. A copy of each file is kept in NDI&apos;s Google Drive; its text, cut into passages, and a short
           summary are kept in NDI&apos;s database so that Ava can find the relevant passage during your meetings. You can
           remove a document at any time from your page, which removes its copy and its passages.
         </p>

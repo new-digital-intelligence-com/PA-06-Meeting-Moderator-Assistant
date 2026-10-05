@@ -30,6 +30,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Write it down: text as one of her documents",
+    points: [
+      "Beside Upload files, From Google Drive and Add a link, “What she knows” has Add text: a title (optional — the first line otherwise) and whatever she should know — who is who, prices, how to answer, what not to say. She reads it like a document: searchable in every meeting, part of what she knows about them, marked Text in the list, and its Preview shows it.",
+      "Nothing goes to Drive for it, and a text up to 1,500 characters is its own summary, so no model is asked to summarise it. What was typed stays in the form until she has read it, so an error loses nothing. Not offered in a meeting's preparation, which has its own notes.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "Preview a document",
     points: [
       "Every document that was read has a Preview, in the list and in a meeting's preparation. It opens over the page with two views: the file as it was given — the copy kept in NDI's Drive, Google Docs, Sheets and Slides (and so Word, Excel and PowerPoint) as a PDF — and “What she read”, the text she searches in a meeting, put back together from its passages. A link has only the second, and a button to open the page.",

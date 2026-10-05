@@ -593,8 +593,9 @@ export default function Docs() {
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
                   Docs, Sheets and Slides as they are stored, and are read as text (every tab of a sheet). Pages are fetched with
                   care: only public addresses, redirects checked, 8 MB at most. Up to 400,000 characters per document, 300
-                  documents per client. Preview shows the kept copy (Google files as a PDF, up to 4.3 MB) or the text she
-                  read, joined back from its passages.
+                  documents per client. Text written on their page is taken as it is, and up to 1,500 characters is its own
+                  summary. Preview shows the kept copy (Google files as a PDF, up to 4.3 MB) or the text she read, joined
+                  back from its passages.
                 </Card>
                 <Card tone="amber" title="Her homework">
                   Each document is summarised as it arrives (Haiku). From the summaries she writes “What Ava knows about
@@ -671,7 +672,7 @@ export default function Docs() {
                 </FileRow>
                 <FileRow path="lib/prepare.ts">Her homework: each document’s summary, the client’s digest, a meeting’s brief, the briefing she is handed.</FileRow>
                 <FileRow path="components/portal · components/admin">
-                  The client’s page, in three tabs — meetings and preparation, what she knows (documents, and her digest shown as a README), how she works for you — and NDI’s (clients, who signs
+                  The client’s page, in three tabs — meetings and preparation, what she knows (documents, links and text they write, each with a preview, and her digest shown as a README), how she works for you — and NDI’s (clients, who signs
                   in, invites she skipped). Admins open any client’s page as the client sees it.
                 </FileRow>
                 <FileRow path="lib/db.ts · db/schema.sql">
@@ -748,7 +749,7 @@ export default function Docs() {
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
                   [<C key="r">/api/admin/clients · [id] · [id]/members</C>, "Admins", "List, create, edit, pause or delete clients; who signs in; invitations"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
-                  [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link); read back what she took from one, or remove it"],
+                  [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],
                   [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting; save its preparation and write her brief"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],

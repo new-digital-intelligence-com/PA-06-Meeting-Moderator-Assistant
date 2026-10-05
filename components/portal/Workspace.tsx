@@ -14,7 +14,7 @@ import { Chip, Notice, Section, ago, api, danger, field, primary, quiet, when } 
 type Doc = {
   id: string;
   meeting_id: string | null;
-  kind: "upload" | "drive" | "link";
+  kind: "upload" | "drive" | "link" | "text";
   title: string;
   mime: string | null;
   source: string | null;
@@ -210,7 +210,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         aside={<span className="text-xs text-slate-400">{data.documents.filter((d) => d.status === "ready").length} read</span>}
       >
         <p className="mb-4 max-w-3xl text-sm text-slate-500">
-          Your documents, pages and files: she reads them now, and in a meeting she looks up what she needs. Kept in NDI&apos;s Google Drive; never shared.
+          Your documents, pages and files, or text you write here: she reads them now, and in a meeting she looks up what she needs. Files are kept in NDI&apos;s Google Drive; nothing is shared.
         </p>
         <AddDocuments
           q={q}
@@ -289,12 +289,14 @@ function AddDocuments({
   const [pending, setPending] = useState<string[]>([]);
   const [linking, setLinking] = useState(false);
   const [link, setLink] = useState("");
+  const [writing, setWriting] = useState(false);
+  const [note, setNote] = useState({ title: "", text: "" });
   const input = useRef<HTMLInputElement>(null);
   const picker = useContext(PickerContext);
 
-  /** One at a time, each in its own request: every file gets the server's whole time limit. */
-  async function run(jobs: { label: string; send: () => Promise<{ document: Doc }> }[]) {
-    if (!jobs.length) return;
+  /** One at a time, each in its own request: every file gets the server's whole time limit. Returns how many she read. */
+  async function run(jobs: { label: string; send: () => Promise<{ document: Doc }> }[]): Promise<number> {
+    if (!jobs.length) return 0;
     setPending((p) => [...p, ...jobs.map((j) => j.label)]);
     let added = 0;
     for (const job of jobs) {
@@ -313,6 +315,7 @@ function AddDocuments({
       }
     }
     onBatchDone?.(added);
+    return added;
   }
 
   function uploadFiles(files: FileList | null) {
@@ -369,6 +372,27 @@ function AddDocuments({
     ]);
   }
 
+  /** The text stays in the form until she has read it, so nothing typed is lost to an error. */
+  async function addText(e: React.FormEvent) {
+    e.preventDefault();
+    const text = note.text.trim();
+    if (!text) return;
+    const title = note.title.trim();
+    setWriting(false);
+    const added = await run([
+      {
+        label: title || "your text",
+        send: () =>
+          api<{ document: Doc }>(`/api/portal/knowledge${q}`, {
+            method: "POST",
+            body: JSON.stringify({ kind: "text", title, text, meeting: meetingId }),
+          }),
+      },
+    ]);
+    if (added) setNote({ title: "", text: "" });
+    else setWriting(true);
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -381,10 +405,56 @@ function AddDocuments({
             From Google Drive
           </button>
         )}
-        <button className={quiet} onClick={() => setLinking((v) => !v)}>
+        <button
+          className={quiet}
+          onClick={() => {
+            setLinking((v) => !v);
+            setWriting(false);
+          }}
+        >
           Add a link
         </button>
+        {/* A meeting has its own notes in its preparation; this is for what she knows about them. */}
+        {!meetingId && (
+          <button
+            className={quiet}
+            onClick={() => {
+              setWriting((v) => !v);
+              setLinking(false);
+            }}
+          >
+            Add text
+          </button>
+        )}
       </div>
+      {writing && (
+        <form onSubmit={(e) => void addText(e)} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <input
+            className={field}
+            placeholder="Title (optional) — e.g. Prices for 2026, Who is who"
+            maxLength={300}
+            value={note.title}
+            onChange={(e) => setNote((n) => ({ ...n, title: e.target.value }))}
+          />
+          <textarea
+            autoFocus
+            rows={7}
+            className={field}
+            placeholder="Anything she should know: who is who, prices and terms, how to answer a question, what not to say…"
+            value={note.text}
+            onChange={(e) => setNote((n) => ({ ...n, text: e.target.value }))}
+          />
+          <div className="flex items-center gap-2">
+            <button className={primary} disabled={!note.text.trim()}>
+              Add
+            </button>
+            <button type="button" className={quiet} onClick={() => setWriting(false)}>
+              Cancel
+            </button>
+            <span className="text-xs text-slate-400">She reads it like a document and can look it up in a meeting.</span>
+          </div>
+        </form>
+      )}
       {linking && (
         <form onSubmit={addLink} className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -418,7 +488,7 @@ function AddDocuments({
   );
 }
 
-const KIND = { upload: "File", drive: "Drive", link: "Link" } as const;
+const KIND = { upload: "File", drive: "Drive", link: "Link", text: "Text" } as const;
 
 function DocumentList({
   documents,
@@ -503,12 +573,12 @@ type Loaded<T> = T | { error: string } | null;
 /**
  * One document, two ways: the file as it was given (the copy kept in NDI's Drive — Google
  * files as a PDF), and the text she read from it, which is what she searches in a meeting.
- * A link has only the second.
+ * A link, and text written on the page, have only the second.
  */
 function Preview({ doc, q, onClose }: { doc: Doc; q: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useId();
-  const hasFile = doc.kind !== "link";
+  const hasFile = doc.kind === "upload" || doc.kind === "drive";
   const [view, setView] = useState<"file" | "text">(hasFile ? "file" : "text");
   const [file, setFile] = useState<Loaded<{ url: string; type: string; text?: string }>>(null);
   const [read, setRead] = useState<Loaded<{ text: string }>>(null);
