@@ -30,6 +30,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Her own icon",
+    points: [
+      "The site's icon is no longer Next.js's: a participant's tile with her speaking, in the site's blue (app/icon.svg; favicon.ico and apple-icon.png made from it, with a simpler drawing at 16 px).",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "Clients' data through Supabase's API, in the team's shared project",
     points: [
       "The team's Supabase project hands each project its schema and the project's secret key, not a database password. Her data now goes through Supabase's Data API with that key — SUPABASE_URL, SUPABASE_SCHEMA (pa-06) and SUPABASE_SERVICE_ROLE_KEY — from the server only. npm run db:migrate and DATABASE_URL are gone.",
