@@ -30,6 +30,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "The Drive button can have a Google project of its own",
+    points: [
+      "Google's file picker needs an API key, a project number and an OAuth client — and they can come from their own Google Cloud project (\"Ava Avatar\"), apart from the one the sign-in uses. NEXT_PUBLIC_GOOGLE_CLIENT_ID is then that project's web client, not GOOGLE_CLIENT_ID. Nothing in the code changed: .env.example and the settings table say how.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-05",
     title: "“Who can open their page”",
     points: [
       "On a client's setup, “Who signs in for them” is now “Who can open their page”, with a line saying what it is: their people who give Ava documents and prepare her. Which meetings are theirs stays the domains and addresses.",

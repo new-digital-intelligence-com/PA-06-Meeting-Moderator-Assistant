@@ -773,7 +773,7 @@ export default function Docs() {
                       [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
                       [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
                       [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],
-                      [<C key="v">NEXT_PUBLIC_GOOGLE_API_KEY · _APP_ID · _CLIENT_ID</C>, "Google’s file picker on a client’s page"],
+                      [<C key="v">NEXT_PUBLIC_GOOGLE_API_KEY · _APP_ID · _CLIENT_ID</C>, "Google’s file picker on a client’s page — an API key, the project number and a web OAuth client, all from one Google Cloud project of their own (not the sign-in’s)"],
                       [<C key="v">APP_URL</C>, "The address in invitations and sign-in links"],
                       [<C key="v">RECALL_API_KEY · RECALL_REGION</C>, "The older Recall bot (retired)"],
                     ]}
