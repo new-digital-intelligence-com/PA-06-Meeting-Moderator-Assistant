@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { decrypt } from "@/lib/seal";
 
 // Signing in and out. Not /api/auth/google itself: connecting Ava's account is for admins.
-const OPEN = [/^\/login(\/|$)/, /^\/docs(\/|$)/, /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/];
+const OPEN = [/^\/login(\/|$)/, /^\/docs(\/|$)/, /^\/privacy(\/|$)/, /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/];
 
 type User = { role?: "admin" | "client" };
 

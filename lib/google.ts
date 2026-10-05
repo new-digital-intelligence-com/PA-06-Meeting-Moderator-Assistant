@@ -29,8 +29,9 @@ function creds() {
  * own connection (calendar, Gmail, Drive) always stays on the main client.
  */
 function loginCreds() {
-  const client_id = process.env.GOOGLE_LOGIN_CLIENT_ID?.trim();
   const client_secret = process.env.GOOGLE_LOGIN_CLIENT_SECRET?.trim();
+  // The Drive picker's web client, unless a different one is named.
+  const client_id = process.env.GOOGLE_LOGIN_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
   return client_id && client_secret ? { client_id, client_secret } : creds();
 }
 

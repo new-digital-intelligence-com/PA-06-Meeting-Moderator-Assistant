@@ -651,6 +651,10 @@ export default function Docs() {
                   Nothing opens without signing in — or the runner’s key — except signing in and these docs. Who is an admin, who
                   signs in for which client (checked again on every request), and the encryption of the session cookie.
                 </FileRow>
+                <FileRow path="app/privacy">
+                  The privacy notice — public, like these docs. Google asks for it before people outside NDI may sign in with
+                  Google or use the Drive picker, and it says how Google data is used (only the files picked, Limited Use).
+                </FileRow>
                 <FileRow path="app/login · app/api/auth/login · email · email/verify · logout">
                   Signing in with Google (who you are, nothing more) or with a link by email: 15 minutes, once, stored only as a
                   hash, and used by a button — mail scanners open links, and would spend it.
@@ -764,7 +768,7 @@ export default function Docs() {
                       [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the notes models (and the Claude brain's)"],
                       [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state — required; the URL is worked out from KV_URL if missing"],
                       [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "Google: Ava's own account (calendar, Gmail, Drive) — and the site's sign-in when the two below are not set"],
-                      [<C key="v">GOOGLE_LOGIN_CLIENT_ID · _SECRET</C>, "The site's “Sign in with Google”, from a project open to outside accounts (ava-avatar), so clients can use it"],
+                      [<C key="v">GOOGLE_LOGIN_CLIENT_SECRET</C>, "The site's “Sign in with Google” on the Drive picker's web client (ava-avatar, open to outside accounts), so clients can use it; GOOGLE_LOGIN_CLIENT_ID only for a different client"],
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],

@@ -32,7 +32,8 @@ export const CHANGELOG: Change[] = [
     date: "2026-10-05",
     title: "Clients can sign in with Google",
     points: [
-      "The site's “Sign in with Google” can use its own OAuth client (GOOGLE_LOGIN_CLIENT_ID and _SECRET), in a Google project open to outside accounts — ava-avatar, which also has the Drive button. Ava's own connection to her calendar, Gmail and Drive stays on GOOGLE_CLIENT_ID; without the two new settings, sign-in uses it as before.",
+      "The site's “Sign in with Google” can run on the Drive picker's web client, in a Google project open to outside accounts — ava-avatar: set GOOGLE_LOGIN_CLIENT_SECRET (its ID is NEXT_PUBLIC_GOOGLE_CLIENT_ID; GOOGLE_LOGIN_CLIENT_ID only for a different client). Ava's own connection to her calendar, Gmail and Drive stays on GOOGLE_CLIENT_ID; without the secret, sign-in uses it as before.",
+      "A privacy notice at /privacy, public like the docs: Google asks for one before publishing the sign-in to outside accounts. It says what is kept, which services process it, and that Google data is used only for the files people pick (Limited Use).",
       "Who gets in is unchanged: NDI addresses, and the people a client was given. The emailed link still works for everyone.",
     ],
     commits: [],
