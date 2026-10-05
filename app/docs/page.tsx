@@ -643,7 +643,7 @@ export default function Docs() {
                   Where her runner asks “have I been sent anywhere?” — each meeting sent from the control room is taken once.
                 </FileRow>
                 <FileRow path="components/ControlRoom.tsx">
-                  The page at <C>/</C>: brief her, send her to any Meet or Teams link (or book her for later), see the meeting she
+                  The page at <C>/</C>: what she depends on, each said in words (her Google account, her server, the meeting storage, and your own Google account, which is optional); brief her, send her to any Meet or Teams link (or book her for later), see the meeting she
                   is in — sent from here or from her calendar — with her voice and face live, the transcript and actions, end a
                   meeting, edit and resend notes.
                 </FileRow>

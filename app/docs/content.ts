@@ -30,6 +30,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Clearer: what each status means, and the two halves of a client",
+    points: [
+      "The control room's coloured pills are now four cards that say what they are: Ava's Google account, Ava's server, meeting storage, and your own Google account — marked optional, grey when off, as it only fills a meeting from your calendar and shares Drive files from there. Red only for what stops her.",
+      "Setting up a client is two separate parts: 1 · which meetings Ava joins for them (company domain, personal email addresses — matched against whoever sent the invite) and 2 · who can open their page (the people who sign in to give her documents and prepare her). The client's setup page is split the same way.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "One Google client for everything",
     points: [
       "Ava's own account, the site's “Sign in with Google” and the Drive button now all use GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET — one OAuth client, in the ava-avatar project, open to outside accounts. GOOGLE_LOGIN_CLIENT_SECRET and the NEXT_PUBLIC_GOOGLE_ settings are gone.",

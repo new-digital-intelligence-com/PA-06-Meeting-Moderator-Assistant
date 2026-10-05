@@ -124,34 +124,54 @@ export default function Clients({ ava }: { ava: string | null }) {
 
       {adding && (
         <Section title="New client">
-          <form onSubmit={create} className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1.5 sm:col-span-2">
-              <span className="text-xs font-medium text-slate-600">Company name</span>
+          <form onSubmit={create} className="space-y-6">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-slate-900">Company name</span>
               <input required className={field} value={form.name} onChange={set("name")} placeholder="Acme GmbH" />
             </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-slate-600">Company domains</span>
-              <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com, acme.de" />
-              <span className="block text-xs text-slate-400">Meetings organised by anyone on these are theirs.</span>
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-slate-600">Exact addresses</span>
-              <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="founder@gmail.com" />
-              <span className="block text-xs text-slate-400">For personal accounts: gmail.com is everybody, so not a domain.</span>
-            </label>
-            <label className="space-y-1.5 sm:col-span-2">
-              <span className="text-xs font-medium text-slate-600">Who can open their page</span>
-              <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="anna@acme.com, ben@acme.com" />
-              <span className="block text-xs text-slate-400">
-                Their people who give Ava documents and prepare her for meetings — they sign in with Google or a link by email.
-                Only these addresses get in. Which meetings are theirs is the domains and addresses above.
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
-              <input type="checkbox" checked={form.invite} onChange={set("invite")} className="accent-blue-600" />
-              Email them an invitation from {ava ?? "Ava"}
-            </label>
-            <div className="flex gap-2 sm:col-span-2">
+
+            {/* Two different questions, kept visibly apart: whose meetings, and who logs in. */}
+            <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <legend className="px-1 text-sm font-semibold text-slate-900">1 · Which meetings Ava joins for them</legend>
+              <p className="-mt-1 text-xs leading-5 text-slate-500">
+                Ava joins a meeting when the person who <b>sent the invite</b> matches one of these. Fill in one or both.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-medium text-slate-700">Company domain</span>
+                  <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
+                  <span className="block text-xs leading-5 text-slate-500">Everyone with an @acme.com address.</span>
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-medium text-slate-700">Personal email addresses</span>
+                  <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="founder@gmail.com" />
+                  <span className="block text-xs leading-5 text-slate-500">
+                    One person each — for people who use Gmail or another personal address instead of a company domain.
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <legend className="px-1 text-sm font-semibold text-slate-900">2 · Who can open their page</legend>
+              <p className="-mt-1 text-xs leading-5 text-slate-500">
+                The people who sign in to this site to give Ava their documents and prepare her for meetings (with Google or an
+                emailed link). This does not decide which meetings she joins.
+              </p>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-700">Their email addresses</span>
+                <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="anna@acme.com, ben@acme.com" />
+                <span className="block text-xs leading-5 text-slate-500">
+                  Often the same person as above: a founder on Gmail goes in both boxes.
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={form.invite} onChange={set("invite")} className="accent-blue-600" />
+                Email them an invitation from {ava ?? "Ava"}
+              </label>
+            </fieldset>
+
+            <div className="flex gap-2">
               <button className={primary} disabled={busy || !form.name.trim()}>
                 {busy ? "Setting up…" : "Create"}
               </button>

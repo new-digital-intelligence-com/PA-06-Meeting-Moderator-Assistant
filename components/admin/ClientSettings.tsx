@@ -120,19 +120,23 @@ export default function ClientSettings({ id }: { id: string }) {
           <p className="text-sm text-slate-500">Loading…</p>
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
-            <form onSubmit={save} className="space-y-3">
+            <form onSubmit={save} className="space-y-4">
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-slate-600">Name</span>
+                <span className="text-xs font-medium text-slate-700">Name</span>
                 <input className={field} value={form.name} onChange={set("name")} />
               </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-slate-600">Company domains</span>
-                <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-slate-600">Exact addresses</span>
-                <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="founder@gmail.com" />
-              </label>
+              <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <legend className="px-1 text-sm font-semibold text-slate-900">Which meetings Ava joins for them</legend>
+                <p className="-mt-1 text-xs leading-5 text-slate-500">When the person who sent the invite matches one of these.</p>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-slate-700">Company domain</span>
+                  <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-slate-700">Personal email addresses</span>
+                  <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="founder@gmail.com" />
+                </label>
+              </fieldset>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-600">Status</span>
                 <select className={field} value={form.status} onChange={set("status")}>
@@ -150,15 +154,17 @@ export default function ClientSettings({ id }: { id: string }) {
               </div>
             </form>
 
-            <div className="space-y-3">
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div>
-                <h3 className="text-xs font-medium text-slate-600">Who can open their page</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Their people who give Ava documents and prepare her.</p>
+                <h3 className="text-sm font-semibold text-slate-900">Who can open their page</h3>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  The people who sign in to give Ava documents and prepare her. This does not decide which meetings she joins.
+                </p>
               </div>
               {members.length === 0 ? (
                 <p className="text-sm text-slate-500">Nobody yet.</p>
               ) : (
-                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
                   {members.map((m) => (
                     <li key={m.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
                       <span className="min-w-0 flex-1 truncate text-slate-700" title={m.email}>

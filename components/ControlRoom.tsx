@@ -95,17 +95,38 @@ const mmss = (s: number) =>
 
 /* ------------------------------------------------------------ small pieces */
 
-function Pill({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
+/**
+ * One thing she depends on, in words: what it is, how it stands, and what to do. Green is
+ * working, grey is optional and off, red is broken — red only for what stops her.
+ */
+function Status({
+  state,
+  title,
+  detail,
+  hint,
+  action,
+}: {
+  state: "ok" | "off" | "bad";
+  title: string;
+  detail: React.ReactNode;
+  hint?: string;
+  action?: React.ReactNode;
+}) {
+  const dot = { ok: "bg-emerald-500", off: "bg-slate-300", bad: "bg-rose-500" }[state];
   return (
-    <span
+    <div
       title={hint}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${
-        ok ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" : "bg-rose-50 text-rose-700 ring-rose-600/20"
-      }`}
+      className={`flex items-start gap-3 rounded-xl border bg-white px-4 py-3 shadow-sm ${state === "bad" ? "border-rose-200" : "border-slate-200"}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
-      {label}
-    </span>
+      <span className={`mt-1.5 size-2 shrink-0 rounded-full ${dot}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-sm font-medium text-slate-900">{title}</p>
+          {action}
+        </div>
+        <p className={`mt-0.5 text-xs leading-5 ${state === "bad" ? "text-rose-700" : "text-slate-500"}`}>{detail}</p>
+      </div>
+    </div>
   );
 }
 
@@ -349,67 +370,69 @@ export default function ControlRoom({
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 px-4 pb-24 pt-6 sm:px-6">
-      <header className="flex flex-wrap items-center justify-between gap-4 pt-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Control room</h1>
-          <p className="text-sm text-slate-500">
-            {name} sits in on your Google Meet or Teams call, answers when asked, and emails the notes afterwards.{" "}
-            <a href="/docs" className="text-blue-600 underline decoration-blue-300 hover:text-blue-700">
-              How she works →
-            </a>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Pill
-            ok={config.googleConnected}
-            label={config.email ?? "Google"}
-            hint={
-              config.googleConnected
-                ? "Gmail, Calendar and Drive are available."
-                : !config.googleClient
-                  ? "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set."
-                  : !config.sessionSecret
-                    ? "SESSION_SECRET is not set — sign-in cannot store its cookie."
-                    : `Not signed in. Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
-            }
-          />
-          {config.avaAccount ? (
-            <Pill
-              ok
-              label={`Ava: ${config.avaAccount}`}
-              hint="Her own Google account — she reads her invites from it and sends the notes as her."
-            />
-          ) : (
+      <header className="pt-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Control room</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {name} sits in on your Google Meet or Teams call, answers when asked, and emails the notes afterwards.{" "}
+          <a href="/docs" className="text-blue-600 underline decoration-blue-300 hover:text-blue-700">
+            How she works →
+          </a>
+        </p>
+      </header>
+
+      {/* What she needs in order to work, and what is only for you — each said in words. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Status
+          state={config.avaAccount ? "ok" : "bad"}
+          title="Ava's Google account"
+          detail={config.avaAccount ?? "Not connected: she can't read her invites or send the notes"}
+          hint="Her own account: she reads her calendar invites from it and sends the meeting notes as her."
+          action={
             <a
               href="/api/auth/google?as=ava"
-              title={`Connect her account${config.avaExpected ? ` (${config.avaExpected})` : ""} so she can read her invites and send notes as herself.`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20 hover:bg-amber-100"
+              title={`Sign in as ${config.avaExpected ?? "her"}, not as yourself.`}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Connect Ava&apos;s Google
+              {config.avaAccount ? "Reconnect" : "Connect"}
             </a>
-          )}
-          <Pill
-            ok={config.runnerKey}
-            label="Her server"
-            hint={config.runnerKey ? "AVA_RUNNER_KEY is set: her server can take meetings from here." : "AVA_RUNNER_KEY is not set — her server cannot reach this app."}
-          />
-          <Pill
-            ok={config.store !== "file" || !config.publicUrl.includes("vercel.app")}
-            label={{ redis: "Redis", mongo: "Mongo", file: "File store" }[config.store]}
-            hint={
-              config.store === "file"
-                ? "data/meeting.json — fine locally, broken on serverless."
-                : "Shared store — she and this page see the same meeting."
-            }
-          />
-          {!config.googleConnected && (
-            <a href="/api/auth/google" className={`${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`}>
-              Connect Google
+          }
+        />
+        <Status
+          state={config.runnerKey ? "ok" : "bad"}
+          title="Ava's server"
+          detail={config.runnerKey ? "Set up: it takes her into meetings" : "AVA_RUNNER_KEY is not set on this app"}
+          hint="The computer with her Chrome, which joins the calls."
+        />
+        <Status
+          state={config.store !== "file" || !config.publicUrl.includes("vercel.app") ? "ok" : "bad"}
+          title="Meeting storage"
+          detail={
+            config.store === "file"
+              ? config.publicUrl.includes("vercel.app")
+                ? "A local file: set up Redis for the live site"
+                : "A local file (this computer)"
+              : `${config.store === "redis" ? "Redis" : "MongoDB"}: shared by her and this page`
+          }
+          hint="Where the meeting in progress is kept, so her server and this page see the same one."
+        />
+        <Status
+          state={config.googleConnected ? "ok" : "off"}
+          title="Your Google account (optional)"
+          detail={config.googleConnected ? (config.email ?? "Connected") : "Only to pick a meeting from your calendar and share Drive files from here"}
+          hint={
+            config.googleConnected
+              ? "Your own account, for this page: your calendar and your Drive."
+              : !config.googleClient
+                ? "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set."
+                : `Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
+          }
+          action={
+            <a href="/api/auth/google" className="text-xs font-medium text-blue-600 hover:text-blue-700">
+              {config.googleConnected ? "Reconnect" : "Connect"}
             </a>
-          )}
-        </div>
-      </header>
+          }
+        />
+      </div>
 
       {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
       {note && <p className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">{note}</p>}
@@ -778,6 +801,11 @@ export default function ControlRoom({
             Search
           </button>
         </div>
+        {!config.googleConnected && (
+          <p className="mt-2 text-xs text-slate-500">
+            To search your Drive and give the guests access to a file, connect <span className="font-medium text-slate-700">Your Google account</span> above.
+          </p>
+        )}
         {drive.length > 0 && (
           <ul className="mt-3 divide-y divide-slate-100">
             {drive.map((f) => {
