@@ -30,6 +30,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "“Who can open their page”",
+    points: [
+      "On a client's setup, “Who signs in for them” is now “Who can open their page”, with a line saying what it is: their people who give Ava documents and prepare her. Which meetings are theirs stays the domains and addresses.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-05",
     title: "Light, and a cleaner design",
     points: [
       "Every page is light now: white cards on a soft grey, the blue of her icon for actions, softer colours for what is ready, waiting or wrong. Commands in the docs stay dark, as a terminal is.",

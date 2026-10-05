@@ -140,10 +140,11 @@ export default function Clients({ ava }: { ava: string | null }) {
               <span className="block text-xs text-slate-400">For personal accounts: gmail.com is everybody, so not a domain.</span>
             </label>
             <label className="space-y-1.5 sm:col-span-2">
-              <span className="text-xs font-medium text-slate-600">Who signs in for them</span>
+              <span className="text-xs font-medium text-slate-600">Who can open their page</span>
               <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="anna@acme.com, ben@acme.com" />
               <span className="block text-xs text-slate-400">
-                Only these addresses can open their page (with Google or a link by email). Add more later.
+                Their people who give Ava documents and prepare her for meetings — they sign in with Google or a link by email.
+                Only these addresses get in. Which meetings are theirs is the domains and addresses above.
               </span>
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
@@ -186,7 +187,7 @@ export default function Clients({ ava }: { ava: string | null }) {
                   </div>
                   <p className="truncate text-xs text-slate-500">{[...c.domains.map((d) => `@${d}`), ...c.addresses].join(", ") || "No domain yet"}</p>
                   <p className="mt-3 text-xs text-slate-500">
-                    {c.members} signing in · {c.documents} documents · {c.upcoming} upcoming
+                    {c.members} with access · {c.documents} documents · {c.upcoming} upcoming
                   </p>
                   <p className="mt-1 text-xs text-slate-400">Last meeting: {c.last_meeting ? ago(c.last_meeting) : "none yet"}</p>
                 </Link>

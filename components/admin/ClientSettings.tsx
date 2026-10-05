@@ -151,7 +151,10 @@ export default function ClientSettings({ id }: { id: string }) {
             </form>
 
             <div className="space-y-3">
-              <h3 className="text-xs font-medium text-slate-600">Who signs in for them</h3>
+              <div>
+                <h3 className="text-xs font-medium text-slate-600">Who can open their page</h3>
+                <p className="mt-0.5 text-xs text-slate-400">Their people who give Ava documents and prepare her.</p>
+              </div>
               {members.length === 0 ? (
                 <p className="text-sm text-slate-500">Nobody yet.</p>
               ) : (
