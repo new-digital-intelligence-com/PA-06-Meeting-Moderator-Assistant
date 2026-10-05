@@ -30,6 +30,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Clients' data through Supabase's API, in the team's shared project",
+    points: [
+      "The team's Supabase project hands each project its schema and the project's secret key, not a database password. Her data now goes through Supabase's Data API with that key — SUPABASE_URL, SUPABASE_SCHEMA (pa-06) and SUPABASE_SERVICE_ROLE_KEY — from the server only. npm run db:migrate and DATABASE_URL are gone.",
+      "db/schema.sql is pasted once into the SQL editor: the tables in pa-06, and three functions for what the API cannot say by itself — her passage search (match_chunks), copying her calendar in (sync_meetings) and the admin counts (client_summaries). Then pa-06 is added to the exposed schemas.",
+      "Row security is on in pa-06 with no policies, and only service_role — the secret key's role — has access: the browser roles get nothing even with the schema exposed.",
+      "Tested on a Postgres set up like Supabase (its roles, pgvector in extensions, another team's table beside hers): the script runs twice cleanly, the functions do what the app expects, and the other table came out untouched.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-05",
     title: "Her tables in a schema of their own: pa-06",
     points: [
       "Her Supabase database is shared with other projects. Everything of hers — clients, who signs in, meetings, documents, passages, sign-in links — is in the schema pa-06, which npm run db:migrate creates; it touches nothing outside it.",

@@ -4,11 +4,11 @@
  *
  * Adding one: keep the file in NDI's Drive (lib/drive.ts), read its text (lib/extract.ts),
  * cut it into overlapping passages, turn each into a vector (lib/embed.ts), store them in
- * Postgres, and summarise the whole for her digest (lib/prepare.ts). Documents added to a
+ * Supabase, and summarise the whole for her digest (lib/prepare.ts). Documents added to a
  * meeting's preparation are searched only in that meeting; the rest in all of them.
  */
 import { avaGoogle } from "./ava";
-import { db, table, vectorSchema, type Client, type Knowledge, type MeetingRow } from "./db";
+import { asKnowledge, count, db, rows, type Client, type Knowledge, type MeetingRow } from "./db";
 import { OFFICE, clientFolder, googleText, meetingFolder, ocr, remove, upload } from "./drive";
 import { embed, vectorLiteral } from "./embed";
 import { MAX_CHARS, extension, isImage, isPdf, isText, linkText, pdfText, plainText } from "./extract";
@@ -57,15 +57,27 @@ export async function addDocument(input: {
   by: string;
 }): Promise<Knowledge> {
   const { client, meeting, source, by } = input;
-  const [{ n }] = await db()<{ n: number }[]>`select count(*)::int as n from ${table("knowledge")} where client_id = ${client.id}`;
+  const n = await count(db().from("knowledge").select("id", { count: "exact", head: true }).eq("client_id", client.id));
   if (n >= MAX_DOCUMENTS) throw new Error(`${client.name} already has ${MAX_DOCUMENTS} documents. Remove some first.`);
 
   const title = source.kind === "link" ? source.url : source.name;
-  const [row] = await db()<Knowledge[]>`
-    insert into ${table("knowledge")} (client_id, meeting_id, kind, title, mime, source, created_by)
-    values (${client.id}, ${meeting?.id ?? null}, ${source.kind}, ${title.slice(0, 300)},
-      ${source.kind === "link" ? "text/html" : source.mime}, ${source.kind === "link" ? source.url : source.kind === "drive" ? (source.link ?? null) : null}, ${by})
-    returning *`;
+  const row = asKnowledge(
+    await rows<Record<string, unknown>>(
+      db()
+        .from("knowledge")
+        .insert({
+          client_id: client.id,
+          meeting_id: meeting?.id ?? null,
+          kind: source.kind,
+          title: title.slice(0, 300),
+          mime: source.kind === "link" ? "text/html" : source.mime,
+          source: source.kind === "link" ? source.url : source.kind === "drive" ? (source.link ?? null) : null,
+          created_by: by,
+        })
+        .select("*")
+        .single(),
+    ),
+  );
 
   try {
     const read = await readSource(client, meeting ?? null, source);
@@ -76,18 +88,17 @@ export async function addDocument(input: {
 
     const passages = chunk(text);
     const vectors = await embed(passages.map((p) => `${read.title}\n\n${p}`));
-    // pgvector's type, named where it is installed.
-    const vector = db()(`${await vectorSchema()}.vector`);
-    for (let i = 0; i < passages.length; i += 100) {
-      const rows = passages.slice(i, i + 100).map((content, j) => ({
+    // Fifty at a time: each passage carries 1,536 numbers, and a request has to stay small.
+    for (let i = 0; i < passages.length; i += 50) {
+      const batch = passages.slice(i, i + 50).map((content, j) => ({
+        knowledge_id: row.id,
+        client_id: client.id,
+        meeting_id: meeting?.id ?? null,
         position: i + j,
         content,
         embedding: vectorLiteral(vectors[i + j]),
       }));
-      await db()`
-        insert into ${table("chunks")} (knowledge_id, client_id, meeting_id, position, content, embedding)
-        select ${row.id}::uuid, ${client.id}::uuid, ${meeting?.id ?? null}::uuid, x.position, x.content, x.embedding::${vector}
-        from jsonb_to_recordset(${db().json(rows)}::jsonb) as x(position int, content text, embedding text)`;
+      await rows(db().from("chunks").insert(batch));
     }
 
     let summary: string;
@@ -99,17 +110,32 @@ export async function addDocument(input: {
     }
     if (cut) summary += `\n(Only the first ${MAX_CHARS.toLocaleString("en")} characters were read.)`;
 
-    const [ready] = await db()<Knowledge[]>`
-      update ${table("knowledge")} set status = 'ready', error = null, title = ${read.title.slice(0, 300)}, chars = ${text.length},
-        summary = ${summary}, drive_file_id = ${read.driveId ?? null}, mime = ${read.mime ?? row.mime}
-      where id = ${row.id} returning *`;
-    return ready;
+    return asKnowledge(
+      await rows<Record<string, unknown>>(
+        db()
+          .from("knowledge")
+          .update({
+            status: "ready",
+            error: null,
+            title: read.title.slice(0, 300),
+            chars: text.length,
+            summary,
+            drive_file_id: read.driveId ?? null,
+            mime: read.mime ?? row.mime,
+          })
+          .eq("id", row.id)
+          .select("*")
+          .single(),
+      ),
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : "It could not be read.";
     console.warn("[knowledge] failed", title, message);
-    const [failed] = await db()<Knowledge[]>`
-      update ${table("knowledge")} set status = 'failed', error = ${message.slice(0, 500)} where id = ${row.id} returning *`;
-    return failed;
+    return asKnowledge(
+      await rows<Record<string, unknown>>(
+        db().from("knowledge").update({ status: "failed", error: message.slice(0, 500) }).eq("id", row.id).select("*").single(),
+      ),
+    );
   }
 }
 
@@ -177,26 +203,19 @@ export type Passage = { title: string; content: string; score: number; meeting: 
 
 /**
  * The passages closest in meaning to `query`, from the client's documents and, during a
- * meeting, that meeting's own. Never another client's: every row is filtered by client.
+ * meeting, that meeting's own — by "pa-06".match_chunks() (db/schema.sql). Never another
+ * client's: the function filters by client.
  */
 export async function searchKnowledge(clientId: string, meetingId: string | null, query: string, limit = 6): Promise<Passage[]> {
   const [embedding] = await embed([query.slice(0, 4000)]);
-  const literal = vectorLiteral(embedding);
-  // pgvector named where it is installed: its type, and its cosine distance operator.
-  const schema = await vectorSchema();
-  const vector = db()(`${schema}.vector`);
-  const ext = db()(schema);
-  const found = await db().begin(async (sql) => {
-    // The index finds the nearest passages of every client first and filters after:
-    // looking at more of them keeps a small client's passages in the running.
-    await sql`set local hnsw.ef_search = 200`;
-    return sql<Passage[]>`
-      select k.title, c.content, 1 - (c.embedding operator(${ext}.<=>) ${literal}::${vector}) as score, (c.meeting_id is not null) as meeting
-      from ${table("chunks")} c join ${table("knowledge")} k on k.id = c.knowledge_id
-      where c.client_id = ${clientId}::uuid and (c.meeting_id is null or c.meeting_id = ${meetingId}::uuid)
-      order by c.embedding operator(${ext}.<=>) ${literal}::${vector}
-      limit ${limit}`;
-  });
+  const found = await rows<Passage[]>(
+    db().rpc("match_chunks", {
+      query_embedding: vectorLiteral(embedding),
+      p_client: clientId,
+      p_meeting: meetingId,
+      match_count: limit,
+    }),
+  );
   // The closest two always; the rest only if they are about the question at all.
   return found.filter((p, i) => i < 2 || Number(p.score) >= MIN_SCORE);
 }
@@ -214,17 +233,19 @@ export function passagesText(passages: Passage[]): string {
 /* ------------------------------------------------------------- the list */
 
 export async function listDocuments(clientId: string, meetingId: string | null = null): Promise<Knowledge[]> {
-  return meetingId
-    ? db()<Knowledge[]>`
-        select * from ${table("knowledge")} where client_id = ${clientId} and meeting_id = ${meetingId} order by created_at desc`
-    : db()<Knowledge[]>`
-        select * from ${table("knowledge")} where client_id = ${clientId} and meeting_id is null order by created_at desc`;
+  const query = db().from("knowledge").select("*").eq("client_id", clientId);
+  const found = await rows<Record<string, unknown>[]>(
+    (meetingId ? query.eq("meeting_id", meetingId) : query.is("meeting_id", null)).order("created_at", { ascending: false }),
+  );
+  return found.map(asKnowledge);
 }
 
 /** Removes a document, its passages, and its copy in Drive. */
 export async function removeDocument(clientId: string, id: string): Promise<Knowledge | null> {
-  const [row] = await db()<Knowledge[]>`
-    delete from ${table("knowledge")} where id = ${id} and client_id = ${clientId} returning *`;
+  const removed = await rows<Record<string, unknown> | null>(
+    db().from("knowledge").delete().eq("id", id).eq("client_id", clientId).select("*").maybeSingle(),
+  );
+  const row = removed ? asKnowledge(removed) : null;
   if (row?.drive_file_id) {
     const google = await avaGoogle();
     if (google) await remove(google, row.drive_file_id);

@@ -1,13 +1,13 @@
 /**
- * Her schedule, by client: the meetings on her calendar, copied into Postgres so each
+ * Her schedule, by client: the meetings on her calendar, copied into Supabase so each
  * client can see theirs and prepare her for them.
  *
  * Her calendar is shared by every client — one Ava, one Google account — so each invite
  * is given to a client by its organiser (lib/clients.ts). An invite from nobody's company
  * is "skipped": she does not go, and admins see it listed.
  */
-import { db, table, type Client, type MeetingRow, type Prep } from "./db";
-import { matchClient } from "./clients";
+import { asMeeting, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
+import { allClients, matchClient } from "./clients";
 import type { GoogleClient } from "./google";
 import { redisOrMongoKey } from "./store";
 import { avaInvites, type Invite } from "./workspace";
@@ -16,10 +16,17 @@ const DAYS_AHEAD = 14;
 const PAGE = 250;
 const SYNCED = "calendar:synced";
 
-/** Reads her calendar and brings the meetings table up to date with it. */
+type Raw = Record<string, unknown>;
+const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000).toISOString();
+
+/**
+ * Reads her calendar and brings the meetings table up to date with it — through
+ * "pa-06".sync_meetings() (db/schema.sql), which adds and updates in one go, keeps a
+ * finished meeting finished, and marks what has gone from her calendar as cancelled.
+ */
 export async function syncCalendar(google: GoogleClient): Promise<{ invites: Invite[]; meetings: MeetingRow[]; clients: Client[] }> {
-  const [invites, clients] = await Promise.all([avaInvites(google, DAYS_AHEAD * 24, PAGE), db()<Client[]>`select * from ${table("clients")}`]);
-  const rows = invites.map((i) => {
+  const [invites, clients] = await Promise.all([avaInvites(google, DAYS_AHEAD * 24, PAGE), allClients()]);
+  const found = invites.map((i) => {
     // A paused client's meetings stay theirs, marked paused: she skips them, they keep their preparation.
     const client = matchClient(clients, i.organizerEmail, true);
     return {
@@ -37,34 +44,17 @@ export async function syncCalendar(google: GoogleClient): Promise<{ invites: Inv
     };
   });
 
-  let meetings: MeetingRow[] = [];
-  if (rows.length) {
-    meetings = await db()<MeetingRow[]>`
-      insert into ${table("meetings")} as m
-        (client_id, event_id, title, starts_at, ends_at, meeting_url, organizer, organizer_name, guests, description, status)
-      select x.client_id, x.event_id, x.title, x.starts_at, x.ends_at, x.meeting_url, x.organizer, x.organizer_name,
-        coalesce(x.guests, '[]'::jsonb), x.description, x.status
-      from jsonb_to_recordset(${db().json(rows)}::jsonb) as x(
-        client_id uuid, event_id text, title text, starts_at timestamptz, ends_at timestamptz, meeting_url text,
-        organizer text, organizer_name text, guests jsonb, description text, status text)
-      on conflict (event_id) do update set
-        client_id = excluded.client_id, title = excluded.title, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
-        meeting_url = excluded.meeting_url, organizer = excluded.organizer, organizer_name = excluded.organizer_name,
-        guests = excluded.guests, description = excluded.description,
-        status = case when m.status = 'ended' then 'ended' else excluded.status end,
-        updated_at = now()
-      returning *`;
-    meetings.sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime());
-  }
-
-  // Gone from her calendar — cancelled, or she was taken off the invite. Only when the
-  // whole window was read: a cut-off list would cancel what it did not reach.
-  if (invites.length < PAGE) {
-    await db()`
-      update ${table("meetings")} set status = 'cancelled', updated_at = now()
-      where status in ('upcoming', 'skipped', 'paused') and starts_at > now() and starts_at < now() + ${`${DAYS_AHEAD} days`}::interval
-        and not (event_id = any(${db().array(invites.map((i) => i.id))}::text[]))`;
-  }
+  const synced = await rows<Raw[]>(
+    db().rpc("sync_meetings", {
+      p_rows: found,
+      p_seen: invites.map((i) => i.id),
+      // Gone from her calendar — cancelled, or she was taken off the invite. Only when the
+      // whole window was read: a cut-off list would cancel what it did not reach.
+      p_complete: invites.length < PAGE,
+      p_days: DAYS_AHEAD,
+    }),
+  );
+  const meetings = synced.map(asMeeting).sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime());
   await redisOrMongoKey(SYNCED).write(String(Date.now()));
   return { invites, meetings, clients };
 }
@@ -80,22 +70,35 @@ export async function syncIfStale(google: GoogleClient, maxAgeMs = 60_000): Prom
 
 /** A client's meetings: the next two weeks, and the last thirty days. */
 export async function clientMeetings(clientId: string): Promise<MeetingRow[]> {
-  return db()<MeetingRow[]>`
-    select * from ${table("meetings")}
-    where client_id = ${clientId} and status <> 'cancelled' and starts_at > now() - interval '30 days'
-    order by starts_at`;
+  const found = await rows<Raw[]>(
+    db()
+      .from("meetings")
+      .select("*")
+      .eq("client_id", clientId)
+      .neq("status", "cancelled")
+      .gt("starts_at", daysAgo(30))
+      .order("starts_at"),
+  );
+  return found.map(asMeeting);
 }
 
 export async function clientMeeting(clientId: string, id: string): Promise<MeetingRow | null> {
-  const [m] = await db()<MeetingRow[]>`select * from ${table("meetings")} where id = ${id} and client_id = ${clientId}`;
-  return m ?? null;
+  const m = await rows<Raw | null>(db().from("meetings").select("*").eq("id", id).eq("client_id", clientId).maybeSingle());
+  return m ? asMeeting(m) : null;
 }
 
 /** Invites she got from organisers who are nobody's client — for admins. */
 export async function skippedInvites(): Promise<MeetingRow[]> {
-  return db()<MeetingRow[]>`
-    select * from ${table("meetings")}
-    where status = 'skipped' and starts_at > now() - interval '7 days' order by starts_at desc limit 50`;
+  const found = await rows<Raw[]>(
+    db()
+      .from("meetings")
+      .select("*")
+      .eq("status", "skipped")
+      .gt("starts_at", daysAgo(7))
+      .order("starts_at", { ascending: false })
+      .limit(50),
+  );
+  return found.map(asMeeting);
 }
 
 export function cleanPrep(input: unknown): Prep {
@@ -105,10 +108,11 @@ export function cleanPrep(input: unknown): Prep {
 }
 
 export async function savePrep(clientId: string, id: string, prep: Prep): Promise<MeetingRow | null> {
-  const [m] = await db()<MeetingRow[]>`
-    update ${table("meetings")} set prep = ${db().json(prep)}::jsonb, prep_at = now(), updated_at = now()
-    where id = ${id} and client_id = ${clientId} returning *`;
-  return m ?? null;
+  const now = isoNow();
+  const m = await rows<Raw | null>(
+    db().from("meetings").update({ prep, prep_at: now, updated_at: now }).eq("id", id).eq("client_id", clientId).select("*").maybeSingle(),
+  );
+  return m ? asMeeting(m) : null;
 }
 
 /** The notes she wrote after a client's meeting, kept with it so the client can read them back. */
@@ -116,9 +120,21 @@ export async function saveNotes(
   meetingId: string,
   notes: { to?: string; subject?: string; body?: string; summary?: string; sentAt?: number; actions?: unknown[] },
 ): Promise<void> {
-  await db()`
-    update ${table("meetings")}
-    set notes = coalesce(notes, '{}'::jsonb) || ${db().json(JSON.parse(JSON.stringify(notes)))}::jsonb, status = 'ended',
-      ended_at = coalesce(ended_at, now()), updated_at = now()
-    where id = ${meetingId}`;
+  const current = await rows<{ notes: Raw | null; ended_at: string | null } | null>(
+    db().from("meetings").select("notes, ended_at").eq("id", meetingId).maybeSingle(),
+  );
+  if (!current) return;
+  const now = isoNow();
+  await rows(
+    db()
+      .from("meetings")
+      .update({
+        // Added to what is there: the write-up first, then when it was sent.
+        notes: { ...(current.notes ?? {}), ...JSON.parse(JSON.stringify(notes)) },
+        status: "ended",
+        ended_at: current.ended_at ?? now,
+        updated_at: now,
+      })
+      .eq("id", meetingId),
+  );
 }

@@ -1,62 +1,60 @@
 /**
- * Where Ava's clients live: Postgres (Supabase), schema in db/schema.sql.
+ * Where Ava's clients live: Supabase — the team's shared "pocs" project — reached through
+ * its Data API with the project's secret key. Server-side only: that key can read and
+ * write everything, so it never reaches a browser.
  *
  * The live meeting stays in Redis (lib/store.ts) — a small blob rewritten every couple of
  * seconds. Everything that has to be found again later is here: the clients and who may
  * sign in for them, their documents and the passages she searches, their meetings with
  * the preparation, her brief and the notes.
  *
- * Connect through Supabase's transaction pooler (port 6543): serverless functions open
- * and drop connections constantly, and the pooler is what absorbs that. It does not keep
- * prepared statements between transactions, hence `prepare: false`.
- *
- * The database is shared with other projects. Everything of hers is in one schema of her
- * own, "pa-06", and every query names it (`table()`): never the search path, which the
- * pooler does not carry from one transaction to the next, and which would happily find
- * another project's `clients` or `meetings` instead.
+ * The project is shared, so everything of hers is in a schema of her own, "pa-06"
+ * (SUPABASE_SCHEMA): every request goes to it and nowhere else. Its tables, and the
+ * functions for what the API cannot express — the passage search, copying her calendar
+ * in, the admin page's counts — are in db/schema.sql, pasted once into the SQL editor.
  */
-import postgres from "postgres";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-type Sql = ReturnType<typeof postgres>;
-
-/** Her schema — created by db/migrate.mjs; nothing of hers lives outside it. */
-export const SCHEMA = "pa-06";
-
-const g = globalThis as { __avaSql?: Sql; __avaVector?: Promise<string> };
+/** Her schema in the shared project. */
+export const SCHEMA = process.env.SUPABASE_SCHEMA?.trim() || "pa-06";
 
 export function hasDb(): boolean {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-export function db(): Sql {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set: clients and their knowledge live in Postgres (see .env.example).");
-  // One pool per server instance, kept across hot reloads in development.
-  g.__avaSql ??= postgres(url, { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 15, onnotice: () => {} });
-  return g.__avaSql;
+// No generated types: rows are given their shapes below.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = SupabaseClient<any, any, any>;
+const g = globalThis as { __avaDb?: Db };
+
+/** Her schema, through the API: db().from("clients") is "pa-06".clients, and nothing else. */
+export function db(): Db {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set: clients and their knowledge live in Supabase (see .env.example).");
+  }
+  g.__avaDb ??= createClient(url, key, {
+    db: { schema: SCHEMA },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  return g.__avaDb;
 }
 
-type Table = "clients" | "members" | "meetings" | "knowledge" | "chunks" | "login_tokens";
+type Reply<T> = { data: T | null; error: { message: string } | null; count?: number | null };
 
-/** One of her tables, schema and all, to put in a query: db()`select * from ${table("clients")}`. */
-export const table = (name: Table) => db()(`${SCHEMA}.${name}`);
+/** What a request returned — the API reports a failure instead of throwing it, so this throws it. */
+export async function rows<T>(request: PromiseLike<Reply<unknown>>): Promise<T> {
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  return data as T;
+}
 
-/**
- * pgvector's schema ("extensions" on Supabase), asked once per instance: the vector type
- * and its distance operator are named with it, for the same reason as the tables.
- */
-export function vectorSchema(): Promise<string> {
-  g.__avaVector ??= db()<{ schema: string }[]>`
-    select n.nspname as schema from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname = 'vector'`
-    .then(([row]) => {
-      if (!row) throw new Error("pgvector is not enabled in this database (Supabase: Database → Extensions → vector).");
-      return row.schema;
-    })
-    .catch((e) => {
-      g.__avaVector = undefined;
-      throw e;
-    });
-  return g.__avaVector;
+/** How many rows match, for a request made with { count: "exact", head: true }. */
+export async function count(request: PromiseLike<Reply<unknown>>): Promise<number> {
+  const { count: n, error } = await request;
+  if (error) throw new Error(error.message);
+  return n ?? 0;
 }
 
 export type Client = {
@@ -130,3 +128,28 @@ export type Knowledge = {
   created_at: Date;
   created_by: string | null;
 };
+
+/* The API sends timestamps as text; the rest of the app works with Dates. */
+
+type Raw = Record<string, unknown>;
+const at = (v: unknown): Date | null => (v ? new Date(String(v)) : null);
+
+export const asClient = (r: Raw): Client => ({ ...(r as Client), digest_at: at(r.digest_at), created_at: at(r.created_at)! });
+
+export const asMember = (r: Raw): Member => ({ ...(r as Member), invited_at: at(r.invited_at)!, last_login_at: at(r.last_login_at) });
+
+export const asMeeting = (r: Raw): MeetingRow => ({
+  ...(r as MeetingRow),
+  starts_at: at(r.starts_at)!,
+  ends_at: at(r.ends_at),
+  prep_at: at(r.prep_at),
+  brief_at: at(r.brief_at),
+  ended_at: at(r.ended_at),
+  created_at: at(r.created_at)!,
+  updated_at: at(r.updated_at)!,
+});
+
+export const asKnowledge = (r: Raw): Knowledge => ({ ...(r as Knowledge), created_at: at(r.created_at)! });
+
+/** Now, as the API takes a timestamp. */
+export const isoNow = () => new Date().toISOString();

@@ -11,7 +11,8 @@
  * documents themselves for anything more specific (lib/knowledge.ts).
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { db, table, type Client, type MeetingRow, type Prep } from "./db";
+import { asMeeting, count, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
+import { getClient } from "./clients";
 import { FAST, WRITER } from "./moderator";
 
 const anthropic = () => new Anthropic();
@@ -58,19 +59,25 @@ export async function summarise(clientName: string, title: string, text: string)
 /* ----------------------------------------------------------------- digest */
 
 export async function rebuildDigest(clientId: string): Promise<string> {
-  const [client] = await db()<Client[]>`select * from ${table("clients")} where id = ${clientId}`;
+  const client = await getClient(clientId);
   if (!client) throw new Error("No such client.");
-  const docs = await db()<{ title: string; summary: string | null; created_at: Date }[]>`
-    select title, summary, created_at from ${table("knowledge")}
-    where client_id = ${clientId} and meeting_id is null and status = 'ready'
-    order by created_at desc limit 200`;
+  const docs = await rows<{ title: string; summary: string | null; created_at: string }[]>(
+    db()
+      .from("knowledge")
+      .select("title, summary, created_at")
+      .eq("client_id", clientId)
+      .is("meeting_id", null)
+      .eq("status", "ready")
+      .order("created_at", { ascending: false })
+      .limit(200),
+  );
 
   let digest = "";
   if (docs.length) {
     let budget = 70_000;
     const listed: string[] = [];
     for (const d of docs) {
-      const entry = `### ${d.title} (added ${d.created_at.toISOString().slice(0, 10)})\n${d.summary ?? "(no summary)"}`;
+      const entry = `### ${d.title} (added ${d.created_at.slice(0, 10)})\n${d.summary ?? "(no summary)"}`;
       if (entry.length > budget) break;
       budget -= entry.length;
       listed.push(entry);
@@ -97,7 +104,7 @@ export async function rebuildDigest(clientId: string): Promise<string> {
       1800,
     );
   }
-  await db()`update ${table("clients")} set digest = ${digest}, digest_at = now() where id = ${clientId}`;
+  await rows(db().from("clients").update({ digest, digest_at: isoNow() }).eq("id", clientId));
   return digest;
 }
 
@@ -132,8 +139,7 @@ function inviteText(m: MeetingRow): string {
 /** Whether the meeting gives her anything to prepare from beyond the invite. */
 export async function hasPreparation(m: MeetingRow): Promise<boolean> {
   if (prepText(m.prep)) return true;
-  const [{ n }] = await db()<{ n: number }[]>`
-    select count(*)::int as n from ${table("knowledge")} where meeting_id = ${m.id} and status = 'ready'`;
+  const n = await count(db().from("knowledge").select("id", { count: "exact", head: true }).eq("meeting_id", m.id).eq("status", "ready"));
   return n > 0;
 }
 
@@ -142,17 +148,21 @@ export async function briefIsStale(m: MeetingRow, client: Client): Promise<boole
   if (!m.brief_at) return true;
   if (m.prep_at && m.prep_at > m.brief_at) return true;
   if (client.digest_at && client.digest_at > m.brief_at) return true;
-  const [{ newer }] = await db()<{ newer: number }[]>`
-    select count(*)::int as newer from ${table("knowledge")} where meeting_id = ${m.id} and created_at > ${m.brief_at}`;
+  const newer = await count(
+    db().from("knowledge").select("id", { count: "exact", head: true }).eq("meeting_id", m.id).gt("created_at", m.brief_at.toISOString()),
+  );
   return newer > 0;
 }
 
 export async function writeBrief(meetingId: string): Promise<MeetingRow> {
-  const [m] = await db()<MeetingRow[]>`select * from ${table("meetings")} where id = ${meetingId}`;
+  const found = await rows<Record<string, unknown> | null>(db().from("meetings").select("*").eq("id", meetingId).maybeSingle());
+  const m = found ? asMeeting(found) : null;
   if (!m?.client_id) throw new Error("No such meeting.");
-  const [client] = await db()<Client[]>`select * from ${table("clients")} where id = ${m.client_id}`;
-  const docs = await db()<{ title: string; summary: string | null }[]>`
-    select title, summary from ${table("knowledge")} where meeting_id = ${meetingId} and status = 'ready' order by created_at`;
+  const client = await getClient(m.client_id);
+  if (!client) throw new Error("No such client.");
+  const docs = await rows<{ title: string; summary: string | null }[]>(
+    db().from("knowledge").select("title, summary").eq("meeting_id", meetingId).eq("status", "ready").order("created_at"),
+  );
 
   const brief = await write(
     WRITER,
@@ -184,9 +194,12 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
     ].join("\n"),
     1500,
   );
-  const [updated] = await db()<MeetingRow[]>`
-    update ${table("meetings")} set brief = ${brief}, brief_at = now(), updated_at = now() where id = ${meetingId} returning *`;
-  return updated;
+  const now = isoNow();
+  return asMeeting(
+    await rows<Record<string, unknown>>(
+      db().from("meetings").update({ brief, brief_at: now, updated_at: now }).eq("id", meetingId).select("*").single(),
+    ),
+  );
 }
 
 /**

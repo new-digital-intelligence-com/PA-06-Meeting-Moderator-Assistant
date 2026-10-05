@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
-import { db, table, hasDb, type Client, type MeetingRow } from "@/lib/db";
+import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
 import { avaInvites, type Invite } from "@/lib/workspace";
@@ -17,7 +17,7 @@ const BRIEF_AHEAD_MS = 45 * 60_000;
  * Runner-only: this is her calendar — titles, descriptions, guest lists. Anybody who
  * found the URL could otherwise read it.
  *
- * With clients set up (DATABASE_URL), only her clients' meetings come back, each with
+ * With clients set up (Supabase), only her clients' meetings come back, each with
  * the client and the briefing she is to walk in with; invites from anybody else are left
  * for admins to see. Without, every invite, as before.
  */
@@ -81,12 +81,16 @@ function inviteOf(m: MeetingRow): Invite {
 /** Documents she can search in each meeting: the client's, and the meeting's own. */
 async function documentCounts(meetings: MeetingRow[]): Promise<Map<string, number>> {
   if (!meetings.length) return new Map();
-  const rows = await db()<{ id: string; n: number }[]>`
-    select m.id, count(k.id)::int as n
-    from ${table("meetings")} m join ${table("knowledge")} k on k.client_id = m.client_id and k.status = 'ready' and (k.meeting_id is null or k.meeting_id = m.id)
-    where m.id = any(${db().array(meetings.map((m) => m.id))}::uuid[])
-    group by m.id`;
-  return new Map(rows.map((r) => [r.id, r.n]));
+  const docs = await rows<{ client_id: string; meeting_id: string | null }[]>(
+    db()
+      .from("knowledge")
+      .select("client_id, meeting_id")
+      .eq("status", "ready")
+      .in("client_id", [...new Set(meetings.map((m) => m.client_id!))]),
+  );
+  return new Map(
+    meetings.map((m) => [m.id, docs.filter((d) => d.client_id === m.client_id && (d.meeting_id === null || d.meeting_id === m.id)).length]),
+  );
 }
 
 async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client>) {

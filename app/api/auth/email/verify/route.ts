@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { roleFor, safeNext, tokenHash } from "@/lib/auth";
-import { db, table, hasDb } from "@/lib/db";
+import { db, hasDb, isoNow, rows } from "@/lib/db";
 import { readSession, sessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -26,10 +26,17 @@ export async function POST(request: Request) {
   if (from && from !== origin) return fail("That sign-in link is not valid.");
 
   // Spent in the same statement that checks it, so two clicks cannot both get in.
-  const [row] = await db()<{ email: string }[]>`
-    update ${table("login_tokens")} set used_at = now()
-    where hash = ${tokenHash(token)} and used_at is null and expires_at > now()
-    returning email`;
+  const now = isoNow();
+  const row = await rows<{ email: string } | null>(
+    db()
+      .from("login_tokens")
+      .update({ used_at: now })
+      .eq("hash", tokenHash(token))
+      .is("used_at", null)
+      .gt("expires_at", now)
+      .select("email")
+      .maybeSingle(),
+  );
   if (!row) return fail("That sign-in link has expired or was already used. Ask for a new one.");
 
   const user = await roleFor(row.email);

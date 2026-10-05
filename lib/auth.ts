@@ -12,7 +12,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
-import { db, hasDb, table } from "./db";
+import { db, hasDb, isoNow, rows } from "./db";
 import { readSession, type PortalUser } from "./session";
 
 export const adminDomain = () => (process.env.ADMIN_DOMAIN || "new-digital-intelligence.com").trim().toLowerCase();
@@ -49,10 +49,15 @@ export async function accessFor(email: string): Promise<PortalUser | null> {
   const e = email.trim().toLowerCase();
   if (isAdminEmail(e)) return { email: e, role: "admin" };
   if (!hasDb()) return null;
-  const [m] = await db()<{ client_id: string; name: string | null }[]>`
-    select m.client_id, m.name from ${table("members")} m join ${table("clients")} c on c.id = m.client_id
-    where m.email = ${e} and c.status = 'active'`;
+  const m = await membership(e);
   return m ? { email: e, name: m.name ?? undefined, role: "client", clientId: m.client_id } : null;
+}
+
+/** The client an address signs in for, if that client is active. */
+async function membership(email: string): Promise<{ client_id: string; name: string | null } | null> {
+  return rows(
+    db().from("members").select("client_id, name, clients!inner(status)").eq("email", email).eq("clients.status", "active").maybeSingle(),
+  );
 }
 
 /** Signs an address in: who it is, and when a client's member was last seen. */
@@ -60,8 +65,13 @@ export async function roleFor(email: string, name?: string): Promise<PortalUser 
   const user = await accessFor(email);
   if (!user) return null;
   if (user.role === "client") {
-    await db()`
-      update ${table("members")} set last_login_at = now(), name = coalesce(name, ${name ?? null}) where email = ${user.email}`;
+    // Their Google name, the first time there is one.
+    await rows(
+      db()
+        .from("members")
+        .update({ last_login_at: isoNow(), ...(name && !user.name ? { name } : {}) })
+        .eq("email", user.email),
+    );
   }
   return { ...user, name: name ?? user.name };
 }
@@ -110,7 +120,7 @@ export async function requireAdmin(): Promise<PortalUser> {
   const user = await currentUser();
   if (!user) throw new HttpError(401, "Sign in first.");
   if (user.role !== "admin") throw new HttpError(403, "Admins only.");
-  if (!hasDb()) throw new HttpError(503, "Clients are not set up yet (DATABASE_URL).");
+  if (!hasDb()) throw new HttpError(503, "Clients are not set up yet (SUPABASE_URL).");
   return user;
 }
 
@@ -122,15 +132,13 @@ export async function requireAdmin(): Promise<PortalUser> {
 export async function portalClient(request: Request): Promise<{ user: PortalUser; clientId: string }> {
   const user = await currentUser();
   if (!user) throw new HttpError(401, "Sign in first.");
-  if (!hasDb()) throw new HttpError(503, "Clients are not set up yet (DATABASE_URL).");
+  if (!hasDb()) throw new HttpError(503, "Clients are not set up yet (SUPABASE_URL).");
   if (user.role === "admin") {
     const id = new URL(request.url).searchParams.get("client");
     if (!id || !isUuid(id)) throw new HttpError(400, "Which client? Add ?client=<id>.");
     return { user, clientId: id };
   }
-  const [m] = await db()<{ client_id: string }[]>`
-    select m.client_id from ${table("members")} m join ${table("clients")} c on c.id = m.client_id
-    where m.email = ${user.email} and c.status = 'active'`;
+  const m = await membership(user.email);
   if (!m) throw new HttpError(403, "This address no longer has access.");
   return { user, clientId: m.client_id };
 }

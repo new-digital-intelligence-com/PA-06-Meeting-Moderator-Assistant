@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { accessFor, appOrigin, safeNext, tokenHash } from "@/lib/auth";
 import { avaGoogle } from "@/lib/ava";
 import { cleanAddresses, escapeHtml } from "@/lib/clients";
-import { db, table, hasDb } from "@/lib/db";
+import { count, db, hasDb, isoNow, rows } from "@/lib/db";
 import { sendEmail } from "@/lib/workspace";
 
 export const runtime = "nodejs";
@@ -33,16 +33,17 @@ export async function POST(request: Request) {
   const user = await accessFor(email);
   if (!user) return sent;
 
-  const sql = db();
-  await sql`delete from ${table("login_tokens")} where expires_at < now() - interval '1 day'`;
-  const [{ waiting }] = await sql<{ waiting: number }[]>`
-    select count(*)::int as waiting from ${table("login_tokens")} where email = ${email} and used_at is null and expires_at > now()`;
+  const tokens = () => db().from("login_tokens");
+  await rows(tokens().delete().lt("expires_at", new Date(Date.now() - 24 * 60 * 60_000).toISOString()));
+  const waiting = await count(
+    tokens().select("hash", { count: "exact", head: true }).eq("email", email).is("used_at", null).gt("expires_at", isoNow()),
+  );
   if (waiting >= MAX_WAITING) return sent;
 
   const token = crypto.randomBytes(32).toString("base64url");
-  await sql`
-    insert into ${table("login_tokens")} (hash, email, expires_at)
-    values (${tokenHash(token)}, ${email}, now() + ${`${MINUTES} minutes`}::interval)`;
+  await rows(
+    tokens().insert({ hash: tokenHash(token), email, expires_at: new Date(Date.now() + MINUTES * 60_000).toISOString() }),
+  );
 
   const link = new URL("/login/verify", appOrigin(request));
   link.searchParams.set("token", token);

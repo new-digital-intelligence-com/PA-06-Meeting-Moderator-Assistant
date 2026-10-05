@@ -6,7 +6,7 @@
  * converts them on the way in, and reading them back as text is then one export, with no
  * parser for .docx or .pptx on this side. PDFs, images and text files are kept as they are.
  */
-import { db, table, type Client } from "./db";
+import { db, rows, type Client } from "./db";
 import type { GoogleClient } from "./google";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -60,7 +60,7 @@ export async function clientFolder(google: GoogleClient, client: Client): Promis
   const root = rootFolder();
   if (!root) return null;
   const id = await findOrMakeFolder(google, client.name, root);
-  await db()`update ${table("clients")} set drive_folder_id = ${id} where id = ${client.id}`;
+  await rows(db().from("clients").update({ drive_folder_id: id }).eq("id", client.id));
   client.drive_folder_id = id;
   return id;
 }

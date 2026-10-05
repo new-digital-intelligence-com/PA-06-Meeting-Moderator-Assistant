@@ -212,7 +212,7 @@ export default function Docs() {
                 <Stat value="Anam" label="Her face · lip-synced to her voice" />
                 <Stat value="Upstash Redis" label="The meeting state" />
                 <Stat value="Google APIs" label="Calendar, Gmail, Drive" />
-                <Stat value="Supabase Postgres" label="Clients, their documents (pgvector), meetings and notes" />
+                <Stat value="Supabase" label="Clients, their documents (pgvector), meetings and notes — schema pa-06" />
                 <Stat value="OpenAI embeddings" label="Clients’ documents, searchable by meaning · text-embedding-3-small" />
               </div>
 
@@ -604,9 +604,9 @@ export default function Docs() {
                 </Card>
                 <Card tone="slate" title="Where it is kept">
                   The files: NDI’s Drive, one folder per client inside <C>CLIENTS_DRIVE_FOLDER</C>, written by Ava’s account.
-                  The passages, their vectors, summaries, briefs and notes: Postgres with pgvector, in a Supabase database shared
-                  with other projects — all of it in her own schema, <C>pa-06</C>, which every query names. OpenAI only turns
-                  passages into vectors — nothing is stored there.
+                  The passages, their vectors, summaries, briefs and notes: the team’s shared Supabase project, all of it in her
+                  own schema, <C>pa-06</C>, reached through its Data API with the project’s secret key — from the server only.
+                  OpenAI only turns passages into vectors — nothing is stored there.
                 </Card>
               </div>
             </Section>
@@ -666,11 +666,12 @@ export default function Docs() {
                   The client’s page (meetings and preparation, documents, how she works for you) and NDI’s (clients, who signs
                   in, invites she skipped). Admins open any client’s page as the client sees it.
                 </FileRow>
-                <FileRow path="lib/db.ts · db/schema.sql · db/migrate.mjs">
-                  Her schema, <C>pa-06</C>, and its tables. The database is shared with other projects, so every query names the
-                  schema — never the search path, which the pooler does not keep and which would find another project’s tables
-                  of the same name — and pgvector’s type and operator are named where it is installed.{" "}
-                  <C>npm run db:migrate</C> creates the schema and touches nothing else.
+                <FileRow path="lib/db.ts · db/schema.sql">
+                  Her schema, <C>pa-06</C>, in the team’s shared Supabase project, through its Data API: the tables, and three
+                  functions for what the API cannot say by itself — her passage search, copying her calendar in, the admin
+                  counts. <C>db/schema.sql</C> is pasted once into the SQL editor and touches nothing outside <C>pa-06</C>{" "}
+                  (beyond switching pgvector on if nobody has). Row security is on and the browser roles get nothing: only the
+                  server’s secret key gets in.
                 </FileRow>
                 <FileRow path="lib/recall.ts · app/bot · components/Stage.tsx" tag={<Chip>retired</Chip>}>
                   The Recall bot she used before she had her own Chrome. Its stage is behind sign-in now, where Recall’s browser
@@ -765,7 +766,7 @@ export default function Docs() {
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
                       [<C key="v">AVA_ALIASES</C>, "Other spellings of her name (default Eva, Iva, Eeva, Ayva, Avah)"],
                       [<C key="v">BOT_NAME</C>, "Her name"],
-                      [<C key="v">DATABASE_URL</C>, "Clients, documents, meetings — Postgres with pgvector enabled (Supabase transaction pooler), all in her schema pa-06"],
+                      [<C key="v">SUPABASE_URL · SUPABASE_SCHEMA · SUPABASE_SERVICE_ROLE_KEY</C>, "Clients, documents, meetings — the team’s Supabase project, her schema (pa-06), and its secret key (server only)"],
                       [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
                       [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
                       [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],
@@ -831,10 +832,11 @@ ssh -L 8080:localhost:8080 ubuntu@<server>
 http://localhost:8080/vnc.html`}</CodeBlock>
               </div>
               <div className="mt-4">
-                <CodeBlock title="clients: once, from the repository">{`# DATABASE_URL in .env.local (Supabase → Connect → Transaction pooler)
-# pgvector enabled in the database (Database → Extensions → vector)
-npm run db:migrate             # creates schema pa-06 and its tables, nothing
-                               # else; NDI is client number one
+                <CodeBlock title="clients: once, in Supabase">{`SQL Editor → paste db/schema.sql → Run
+                               # schema pa-06, its tables and functions,
+                               # nothing else; NDI is client number one
+Project Settings → Data API → Exposed schemas → add pa-06
+# and SUPABASE_URL, SUPABASE_SCHEMA, SUPABASE_SERVICE_ROLE_KEY in Vercel
 
 # then, signed in as anybody @new-digital-intelligence.com:
 /admin                         # set up a client, invite their people
@@ -865,7 +867,7 @@ npm run db:migrate             # creates schema pa-06 and its tables, nothing
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
                   ["Clients’ documents", "4 MB per upload (Vercel’s limit; bigger through Google Drive), 400,000 characters each, 300 per client", "Embeddings $0.02 per million tokens — a 100-page document is about a tenth of a cent; its summary a cent or two"],
-                  ["Supabase Postgres", "Free: 500 MB, paused after a week unused", "Pro $25 a month"],
+                  ["Supabase", "The team’s shared “pocs” project: its plan’s limits, shared with the other projects", "On the team’s plan"],
                 ]}
               />
               <p className="mt-3 text-xs text-white/35">Prices as last checked; providers change them.</p>

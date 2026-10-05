@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { avaGoogle } from "@/lib/ava";
 import { handle, HttpError, portalClient } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
-import { db, table } from "@/lib/db";
+import { db, rows } from "@/lib/db";
 import { listDocuments } from "@/lib/knowledge";
 import { clientMeetings, syncIfStale } from "@/lib/schedule";
 
@@ -18,13 +18,14 @@ export async function GET(request: Request) {
 
     const client = await getClient(clientId);
     if (!client) throw new HttpError(404, "No such client.");
-    const [documents, meetings, perMeeting] = await Promise.all([
+    const [documents, meetings, meetingDocs] = await Promise.all([
       listDocuments(clientId),
       clientMeetings(clientId),
-      db()<{ meeting_id: string; n: number }[]>`
-        select meeting_id, count(*)::int as n from ${table("knowledge")} where client_id = ${clientId} and meeting_id is not null group by meeting_id`,
+      rows<{ meeting_id: string }[]>(db().from("knowledge").select("meeting_id").eq("client_id", clientId).not("meeting_id", "is", null)),
     ]);
-    const counts = new Map(perMeeting.map((r) => [r.meeting_id, r.n]));
+    // Documents added to each meeting's preparation.
+    const counts = new Map<string, number>();
+    for (const d of meetingDocs) counts.set(d.meeting_id, (counts.get(d.meeting_id) ?? 0) + 1);
     return NextResponse.json({
       client: {
         id: client.id,
