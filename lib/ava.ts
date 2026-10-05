@@ -66,3 +66,20 @@ export function isRunner(request: Request): boolean {
   if (!expected) return false;
   return request.headers.get("x-ava-key") === expected;
 }
+
+/* Her screen's address (https://<AVA_SCREEN_HOST>), as her runner gives it with each call —
+   where her logs are, one per client. Kept so admin pages can link there; written only
+   when it changes. */
+const SCREEN = "ava:screen";
+let screenSeen: string | null = null;
+
+export async function noteScreen(request: Request): Promise<void> {
+  const given = request.headers.get("x-ava-screen")?.trim() ?? "";
+  if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(given) || given === screenSeen) return;
+  if ((await redisOrMongoKey(SCREEN).read()) !== given) await redisOrMongoKey(SCREEN).write(given);
+  screenSeen = given;
+}
+
+export async function avaScreen(): Promise<string | null> {
+  return (await redisOrMongoKey(SCREEN).read().catch(() => null)) || null;
+}

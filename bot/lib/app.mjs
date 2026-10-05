@@ -5,12 +5,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { STATE_DIR, requireApp } from "./config.mjs";
 
+/** Her screen's address when it is online: the app links each client's log there (logs.mjs). */
+const SCREEN = process.env.AVA_SCREEN_HOST?.trim();
+
 async function call(method, path, body) {
   const res = await fetch(`${requireApp()}${path}`, {
     method,
     // Her key: the server only lets the runner read her calendar, send mail as her or
     // mark her as attending, since each of those is dangerous from a stranger.
-    headers: { "Content-Type": "application/json", "x-ava-key": process.env.AVA_RUNNER_KEY || "" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-ava-key": process.env.AVA_RUNNER_KEY || "",
+      ...(SCREEN ? { "x-ava-screen": `https://${SCREEN}` } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     // A request that never comes back would freeze her mid-meeting.
     signal: AbortSignal.timeout(180_000),

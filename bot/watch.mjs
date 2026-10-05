@@ -38,19 +38,35 @@ const stamp = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute:
  * Also written to her disk, one file a day, two weeks kept: `docker compose logs` starts
  * empty with every new container, and twice a test meeting's log went with it before
  * anybody had read it. On the server: docker compose exec ava tail -200 /data/logs/<date>.log
+ *
+ * What she prints in a client's meeting also goes to that client's own log,
+ * /data/logs/clients/<client id>/<date>.log, beside their name — /logs/client/<id> shows it.
  */
 const LOG_DIR = IN_CONTAINER ? path.join(STATE_DIR, "logs") : null;
+const CLIENT_LOGS = LOG_DIR && path.join(LOG_DIR, "clients");
+/** The client whose meeting she is in, while she is in it. */
+let forClient = null;
+
+/** The newest 14 day files of a folder are kept. */
+const prune = (dir) => {
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".log")).sort().slice(0, -14)) fs.rmSync(path.join(dir, f), { force: true });
+};
+
 if (LOG_DIR) {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-  for (const f of fs.readdirSync(LOG_DIR).sort().slice(0, -14)) fs.rmSync(path.join(LOG_DIR, f), { force: true });
+  fs.mkdirSync(CLIENT_LOGS, { recursive: true });
+  prune(LOG_DIR);
+  for (const d of fs.readdirSync(CLIENT_LOGS, { withFileTypes: true })) if (d.isDirectory()) prune(path.join(CLIENT_LOGS, d.name));
   // Everything she prints, not only her own log lines — what the terminal shows is what
   // the file (and the live log page, logs.mjs) shows.
   for (const level of ["log", "warn", "error"]) {
     const print = console[level].bind(console);
     console[level] = (...args) => {
       print(...args);
+      const line = `${util.format(...args)}\n`;
+      const day = `${new Date().toISOString().slice(0, 10)}.log`;
       try {
-        fs.appendFileSync(path.join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.log`), `${util.format(...args)}\n`);
+        fs.appendFileSync(path.join(LOG_DIR, day), line);
+        if (forClient) fs.appendFileSync(path.join(CLIENT_LOGS, forClient, day), line);
       } catch {
         /* a full disk must not stop her */
       }
@@ -58,6 +74,19 @@ if (LOG_DIR) {
   }
 }
 const log = (m) => console.log(`${stamp()}${m}`);
+
+/** From here on, what she prints is also the client's: their folder, with their name for its page. */
+function logFor(client) {
+  const id = String(client?.id ?? "");
+  if (!CLIENT_LOGS || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+  try {
+    fs.mkdirSync(path.join(CLIENT_LOGS, id), { recursive: true });
+    fs.writeFileSync(path.join(CLIENT_LOGS, id, "name.txt"), String(client.name ?? ""));
+    return id;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Her briefing, from the invite: whatever the organiser wrote in the description, plus
@@ -146,6 +175,7 @@ for (;;) {
     }
 
     if (due) {
+      forClient = logFor(due.client);
       log(`  → ${due.title} (${new Date(due.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})${due.client ? ` for ${due.client.name}` : ""}`);
       remember(due.id);
       await attend(
@@ -164,6 +194,7 @@ for (;;) {
         { log },
       );
       log(`  ← finished ${due.title}`);
+      forClient = null;
       continue; // straight on to the next check: another meeting may already be due
     }
 
@@ -174,6 +205,8 @@ for (;;) {
     }
   } catch (e) {
     log(`  ${e.message}`);
+    // A meeting that failed: said in the client's log too, and theirs ends here.
+    forClient = null;
     // Google occasionally signs accounts out. Rather than knock on the next meeting as a
     // stranger, stop and get her signed back in.
     if (/not signed in/i.test(e.message)) await ensureSignedIn({ log });

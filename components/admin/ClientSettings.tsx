@@ -12,7 +12,7 @@ import { Chip, Notice, Section, ago, api, danger, field, primary, quiet } from "
 type Client = { id: string; name: string; domains: string[]; addresses: string[]; status: string; created_at: string; created_by: string | null };
 type Member = { id: string; email: string; name: string | null; invited_at: string; last_login_at: string | null };
 
-export default function ClientSettings({ id }: { id: string }) {
+export default function ClientSettings({ id, log = null }: { id: string; log?: string | null }) {
   const router = useRouter();
   const [client, setClient] = useState<Client | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -114,7 +114,27 @@ export default function ClientSettings({ id }: { id: string }) {
 
       <Section
         title="Client setup (NDI only)"
-        aside={client && <span className="text-xs text-slate-400">Created {ago(client.created_at)}{client.created_by ? ` by ${client.created_by}` : ""}</span>}
+        aside={
+          client && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {log && (
+                <a
+                  href={log}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Everything she printed in their meetings, live, on her server"
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  Her log for {client.name} ↗
+                </a>
+              )}
+              <span className="text-xs text-slate-400">
+                Created {ago(client.created_at)}
+                {client.created_by ? ` by ${client.created_by}` : ""}
+              </span>
+            </div>
+          )
+        }
       >
         {!client ? (
           <p className="text-sm text-slate-500">Loading…</p>

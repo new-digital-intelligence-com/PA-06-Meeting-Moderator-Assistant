@@ -30,6 +30,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Each client's log, alone",
+    points: [
+      "Her server keeps a log per client: what she prints in a client's meeting — from walking in to “finished”, what was said, her searches, any error — also goes to /data/logs/clients/<client id>, one file a day, two weeks kept. The full log is unchanged.",
+      "On her screen's address: /logs/clients lists the clients she has a log for, the most recent first; /logs/client/<id> shows one client's last days, each under its date, then follows live. Same access as /logs.",
+      "A client's page in /admin links to it (“Her log for …”) — NDI only, never on the client's own page. Her runner gives the app its screen's address (AVA_SCREEN_HOST) with each call, so there is nothing to set.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "Write it down: text as one of her documents",
     points: [
       "Beside Upload files, From Google Drive and Add a link, “What she knows” has Add text: a title (optional — the first line otherwise) and whatever she should know — who is who, prices, how to answer, what not to say. She reads it like a document: searchable in every meeting, part of what she knows about them, marked Text in the list, and its Preview shows it.",

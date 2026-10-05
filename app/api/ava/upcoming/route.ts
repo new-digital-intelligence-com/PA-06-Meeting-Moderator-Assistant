@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
+import { avaEmail, avaGoogle, isRunner, noteScreen } from "@/lib/ava";
 import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
@@ -25,6 +25,8 @@ export async function GET(request: Request) {
   if (!isRunner(request)) {
     return NextResponse.json({ error: "Runner key required." }, { status: 403 });
   }
+  // Where her logs are, for the admin pages' links — remembered after answering.
+  after(() => noteScreen(request).catch(() => undefined));
   const google = await avaGoogle();
   if (!google) {
     return NextResponse.json(

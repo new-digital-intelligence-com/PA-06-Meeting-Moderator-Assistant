@@ -829,10 +829,15 @@ docker compose stop            # stop — she will not join meetings
 docker compose logs -f         # follow what she is doing
 
 # her log survives restarts: one file a day, two weeks kept
-docker compose exec ava tail -200 /data/logs/$(date +%F).log`}</CodeBlock>
+docker compose exec ava tail -200 /data/logs/$(date +%F).log
+# and each client's meetings alone, the same way
+docker compose exec ava ls /data/logs/clients/<client id>`}</CodeBlock>
                 <CodeBlock title="her screen and live log">{`# online, over HTTPS (COMPOSE_PROFILES=public)
-https://<AVA_SCREEN_HOST>          her screen
-https://<AVA_SCREEN_HOST>/logs     her log, live, as it is written
+https://<AVA_SCREEN_HOST>                    her screen
+https://<AVA_SCREEN_HOST>/logs               her log, live, as it is written
+https://<AVA_SCREEN_HOST>/logs/clients       the clients she has a log for
+https://<AVA_SCREEN_HOST>/logs/client/<id>   one client's meetings alone
+                                  # linked from the client's page in /admin
 
 # no password with AVA_BASIC_AUTH set; otherwise user ava,
 # password AVA_ADMIN_PASSWORD
