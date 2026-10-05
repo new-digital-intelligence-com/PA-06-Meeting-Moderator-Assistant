@@ -1,12 +1,12 @@
-/** Small pieces shared by the client and admin pages, in the control room's style. */
+/** Small pieces shared by the client and admin pages. */
 
 export const field =
-  "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-sky-400/60 focus:outline-none";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 export const button =
-  "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
-export const primary = `${button} bg-sky-500 text-white hover:bg-sky-400`;
-export const quiet = `${button} bg-white/5 text-white/75 hover:bg-white/10`;
-export const danger = `${button} bg-rose-500/10 text-rose-200 hover:bg-rose-500/20`;
+  "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50";
+export const primary = `${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`;
+export const quiet = `${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900`;
+export const danger = `${button} border border-rose-200 bg-white text-rose-700 hover:bg-rose-50`;
 
 export function Section({
   title,
@@ -20,9 +20,9 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6">
+    <section id={id} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">{title}</h2>
+        <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
         {aside}
       </div>
       {children}
@@ -32,13 +32,15 @@ export function Section({
 
 export function Chip({ tone = "neutral", children }: { tone?: "good" | "warn" | "bad" | "neutral" | "info"; children: React.ReactNode }) {
   const tones = {
-    good: "bg-emerald-500/10 text-emerald-300",
-    warn: "bg-amber-500/10 text-amber-300",
-    bad: "bg-rose-500/10 text-rose-300",
-    info: "bg-sky-500/10 text-sky-300",
-    neutral: "bg-white/5 text-white/50",
+    good: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+    warn: "bg-amber-50 text-amber-800 ring-amber-600/20",
+    bad: "bg-rose-50 text-rose-700 ring-rose-600/20",
+    info: "bg-blue-50 text-blue-700 ring-blue-600/20",
+    neutral: "bg-slate-50 text-slate-600 ring-slate-500/20",
   };
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${tones[tone]}`}>{children}</span>
+  );
 }
 
 export function Notice({ tone, children, onClose }: { tone: "error" | "info"; children: React.ReactNode; onClose?: () => void }) {
@@ -46,12 +48,12 @@ export function Notice({ tone, children, onClose }: { tone: "error" | "info"; ch
     <div
       role={tone === "error" ? "alert" : "status"}
       className={`flex items-start justify-between gap-4 rounded-xl border p-4 text-sm ${
-        tone === "error" ? "border-rose-400/30 bg-rose-400/5 text-rose-200" : "border-sky-400/30 bg-sky-400/5 text-sky-200"
+        tone === "error" ? "border-rose-200 bg-rose-50 text-rose-800" : "border-blue-200 bg-blue-50 text-blue-800"
       }`}
     >
       <div className="min-w-0 break-words">{children}</div>
       {onClose && (
-        <button className="shrink-0 text-white/40 hover:text-white" onClick={onClose} aria-label="Dismiss">
+        <button className="shrink-0 text-current opacity-50 hover:opacity-100" onClick={onClose} aria-label="Dismiss">
           ✕
         </button>
       )}

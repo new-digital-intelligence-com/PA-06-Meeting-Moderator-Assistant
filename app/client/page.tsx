@@ -22,7 +22,7 @@ export default async function ClientPage() {
       <>
         <TopBar user={user} />
         <main className="mx-auto w-full max-w-xl p-6">
-          <p className="rounded-xl border border-white/10 bg-white/[0.02] p-5 text-sm text-white/60">
+          <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
             {user.email} no longer has access to Ava. If that is a mistake, ask your contact at NDI.
           </p>
         </main>

@@ -46,8 +46,8 @@ export default function Nav({ sections }: { sections: { id: string; label: strin
         aria-current={on ? "true" : undefined}
         className={
           compact
-            ? `shrink-0 rounded-full border px-3 py-1 text-xs ${on ? "border-sky-400/40 bg-sky-400/10 text-sky-200" : "border-white/10 text-white/50"}`
-            : `block rounded-lg px-3 py-1.5 text-sm transition-colors ${on ? "bg-white/[0.06] text-white" : "text-white/45 hover:text-white/80"}`
+            ? `shrink-0 rounded-full border px-3 py-1 text-xs ${on ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500"}`
+            : `block rounded-lg px-3 py-1.5 text-sm transition-colors ${on ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-700"}`
         }
       >
         {s.label}
@@ -60,12 +60,12 @@ export default function Nav({ sections }: { sections: { id: string; label: strin
       <nav
         ref={strip}
         aria-label="Sections"
-        className="sticky top-0 z-10 -mx-4 flex gap-2 overflow-x-auto border-b border-white/5 bg-[#0b0f17]/90 px-4 py-3 backdrop-blur lg:hidden"
+        className="sticky top-0 z-10 -mx-4 flex gap-2 overflow-x-auto border-b border-slate-100 bg-white/90 px-4 py-3 backdrop-blur lg:hidden"
       >
         {sections.map((s) => link(s, true))}
       </nav>
       <nav aria-label="Sections" className="sticky top-8 hidden max-h-[calc(100vh-4rem)] overflow-y-auto lg:block">
-        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/30">On this page</p>
+        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">On this page</p>
         {sections.map((s) => link(s, false))}
       </nav>
     </>

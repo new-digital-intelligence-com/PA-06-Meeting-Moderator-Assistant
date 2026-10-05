@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
-  --background: #0b0f17;
-  --foreground: #e2e8f0;
+  color-scheme: light;
+  --background: #f5f7fb;
+  --foreground: #0f172a;
 }
 
 @theme inline {
@@ -18,4 +18,9 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   overscroll-behavior: none;
+}
+
+::selection {
+  background: #bfdbfe;
+  color: #0f172a;
 }

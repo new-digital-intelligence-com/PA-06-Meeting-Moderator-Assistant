@@ -1,41 +1,55 @@
 import Link from "next/link";
+import Logo from "./Logo";
 import type { PortalUser } from "@/lib/session";
 
 /**
- * The bar across every signed-in page: where you are, and signing out. Admins get the
- * control room and their clients; a client sees whose Ava this is.
+ * The bar across every signed-in page: where you are, who you are, and signing out.
+ * Admins get the control room and their clients; a client sees whose Ava this is.
  */
 export default function TopBar({ user, active, clientName }: { user: PortalUser; active?: "room" | "clients"; clientName?: string }) {
   const link = (href: string, label: string, on: boolean) => (
     <Link
       href={href}
-      className={`rounded-lg px-3 py-1.5 text-sm transition ${on ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white"}`}
+      aria-current={on ? "page" : undefined}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+        on ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+      }`}
     >
       {label}
     </Link>
   );
+  const initial = (user.name || user.email).trim().charAt(0).toUpperCase();
   return (
-    <div className="border-b border-white/10 bg-black/20">
-      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="mr-2 text-sm font-semibold tracking-wide">
-            Ava <span className="font-normal text-white/35">by NDI</span>
-          </span>
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur">
+      <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-4 sm:gap-6">
+          <Link href={user.role === "admin" ? "/" : "/client"} className="flex shrink-0 items-center gap-2.5">
+            <Logo className="size-7" />
+            <span className="text-[15px] font-semibold tracking-tight text-slate-900">Ava</span>
+            <span className="hidden rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 sm:inline">by NDI</span>
+          </Link>
           {user.role === "admin" ? (
-            <nav className="flex flex-wrap items-center gap-1">
+            <nav className="flex items-center gap-1 overflow-x-auto">
               {link("/", "Control room", active === "room")}
               {link("/admin", "Clients", active === "clients")}
               {link("/docs", "Docs", false)}
             </nav>
           ) : (
-            clientName && <span className="truncate text-sm text-white/50">for {clientName}</span>
+            clientName && <span className="truncate text-sm text-slate-500">for {clientName}</span>
           )}
         </div>
-        <form action="/api/auth/logout" method="post" className="flex items-center gap-3">
-          <span className="hidden max-w-[16rem] truncate text-xs text-white/40 sm:inline">{user.email}</span>
-          <button className="rounded-lg px-3 py-1.5 text-sm text-white/50 hover:bg-white/5 hover:text-white">Sign out</button>
-        </form>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden max-w-[14rem] truncate text-xs text-slate-500 md:inline" title={user.email}>
+            {user.email}
+          </span>
+          <span className="flex size-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/10">
+            {initial}
+          </span>
+          <form action="/api/auth/logout" method="post">
+            <button className="rounded-lg px-2.5 py-1.5 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Sign out</button>
+          </form>
+        </div>
       </div>
-    </div>
+    </header>
   );
 }

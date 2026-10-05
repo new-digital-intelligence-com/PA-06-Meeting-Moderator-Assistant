@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import Nav from "./Nav";
 import { CHANGELOG, STATUS, UPDATED } from "./content";
 import { C, Callout, Card, Chip, CodeBlock, Decision, Dot, FileRow, Section, Stat, Steps, Table } from "./ui";
@@ -43,10 +44,12 @@ export default function Docs() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-32 pt-6 sm:px-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/" className="text-sm text-white/45 hover:text-white/80">
-          ← Control room
+        <Link href="/" className="group flex items-center gap-2.5">
+          <Logo className="size-7" />
+          <span className="text-[15px] font-semibold tracking-tight text-slate-900">Ava</span>
+          <span className="text-sm text-slate-500 transition group-hover:text-slate-900">← back to the app</span>
         </Link>
-        <p className="text-xs text-white/35">Updated {fmt(UPDATED)}</p>
+        <p className="text-xs text-slate-400">Updated {fmt(UPDATED)}</p>
       </header>
 
       <div className="mt-6 lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-12">
@@ -59,23 +62,23 @@ export default function Docs() {
           {/* ── overview ─────────────────────────────────────────────────── */}
           <section id="overview" className="scroll-mt-24 pt-6 lg:pt-0">
             <Chip tone="sky">Docs</Chip>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">Ava, the meeting participant</h1>
-            <p className="mt-4 max-w-3xl text-lg leading-8 text-white/60">
-              Ava joins your <strong className="font-semibold text-white/85">Google Meet</strong> as a normal member, with her own
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">Ava, the meeting participant</h1>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">
+              Ava joins your <strong className="font-semibold text-slate-800">Google Meet</strong> as a normal member, with her own
               Google account. Invite her like anybody else: she turns up at the start time, listens, answers and joins in out
               loud, takes notes, and emails the write-up to the guests when it ends. She can also be sent into a{" "}
-              <strong className="font-semibold text-white/85">Microsoft Teams</strong> meeting from the control room. She hears
-              and talks through <strong className="font-semibold text-white/85">OpenAI GPT-Live</strong>, which listens while she
+              <strong className="font-semibold text-slate-800">Microsoft Teams</strong> meeting from the control room. She hears
+              and talks through <strong className="font-semibold text-slate-800">OpenAI GPT-Live</strong>, which listens while she
               speaks — so she answers almost at once, and can be interrupted like anybody else.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {STATUS.map((s) => (
-                <div key={s.label} className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
+                <div key={s.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                     <Dot tone={s.tone} /> {s.label}
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-white/75">{s.value}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-700">{s.value}</p>
                 </div>
               ))}
             </div>
@@ -116,7 +119,7 @@ export default function Docs() {
                       <>
                         It reads her calendar every 60 seconds. Declined meetings, all-day entries and anything without a Meet link
                         are ignored, and so is a meeting whose organiser is nobody’s client (see{" "}
-                        <a href="#clients" className="text-sky-300 underline decoration-sky-400/40">Clients</a>). It opens the
+                        <a href="#clients" className="text-blue-600 underline decoration-blue-300">Clients</a>). It opens the
                         meeting a minute before the start (<C>AVA_JOIN_EARLY_SECONDS</C>), with the app’s briefing for that client.
                       </>
                     ),
@@ -143,7 +146,7 @@ export default function Docs() {
                       <>
                         GPT-Live holds the conversation itself, with no round trip through the app — so she answers almost at once,
                         and stops when talked over (see{" "}
-                        <a href="#talking" className="text-sky-300 underline decoration-sky-400/40">When she talks</a>). What needs
+                        <a href="#talking" className="text-blue-600 underline decoration-blue-300">When she talks</a>). What needs
                         thought, the web or the meeting’s record it hands to its backend, gpt-6-luna.
                       </>
                     ),
@@ -178,7 +181,7 @@ export default function Docs() {
                     <li>Live captions with speaker names</li>
                   </ul>
                 </Card>
-                <div className="flex items-center justify-center text-base text-white/35 lg:flex-col">
+                <div className="flex items-center justify-center text-base text-slate-400 lg:flex-col">
                   <span className="lg:hidden">↓ ↑</span>
                   <span className="hidden lg:block">⇄</span>
                 </div>
@@ -190,7 +193,7 @@ export default function Docs() {
                     <li>Watches her calendar, joins, leaves</li>
                   </ul>
                 </Card>
-                <div className="flex items-center justify-center text-base text-white/35 lg:flex-col">
+                <div className="flex items-center justify-center text-base text-slate-400 lg:flex-col">
                   <span className="lg:hidden">↓ ↑</span>
                   <span className="hidden lg:block">⇄</span>
                 </div>
@@ -248,7 +251,7 @@ export default function Docs() {
                 <Card title="Interrupted">She stops when somebody talks over her, listens, and answers what they said.</Card>
                 <Card title="Handing over">
                   Earlier decisions, a recap, the actions so far, something to note, current facts: she says “one moment” and her
-                  backend answers — see <a href="#brains" className="text-sky-300 underline decoration-sky-400/40">Two brains</a>.
+                  backend answers — see <a href="#brains" className="text-blue-600 underline decoration-blue-300">Two brains</a>.
                 </Card>
                 <Card title="What she knows">
                   General questions get a real answer. Facts about this company, these people or this project come only from the
@@ -260,8 +263,8 @@ export default function Docs() {
                 </Card>
               </div>
 
-              <h3 className="mb-3 mt-10 text-sm font-semibold text-white/80">With the Claude brain (AVA_BRAIN=claude)</h3>
-              <p className="mb-4 text-sm leading-6 text-white/55">
+              <h3 className="mb-3 mt-10 text-sm font-semibold text-slate-700">With the Claude brain (AVA_BRAIN=claude)</h3>
+              <p className="mb-4 text-sm leading-6 text-slate-500">
                 The app decides instead, in turns: everything said that she has not dealt with waits in a queue, and at each pause
                 she deals with all of it, once. Every heartbeat runs down this list.
               </p>
@@ -493,7 +496,7 @@ export default function Docs() {
                   ["The notes", "Always in English, whatever the meeting was held in: the write-up translates what was said, keeping names and quoted terms as they were."],
                 ]}
               />
-              <p className="mt-3 text-xs text-white/40">
+              <p className="mt-3 text-xs text-slate-500">
                 A meeting that mixes languages keeps its captions in the one spoken most lately; GPT-Live itself follows every switch.
               </p>
             </Section>
@@ -613,7 +616,7 @@ export default function Docs() {
 
             {/* ── brain modules ────────────────────────────────────────── */}
             <Section id="brain" eyebrow="Modules" title="The brain — web app" intro="Next.js on Vercel. The meeting lives in Redis, so every serverless instance sees the same one.">
-              <div className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/[0.02] px-5">
+              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-5">
                 <FileRow path="app/api/moderator/tick" tag={<Chip tone="emerald">the heart</Chip>}>
                   Takes what was heard and folds it into the transcript, with her own lines and the state of her voice and face.
                   With the Claude brain it also decides the one thing to say now.
@@ -682,7 +685,7 @@ export default function Docs() {
 
             {/* ── runner modules ───────────────────────────────────────── */}
             <Section id="runner" eyebrow="Modules" title="The runner — bot/" intro="One Docker container: Node, Google Chrome, a virtual screen, and a web view of that screen.">
-              <div className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/[0.02] px-5">
+              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-5">
                 <FileRow path="watch.mjs" tag={<Chip tone="sky">entry point</Chip>}>
                   On duty: checks she is signed in, reads her calendar every minute and the control room every 10 seconds, attends
                   each meeting — with the app’s briefing for its client — and remembers which ones she already did.
@@ -753,7 +756,7 @@ export default function Docs() {
             <Section id="config" eyebrow="Reference" title="Configuration" intro="Names only — values live in Vercel and in bot/.env, never in the repo.">
               <div className="grid gap-6 xl:grid-cols-2">
                 <div className="min-w-0">
-                  <h3 className="mb-3 text-sm font-semibold text-white/80">Web app (Vercel)</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Web app (Vercel)</h3>
                   <Table
                     head={["Variable", "For"]}
                     rows={[
@@ -777,7 +780,7 @@ export default function Docs() {
                   />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="mb-3 text-sm font-semibold text-white/80">Runner (bot/.env)</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Runner (bot/.env)</h3>
                   <Table
                     head={["Variable", "For"]}
                     rows={[
@@ -870,28 +873,28 @@ Project Settings → Data API → Exposed schemas → add pa-06
                   ["Supabase", "The team’s shared “pocs” project: its plan’s limits, shared with the other projects", "On the team’s plan"],
                 ]}
               />
-              <p className="mt-3 text-xs text-white/35">Prices as last checked; providers change them.</p>
+              <p className="mt-3 text-xs text-slate-400">Prices as last checked; providers change them.</p>
             </Section>
 
             {/* ── changelog ────────────────────────────────────────────── */}
             <Section id="changelog" eyebrow="History" title="Changelog">
               <ol className="space-y-4">
                 {CHANGELOG.map((c) => (
-                  <li key={`${c.date}-${c.title}`} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                  <li key={`${c.date}-${c.title}`} className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap items-center gap-2">
                       <Chip tone={c.tone ?? "slate"}>{fmt(c.date)}</Chip>
-                      <h3 className="font-semibold text-white">{c.title}</h3>
+                      <h3 className="font-semibold text-slate-900">{c.title}</h3>
                     </div>
-                    <ul className="mt-3 space-y-1.5 text-sm leading-6 text-white/60">
+                    <ul className="mt-3 space-y-1.5 text-sm leading-6 text-slate-600">
                       {c.points.map((p) => (
                         <li key={p} className="flex gap-2">
-                          <span className="mt-2.5 size-1 shrink-0 rounded-full bg-white/30" />
+                          <span className="mt-2.5 size-1 shrink-0 rounded-full bg-slate-300" />
                           <span>{p}</span>
                         </li>
                       ))}
                     </ul>
                     {c.commits.length ? (
-                      <p className="mt-3 font-mono text-xs text-white/30">{c.commits.join(" · ")}</p>
+                      <p className="mt-3 font-mono text-xs text-slate-400">{c.commits.join(" · ")}</p>
                     ) : null}
                   </li>
                 ))}

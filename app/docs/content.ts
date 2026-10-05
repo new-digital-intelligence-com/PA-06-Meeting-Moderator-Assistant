@@ -30,6 +30,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Light, and a cleaner design",
+    points: [
+      "Every page is light now: white cards on a soft grey, the blue of her icon for actions, softer colours for what is ready, waiting or wrong. Commands in the docs stay dark, as a terminal is.",
+      "One header across the signed-in pages — her mark, where you are, who you are, sign out — and the same fields, buttons and badges on every page. Sign-in is a single card under her mark.",
+      "A client's meetings show their day like a calendar page; a meeting already prepared offers “Edit preparation” rather than another blue button. The control room is titled as such.",
+      "Her stage (/bot), which is a video tile, keeps its dark background.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "Her own icon",
     points: [
       "The site's icon is no longer Next.js's: a participant's tile with her speaking, in the site's blue (app/icon.svg; favicon.ico and apple-icon.png made from it, with a simpler drawing at 16 px).",

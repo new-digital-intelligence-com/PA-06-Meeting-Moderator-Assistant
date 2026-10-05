@@ -114,27 +114,27 @@ export default function ClientSettings({ id }: { id: string }) {
 
       <Section
         title="Client setup (NDI only)"
-        aside={client && <span className="text-xs text-white/30">Created {ago(client.created_at)}{client.created_by ? ` by ${client.created_by}` : ""}</span>}
+        aside={client && <span className="text-xs text-slate-400">Created {ago(client.created_at)}{client.created_by ? ` by ${client.created_by}` : ""}</span>}
       >
         {!client ? (
-          <p className="text-sm text-white/40">Loading…</p>
+          <p className="text-sm text-slate-500">Loading…</p>
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
             <form onSubmit={save} className="space-y-3">
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-white/60">Name</span>
+                <span className="text-xs font-medium text-slate-600">Name</span>
                 <input className={field} value={form.name} onChange={set("name")} />
               </label>
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-white/60">Company domains</span>
+                <span className="text-xs font-medium text-slate-600">Company domains</span>
                 <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
               </label>
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-white/60">Exact addresses</span>
+                <span className="text-xs font-medium text-slate-600">Exact addresses</span>
                 <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="founder@gmail.com" />
               </label>
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-white/60">Status</span>
+                <span className="text-xs font-medium text-slate-600">Status</span>
                 <select className={field} value={form.status} onChange={set("status")}>
                   <option value="active">Active: she attends their meetings</option>
                   <option value="paused">Paused: she skips them, and nobody signs in</option>
@@ -151,22 +151,22 @@ export default function ClientSettings({ id }: { id: string }) {
             </form>
 
             <div className="space-y-3">
-              <h3 className="text-xs font-medium text-white/60">Who signs in for them</h3>
+              <h3 className="text-xs font-medium text-slate-600">Who signs in for them</h3>
               {members.length === 0 ? (
-                <p className="text-sm text-white/40">Nobody yet.</p>
+                <p className="text-sm text-slate-500">Nobody yet.</p>
               ) : (
-                <ul className="divide-y divide-white/5 rounded-xl border border-white/10">
+                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                   {members.map((m) => (
                     <li key={m.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
-                      <span className="min-w-0 flex-1 truncate text-white/80" title={m.email}>
+                      <span className="min-w-0 flex-1 truncate text-slate-700" title={m.email}>
                         {m.name ? `${m.name} · ` : ""}
                         {m.email}
                       </span>
                       {m.last_login_at ? <Chip tone="good">Signed in {ago(m.last_login_at)}</Chip> : <Chip>Not yet</Chip>}
-                      <button className="text-xs text-sky-300/80 hover:text-sky-200" onClick={() => void resend(m)} disabled={busy !== null}>
+                      <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => void resend(m)} disabled={busy !== null}>
                         {busy === `resend:${m.id}` ? "Sending…" : "Resend invite"}
                       </button>
-                      <button className="text-xs text-white/35 hover:text-rose-300" onClick={() => void removeMember(m)} disabled={busy !== null}>
+                      <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void removeMember(m)} disabled={busy !== null}>
                         Remove
                       </button>
                     </li>
@@ -186,10 +186,10 @@ export default function ClientSettings({ id }: { id: string }) {
                     {busy === "member" ? "Adding…" : "Add"}
                   </button>
                 </div>
-                <label className="flex items-center gap-2 text-xs text-white/50">
+                <label className="flex items-center gap-2 text-xs text-slate-500">
                   <input
                     type="checkbox"
-                    className="accent-sky-500"
+                    className="accent-blue-600"
                     checked={newMember.invite}
                     onChange={(e) => setNewMember((n) => ({ ...n, invite: e.target.checked }))}
                   />

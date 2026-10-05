@@ -99,11 +99,11 @@ function Pill({ ok, label, hint }: { ok: boolean; label: string; hint?: string }
   return (
     <span
       title={hint}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-        ok ? "bg-emerald-500/10 text-emerald-300" : "bg-rose-500/10 text-rose-300"
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${
+        ok ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" : "bg-rose-50 text-rose-700 ring-rose-600/20"
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-rose-400"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
       {label}
     </span>
   );
@@ -111,9 +111,9 @@ function Pill({ ok, label, hint }: { ok: boolean; label: string; hint?: string }
 
 function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">{title}</h2>
+        <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
         {aside}
       </div>
       {children}
@@ -122,9 +122,9 @@ function Section({ title, children, aside }: { title: string; children: React.Re
 }
 
 const field =
-  "rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-sky-400/60 focus:outline-none";
+  "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 const button =
-  "rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-lg px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50";
 
 /* ------------------------------------------------------------------- page */
 
@@ -348,13 +348,13 @@ export default function ControlRoom({
   const name = config.botName.split("—")[0].trim();
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 p-6 pb-24">
+    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 pb-24 pt-6 sm:px-6">
       <header className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <div>
-          <h1 className="text-2xl font-semibold">Meeting Moderator</h1>
-          <p className="text-sm text-white/40">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Control room</h1>
+          <p className="text-sm text-slate-500">
             {name} sits in on your Google Meet or Teams call, answers when asked, and emails the notes afterwards.{" "}
-            <a href="/docs" className="text-sky-300/80 underline decoration-sky-400/40 hover:text-sky-200">
+            <a href="/docs" className="text-blue-600 underline decoration-blue-300 hover:text-blue-700">
               How she works →
             </a>
           </p>
@@ -383,9 +383,9 @@ export default function ControlRoom({
             <a
               href="/api/auth/google?as=ava"
               title={`Connect her account${config.avaExpected ? ` (${config.avaExpected})` : ""} so she can read her invites and send notes as herself.`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20 hover:bg-amber-100"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               Connect Ava&apos;s Google
             </a>
           )}
@@ -404,15 +404,15 @@ export default function ControlRoom({
             }
           />
           {!config.googleConnected && (
-            <a href="/api/auth/google" className={`${button} bg-sky-500 text-white hover:bg-sky-400`}>
+            <a href="/api/auth/google" className={`${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`}>
               Connect Google
             </a>
           )}
         </div>
       </header>
 
-      {error && <p className="rounded-xl border border-rose-400/30 bg-rose-400/5 p-4 text-sm text-rose-200">{error}</p>}
-      {note && <p className="rounded-xl border border-sky-400/30 bg-sky-400/5 p-4 text-sm text-sky-200">{note}</p>}
+      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
+      {note && <p className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">{note}</p>}
 
       {/* ── brief her ────────────────────────────────────────────────────── */}
       {planning ? (
@@ -421,7 +421,7 @@ export default function ControlRoom({
           aside={
             calendar.length > 0 ? (
               <select
-                className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-white/70"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600"
                 defaultValue=""
                 onChange={(e) => {
                   const found = calendar.find((c) => c.id === e.target.value);
@@ -449,7 +449,7 @@ export default function ControlRoom({
         >
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs text-white/40">Title</span>
+              <span className="text-xs text-slate-500">Title</span>
               <input
                 className={`${field} w-full`}
                 value={draft.title}
@@ -458,7 +458,7 @@ export default function ControlRoom({
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-white/40">Google Meet or Microsoft Teams link</span>
+              <span className="text-xs text-slate-500">Google Meet or Microsoft Teams link</span>
               <input
                 className={`${field} w-full`}
                 value={draft.meetingUrl}
@@ -469,9 +469,9 @@ export default function ControlRoom({
           </div>
 
           <label className="mt-4 block space-y-1">
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-slate-500">
               What is this meeting about?{" "}
-              <span className="text-white/25">
+              <span className="text-slate-400">
                 The subject, who is attending, anything she should know walking in. This is the only
                 briefing she gets — it is what she answers from when somebody asks her something.
               </span>
@@ -489,16 +489,16 @@ export default function ControlRoom({
             />
           </label>
 
-          <p className="mt-4 rounded-lg bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/50">
+          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
             The notes of a meeting she is sent to from here are not emailed — they appear here when it ends. To have them
             emailed to everybody, invite {config.avaAccount ?? config.avaExpected ?? "her"} to the meeting in the calendar:
             she joins by herself and mails the notes to the invite&apos;s guests.
           </p>
 
           <div className="mt-4 space-y-1">
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-slate-500">
               When does she join?{" "}
-              <span className="text-white/25">
+              <span className="text-slate-400">
                 Now, or a time to book her: she opens the link a minute before. Meetings she is
                 invited to on her calendar she joins by herself, without being sent.
               </span>
@@ -508,25 +508,25 @@ export default function ControlRoom({
                 type="button"
                 onClick={() => setDraft({ ...draft, joinAt: null })}
                 className={`${button} ${
-                  !draft.joinAt ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40" : "bg-white/5 text-white/50 hover:bg-white/10"
+                  !draft.joinAt ? "bg-blue-100 text-blue-700 ring-1 ring-blue-500/30" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}
               >
                 Now
               </button>
               <input
                 type="datetime-local"
-                className={`${field} ${draft.joinAt ? "ring-1 ring-sky-400/40" : ""}`}
+                className={`${field} ${draft.joinAt ? "ring-1 ring-blue-500/30" : ""}`}
                 value={toLocalInput(draft.joinAt)}
                 onChange={(e) => setDraft({ ...draft, joinAt: e.target.value ? new Date(e.target.value).getTime() : null })}
               />
               {draft.joinAt && draft.joinAt < now && (
-                <span className="text-xs text-amber-300">That time has passed — she will join now.</span>
+                <span className="text-xs text-amber-700">That time has passed — she will join now.</span>
               )}
             </div>
           </div>
 
           {validLink && (
-            <p className="mt-4 rounded-lg bg-sky-400/5 px-3 py-2 text-xs text-sky-200/80">
+            <p className="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
               {teams ? (
                 <>
                   <strong>Teams:</strong> she opens the link in her own Chrome as a guest named {name} and waits in the
@@ -541,14 +541,14 @@ export default function ControlRoom({
             </p>
           )}
           {draft.meetingUrl && !validLink && (
-            <p className="mt-4 rounded-lg bg-amber-400/5 px-3 py-2 text-xs text-amber-200/80">
+            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
               That is not a Google Meet or Microsoft Teams link.
             </p>
           )}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
-              className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
+              className={`${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`}
               disabled={!ready || !validLink || busy !== null}
               onClick={sendAva}
             >
@@ -558,10 +558,10 @@ export default function ControlRoom({
                   ? `Book ${name} for ${clock(draft.joinAt)}`
                   : `Send ${name} to the meeting`}
             </button>
-            <button className={`${button} bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
+            <button className={`${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`} onClick={savePlan}>
               Save
             </button>
-            {!ready && <span className="text-xs text-white/30">AVA_RUNNER_KEY is not set on this app.</span>}
+            {!ready && <span className="text-xs text-slate-400">AVA_RUNNER_KEY is not set on this app.</span>}
           </div>
         </Section>
       ) : (
@@ -593,8 +593,8 @@ export default function ControlRoom({
               <button
                 className={`${button} ${
                   status === "scheduled"
-                    ? "bg-white/5 text-white/70 hover:bg-rose-500/20 hover:text-rose-200"
-                    : "bg-rose-500/80 text-white hover:bg-rose-500"
+                    ? "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                    : "bg-rose-600 text-white shadow-sm hover:bg-rose-700"
                 }`}
                 onClick={endAndSend}
                 disabled={busy !== null}
@@ -618,25 +618,25 @@ export default function ControlRoom({
         >
           {status !== "scheduled" && meeting.meetingUrl && (
             <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <p className="text-lg font-medium text-white/90">{meeting.title}</p>
+              <p className="text-lg font-medium text-slate-800">{meeting.title}</p>
               <a
                 href={meeting.meetingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-sky-300/80 underline decoration-sky-400/40 hover:text-sky-200"
+                className="text-xs text-blue-600 underline decoration-blue-300 hover:text-blue-700"
               >
                 {platformOf(meeting.meetingUrl) === "teams" ? "Teams" : "Google Meet"} link
               </a>
-              <span className="text-xs text-white/35">
+              <span className="text-xs text-slate-400">
                 {meeting.attendedFrom === "dispatch" || meeting.dispatch ? "sent from here — notes not emailed" : "from her calendar invite"} ·{" "}
                 {LANGUAGES[(meeting.language ?? "en") as Lang].name}
               </span>
             </div>
           )}
           {status === "scheduled" && (
-            <div className="mb-4 rounded-lg bg-sky-400/5 px-4 py-3 text-sm text-sky-100/80">
+            <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
               She will join{" "}
-              <a href={meeting.meetingUrl} target="_blank" rel="noreferrer" className="underline decoration-sky-400/40">
+              <a href={meeting.meetingUrl} target="_blank" rel="noreferrer" className="underline decoration-blue-300">
                 the meeting
               </a>{" "}
               by herself at <strong>{clock(meeting.joinAt)}</strong>
@@ -654,27 +654,27 @@ export default function ControlRoom({
           {/* Her tile lives inside Recall's browser where nobody can inspect it, so
               what it reports about itself, and why she last said nothing, are shown
               here. Without this "she stopped talking" is unanswerable. */}
-          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-black/30 px-3 py-2 text-xs">
+          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-inset ring-slate-200">
             {meeting.stage?.voice && (
               <span>
-                <span className="text-white/35">her voice: </span>
-                <span className={meeting.stage.voice.startsWith("GPT-Live open") ? "text-emerald-300" : "text-white/60"}>
+                <span className="text-slate-400">her voice: </span>
+                <span className={meeting.stage.voice.startsWith("GPT-Live open") ? "text-emerald-700" : "text-slate-600"}>
                   {meeting.stage.voice}
                 </span>
               </span>
             )}
             <span>
-              <span className="text-white/35">her face: </span>
-              <span className={meeting.stage?.face === "live" || meeting.stage?.face === "speaking" ? "text-emerald-300" : "text-amber-300"}>
+              <span className="text-slate-400">her face: </span>
+              <span className={meeting.stage?.face === "live" || meeting.stage?.face === "speaking" ? "text-emerald-700" : "text-amber-700"}>
                 {meeting.stage?.face ?? "no word from the tile yet"}
               </span>
             </span>
             <span>
-              <span className="text-white/35">her ears: </span>
+              <span className="text-slate-400">her ears: </span>
               {meeting.stage?.captions ? (
-                <span className={meeting.stage.captions.socket ? "text-emerald-300" : "text-rose-300"}>
+                <span className={meeting.stage.captions.socket ? "text-emerald-700" : "text-rose-700"}>
                   {meeting.stage.captions.socket ? "listening" : "caption feed down"}
-                  <span className="text-white/45">
+                  <span className="text-slate-500">
                     {" "}· {meeting.stage.captions.received} captions
                     {meeting.stage.captions.secondsSinceLast !== null
                       ? `, last ${meeting.stage.captions.secondsSinceLast}s ago`
@@ -682,21 +682,21 @@ export default function ControlRoom({
                   </span>
                 </span>
               ) : (
-                <span className="text-white/45">no word yet</span>
+                <span className="text-slate-500">no word yet</span>
               )}
             </span>
-            {meeting.stage?.detail && <span className="text-rose-300">{meeting.stage.detail}</span>}
+            {meeting.stage?.detail && <span className="text-rose-700">{meeting.stage.detail}</span>}
             {meeting.lastDecision && (
               <span>
-                <span className="text-white/35">last decision: </span>
-                <span className="text-white/60">{meeting.lastDecision.reason}</span>
+                <span className="text-slate-400">last decision: </span>
+                <span className="text-slate-600">{meeting.lastDecision.reason}</span>
               </span>
             )}
           </div>
 
           <div className="flex flex-wrap items-baseline gap-6">
-            <p className="font-mono text-3xl tabular-nums">{mmss(secs)}</p>
-            <p className="text-sm text-white/40">
+            <p className="font-mono text-3xl font-semibold tabular-nums text-slate-900">{mmss(secs)}</p>
+            <p className="text-sm text-slate-500">
               {meeting.transcript.length} line{meeting.transcript.length === 1 ? "" : "s"} heard ·{" "}
               {meeting.actions.length} action{meeting.actions.length === 1 ? "" : "s"}
             </p>
@@ -704,17 +704,17 @@ export default function ControlRoom({
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div>
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">Heard</p>
-              <div className="h-64 space-y-1.5 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Heard</p>
+              <div className="h-64 space-y-1.5 overflow-y-auto rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-inset ring-slate-200">
                 {meeting.transcript.length ? (
                   meeting.transcript.slice(-80).map((l) => (
                     <p key={l.id}>
-                      <span className="text-sky-300">{l.speaker}</span>{" "}
-                      <span className="text-white/70">{l.text}</span>
+                      <span className="text-blue-600">{l.speaker}</span>{" "}
+                      <span className="text-slate-600">{l.text}</span>
                     </p>
                   ))
                 ) : (
-                  <p className="text-white/25">
+                  <p className="text-slate-400">
                     Nothing yet. Captions start once she is admitted and somebody speaks — turn on live
                     captions in the Meet window if this stays empty.
                   </p>
@@ -722,18 +722,18 @@ export default function ControlRoom({
               </div>
             </div>
             <div>
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">Actions</p>
-              <div className="h-64 space-y-2 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Actions</p>
+              <div className="h-64 space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-inset ring-slate-200">
                 {meeting.actions.length ? (
                   meeting.actions.map((a) => (
                     <p key={a.id}>
                       {a.owner && <span className="font-medium">{a.owner} — </span>}
-                      <span className="text-white/75">{a.text}</span>
-                      {a.due && <span className="text-white/35"> ({a.due})</span>}
+                      <span className="text-slate-700">{a.text}</span>
+                      {a.due && <span className="text-slate-400"> ({a.due})</span>}
                     </p>
                   ))
                 ) : (
-                  <p className="text-white/25">She adds them as people commit to things.</p>
+                  <p className="text-slate-400">She adds them as people commit to things.</p>
                 )}
               </div>
             </div>
@@ -741,9 +741,9 @@ export default function ControlRoom({
 
           {status !== "ended" && (
             <label className="mt-4 block space-y-1">
-              <span className="text-xs text-white/40">
+              <span className="text-xs text-slate-500">
                 Tell her something mid-meeting{" "}
-                <span className="text-white/25">— added to her briefing; the next answer will know it.</span>
+                <span className="text-slate-400">— added to her briefing; the next answer will know it.</span>
               </span>
               <div className="flex gap-2">
                 <textarea
@@ -751,7 +751,7 @@ export default function ControlRoom({
                   value={draft.context}
                   onChange={(e) => setDraft({ ...draft, context: e.target.value })}
                 />
-                <button className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`} onClick={savePlan}>
+                <button className={`${button} shrink-0 border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`} onClick={savePlan}>
                   Update
                 </button>
               </div>
@@ -771,7 +771,7 @@ export default function ControlRoom({
             onKeyDown={(e) => e.key === "Enter" && searchDrive()}
           />
           <button
-            className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`}
+            className={`${button} shrink-0 border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`}
             onClick={searchDrive}
             disabled={!config.googleConnected}
           >
@@ -779,21 +779,21 @@ export default function ControlRoom({
           </button>
         </div>
         {drive.length > 0 && (
-          <ul className="mt-3 divide-y divide-white/5">
+          <ul className="mt-3 divide-y divide-slate-100">
             {drive.map((f) => {
               const already = meeting.files.find((s) => s.id === f.id);
               return (
                 <li key={f.id} className="flex items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
-                    <a href={f.link} target="_blank" rel="noreferrer" className="block truncate text-sm hover:text-sky-300">
+                    <a href={f.link} target="_blank" rel="noreferrer" className="block truncate text-sm hover:text-blue-600">
                       {f.name}
                     </a>
-                    <p className="text-xs text-white/30">
+                    <p className="text-xs text-slate-400">
                       {already ? `shared with ${already.sharedWith.length}` : f.owner}
                     </p>
                   </div>
                   <button
-                    className={`${button} shrink-0 bg-white/5 text-white/70 hover:bg-white/10`}
+                    className={`${button} shrink-0 border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`}
                     onClick={() => share(f)}
                     disabled={busy === `share:${f.id}`}
                   >
@@ -811,14 +811,14 @@ export default function ControlRoom({
         <Section
           title={meeting.followUp?.sentAt ? "Sent" : "Notes — not sent yet"}
           aside={
-            <span className="text-xs text-white/30">
+            <span className="text-xs text-slate-400">
               {meeting.followUp?.sentAt ? `to ${followUp.to}` : "edit below, then send"}
             </span>
           }
         >
           <div className="space-y-3">
             <label className="block space-y-1">
-              <span className="text-xs text-white/40">To</span>
+              <span className="text-xs text-slate-500">To</span>
               <input
                 className={`${field} w-full`}
                 value={followUp.to}
@@ -826,7 +826,7 @@ export default function ControlRoom({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-white/40">Subject</span>
+              <span className="text-xs text-slate-500">Subject</span>
               <input
                 className={`${field} w-full`}
                 value={followUp.subject}
@@ -834,7 +834,7 @@ export default function ControlRoom({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-white/40">Body</span>
+              <span className="text-xs text-slate-500">Body</span>
               <textarea
                 className={`${field} h-72 w-full resize-y font-mono text-xs leading-relaxed`}
                 value={followUp.body}
@@ -843,14 +843,14 @@ export default function ControlRoom({
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <button
-                className={`${button} bg-white/5 text-white/70 hover:bg-white/10`}
+                className={`${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`}
                 onClick={() => deliver("draft")}
                 disabled={busy !== null}
               >
                 Save as Gmail draft
               </button>
               <button
-                className={`${button} bg-sky-500 text-white hover:bg-sky-400`}
+                className={`${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`}
                 onClick={() => deliver("send")}
                 disabled={busy !== null}
               >
@@ -861,16 +861,16 @@ export default function ControlRoom({
         </Section>
       )}
 
-      <footer className="flex items-center justify-between pt-2 text-xs text-white/25">
+      <footer className="flex items-center justify-between pt-2 text-xs text-slate-400">
         <span>
           Her tile:{" "}
-          <a href="/bot" target="_blank" rel="noreferrer" className="hover:text-sky-300">
+          <a href="/bot" target="_blank" rel="noreferrer" className="hover:text-blue-600">
             /bot
           </a>{" "}
           — what the meeting sees
         </span>
         <button
-          className="hover:text-rose-300"
+          className="hover:text-rose-700"
           onClick={() => {
             if (window.confirm("Throw this meeting away and start a new one?")) {
               call("reset", () => fetch("/api/meeting", { method: "DELETE" }));

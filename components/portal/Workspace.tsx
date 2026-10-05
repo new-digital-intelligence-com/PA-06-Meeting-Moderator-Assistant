@@ -112,7 +112,7 @@ export default function Workspace({ clientId }: { clientId?: string }) {
   if (!data) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        {error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-white/40">Loading…</p>}
+        {error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-slate-500">Loading…</p>}
       </div>
     );
   }
@@ -134,8 +134,8 @@ export default function Workspace({ clientId }: { clientId?: string }) {
             </span>
           )}
         </h1>
-        <p className="max-w-3xl text-sm leading-relaxed text-white/50">
-          Invite <span className="text-white/80">{ava}</span> to a Google Meet from your calendar, like a colleague, and she joins it.
+        <p className="max-w-3xl text-sm leading-relaxed text-slate-500">
+          Invite <span className="text-slate-700">{ava}</span> to a Google Meet from your calendar, like a colleague, and she joins it.
           Here you give her what she should know about {client.name}, and prepare her for each meeting.
           {routes.length > 0 && <> Meetings organised by {routes.join(", ")} are yours.</>}
         </p>
@@ -147,9 +147,9 @@ export default function Workspace({ clientId }: { clientId?: string }) {
         </Notice>
       )}
 
-      <Section title="Meetings" aside={<span className="text-xs text-white/30">{upcoming.length} coming up</span>}>
+      <Section title="Meetings" aside={<span className="text-xs text-slate-400">{upcoming.length} coming up</span>}>
         {upcoming.length === 0 ? (
-          <p className="text-sm text-white/45">
+          <p className="text-sm text-slate-500">
             None coming up. Invite {ava} to a meeting from your calendar — it shows here within a minute.
           </p>
         ) : (
@@ -161,7 +161,7 @@ export default function Workspace({ clientId }: { clientId?: string }) {
         )}
         {past.length > 0 && (
           <div className="mt-6 space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/30">Past 30 days</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Past 30 days</h3>
             <ul className="space-y-2">
               {past.map((m) => (
                 <PastMeeting key={m.id} meeting={m} />
@@ -173,9 +173,9 @@ export default function Workspace({ clientId }: { clientId?: string }) {
 
       <Section
         title="What she knows"
-        aside={<span className="text-xs text-white/30">{data.documents.filter((d) => d.status === "ready").length} documents</span>}
+        aside={<span className="text-xs text-slate-400">{data.documents.filter((d) => d.status === "ready").length} documents</span>}
       >
-        <p className="mb-4 max-w-3xl text-sm text-white/50">
+        <p className="mb-4 max-w-3xl text-sm text-slate-500">
           Your documents, pages and files: she reads them now, and in a meeting she looks up what she needs. Kept in NDI&apos;s Google Drive; never shared.
         </p>
         <AddDocuments
@@ -195,20 +195,20 @@ export default function Workspace({ clientId }: { clientId?: string }) {
           }}
           onError={setError}
         />
-        <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-white/80">What Ava knows about {client.name}</h3>
+            <h3 className="text-sm font-medium text-slate-700">What Ava knows about {client.name}</h3>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-white/30">{digesting ? "Reading your documents…" : client.digest_at ? `Updated ${ago(client.digest_at)}` : ""}</span>
+              <span className="text-xs text-slate-400">{digesting ? "Reading your documents…" : client.digest_at ? `Updated ${ago(client.digest_at)}` : ""}</span>
               <button className={quiet} onClick={() => void rebuildDigest()} disabled={digesting}>
                 {digesting ? "Updating…" : "Update"}
               </button>
             </div>
           </div>
           {client.digest ? (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{client.digest}</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{client.digest}</p>
           ) : (
-            <p className="text-sm text-white/40">Nothing yet. Add documents and she writes down what she takes from them.</p>
+            <p className="text-sm text-slate-500">Nothing yet. Add documents and she writes down what she takes from them.</p>
           )}
         </div>
       </Section>
@@ -345,15 +345,15 @@ function AddDocuments({
           </button>
         </form>
       )}
-      <p className="text-xs text-white/30">
+      <p className="text-xs text-slate-400">
         PDF, Word, Excel, PowerPoint, Google Docs, Sheets and Slides, images and text — up to 4 MB here
         {pickerConfigured ? "; bigger files through Google Drive (its Upload tab takes them from your computer)." : "."}
       </p>
       {pending.length > 0 && (
         <ul className="space-y-1">
           {pending.map((label, i) => (
-            <li key={`${label}-${i}`} className="flex items-center gap-2 text-sm text-sky-200/80">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400" />
+            <li key={`${label}-${i}`} className="flex items-center gap-2 text-sm text-blue-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
               Reading {label}…
             </li>
           ))}
@@ -394,12 +394,12 @@ function DocumentList({
   }
 
   return (
-    <ul className="mt-4 divide-y divide-white/5 rounded-xl border border-white/10">
+    <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
       {documents.map((doc) => (
         <li key={doc.id} className="p-3">
           <div className="flex flex-wrap items-center gap-3">
             <button
-              className="min-w-0 flex-1 truncate text-left text-sm text-white/85 hover:text-white"
+              className="min-w-0 flex-1 truncate text-left text-sm text-slate-800 hover:text-slate-900"
               onClick={() => setOpen(open === doc.id ? null : doc.id)}
               title={doc.title}
             >
@@ -407,22 +407,22 @@ function DocumentList({
             </button>
             <Chip>{KIND[doc.kind]}</Chip>
             {doc.status === "ready" ? (
-              <span className="text-xs text-white/30">{doc.chars.toLocaleString()} characters · {ago(doc.created_at)}</span>
+              <span className="text-xs text-slate-400">{doc.chars.toLocaleString()} characters · {ago(doc.created_at)}</span>
             ) : doc.status === "failed" ? (
               <Chip tone="bad">Could not read</Chip>
             ) : (
               <Chip tone="info">Reading…</Chip>
             )}
-            <button className="text-xs text-white/35 hover:text-rose-300" onClick={() => void remove(doc)} disabled={removing === doc.id}>
+            <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void remove(doc)} disabled={removing === doc.id}>
               {removing === doc.id ? "Removing…" : "Remove"}
             </button>
           </div>
           {open === doc.id && (
-            <div className="mt-2 space-y-2 text-sm text-white/60">
-              {doc.status === "failed" && <p className="text-rose-200/80">{doc.error}</p>}
+            <div className="mt-2 space-y-2 text-sm text-slate-600">
+              {doc.status === "failed" && <p className="text-rose-700">{doc.error}</p>}
               {doc.summary && <p className="whitespace-pre-wrap leading-relaxed">{doc.summary}</p>}
               {doc.source && /^https?:/.test(doc.source) && (
-                <a href={doc.source} target="_blank" rel="noreferrer" className="text-xs text-sky-300/80 hover:text-sky-200">
+                <a href={doc.source} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:text-blue-700">
                   Open the original ↗
                 </a>
               )}
@@ -459,12 +459,20 @@ function UpcomingMeeting({
   const [open, setOpen] = useState(false);
   const state = briefState(meeting);
   const soon = new Date(meeting.starts_at).getTime() - now < 15 * 60_000;
+  const start = new Date(meeting.starts_at);
   return (
-    <li className="rounded-xl border border-white/10 bg-black/20">
-      <div className="flex flex-wrap items-center gap-3 p-4">
+    <li className={`rounded-xl border bg-slate-50 transition ${open ? "border-blue-200 ring-4 ring-blue-500/5" : "border-slate-200"}`}>
+      <div className="flex flex-wrap items-center gap-4 p-4">
+        {/* The day, as on a calendar page. */}
+        <div className="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-center shadow-sm">
+          <span className="w-full bg-blue-600 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+            {start.toLocaleDateString([], { month: "short" })}
+          </span>
+          <span className="py-1 text-lg font-semibold leading-none text-slate-900">{start.getDate()}</span>
+        </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-white/90">{meeting.title}</p>
-          <p className="text-xs text-white/40">
+          <p className="truncate font-medium text-slate-900">{meeting.title}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
             {when(meeting.starts_at)}
             {meeting.organizer && <> · organised by {meeting.organizer_name || meeting.organizer}</>}
             {meeting.guests?.length > 0 && <> · {meeting.guests.length} invited</>}
@@ -472,8 +480,8 @@ function UpcomingMeeting({
         </div>
         {soon && <Chip tone="info">Starting soon</Chip>}
         <Chip tone={state.tone}>{state.label}</Chip>
-        <button className={open ? quiet : primary} onClick={() => setOpen((v) => !v)}>
-          {open ? "Close" : "Prepare her"}
+        <button className={open || state.tone === "good" ? quiet : primary} onClick={() => setOpen((v) => !v)}>
+          {open ? "Close" : state.tone === "good" ? "Edit preparation" : "Prepare her"}
         </button>
       </div>
       {open && <PrepPanel meeting={meeting} q={q} onSaved={onChange} onError={onError} />}
@@ -534,10 +542,10 @@ function PrepPanel({
   }
 
   return (
-    <div className="space-y-5 border-t border-white/10 p-4">
+    <div className="space-y-5 border-t border-slate-200 p-4">
       {meeting.description.trim() && (
-        <details className="text-sm text-white/50">
-          <summary className="cursor-pointer text-white/40 hover:text-white/70">The invite&apos;s description</summary>
+        <details className="text-sm text-slate-500">
+          <summary className="cursor-pointer text-slate-500 hover:text-slate-600">The invite&apos;s description</summary>
           <p className="mt-2 whitespace-pre-wrap">{meeting.description}</p>
         </details>
       )}
@@ -545,7 +553,7 @@ function PrepPanel({
       <div className="grid gap-4">
         {PREP_FIELDS.map((f) => (
           <label key={f.key} className="block space-y-1.5">
-            <span className="text-xs font-medium text-white/60">{f.label}</span>
+            <span className="text-xs font-medium text-slate-600">{f.label}</span>
             <textarea
               rows={f.rows}
               className={field}
@@ -561,7 +569,7 @@ function PrepPanel({
       </div>
 
       <div className="space-y-3">
-        <h4 className="text-xs font-medium text-white/60">Documents for this meeting only</h4>
+        <h4 className="text-xs font-medium text-slate-600">Documents for this meeting only</h4>
         <AddDocuments
           q={q}
           meetingId={meeting.id}
@@ -593,16 +601,16 @@ function PrepPanel({
             Rewrite her brief
           </button>
         )}
-        {changed && !saving && <span className="text-xs text-amber-300/80">Not saved yet</span>}
+        {changed && !saving && <span className="text-xs text-amber-700">Not saved yet</span>}
       </div>
 
       {brief.text && (
-        <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.03] p-4">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h4 className="text-sm font-medium text-emerald-200/90">What she will walk in with</h4>
-            <span className="text-xs text-white/30">{brief.at ? `Written ${ago(brief.at)}` : ""}</span>
+            <h4 className="text-sm font-medium text-emerald-800">What she will walk in with</h4>
+            <span className="text-xs text-slate-400">{brief.at ? `Written ${ago(brief.at)}` : ""}</span>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{brief.text}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{brief.text}</p>
         </div>
       )}
     </div>
@@ -613,18 +621,18 @@ function PastMeeting({ meeting }: { meeting: Meeting }) {
   const [open, setOpen] = useState(false);
   const notes = meeting.notes;
   return (
-    <li className="rounded-xl border border-white/5 bg-black/10">
+    <li className="rounded-xl border border-slate-100 bg-slate-50">
       <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left" onClick={() => setOpen((v) => !v)} disabled={!notes}>
-        <span className="min-w-0 flex-1 truncate text-sm text-white/75">{meeting.title}</span>
-        <span className="text-xs text-white/35">{when(meeting.starts_at)}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{meeting.title}</span>
+        <span className="text-xs text-slate-400">{when(meeting.starts_at)}</span>
         {notes ? <Chip tone="good">Notes</Chip> : <Chip>No notes</Chip>}
       </button>
       {open && notes && (
-        <div className="space-y-3 border-t border-white/5 p-4 text-sm text-white/65">
+        <div className="space-y-3 border-t border-slate-100 p-4 text-sm text-slate-600">
           {notes.summary && <p className="whitespace-pre-wrap leading-relaxed">{notes.summary}</p>}
           {notes.body && (
             <details>
-              <summary className="cursor-pointer text-white/40 hover:text-white/70">The email she sent{notes.to ? ` to ${notes.to}` : ""}</summary>
+              <summary className="cursor-pointer text-slate-500 hover:text-slate-600">The email she sent{notes.to ? ` to ${notes.to}` : ""}</summary>
               <p className="mt-2 whitespace-pre-wrap">{notes.body}</p>
             </details>
           )}
@@ -658,7 +666,7 @@ function Instructions({ initial, name, q, onError }: { initial: string; name: st
 
   return (
     <Section title="How she works for you">
-      <p className="mb-3 max-w-3xl text-sm text-white/50">
+      <p className="mb-3 max-w-3xl text-sm text-slate-500">
         In your own words: who {name} is, the tone she should take, what she may and may not say. She reads this before every meeting.
       </p>
       <textarea

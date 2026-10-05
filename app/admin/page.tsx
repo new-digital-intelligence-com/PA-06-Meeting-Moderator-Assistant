@@ -16,9 +16,9 @@ export default async function AdminPage() {
         <Clients ava={process.env.AVA_EMAIL || null} />
       ) : (
         <main className="mx-auto w-full max-w-3xl p-6">
-          <p className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-5 text-sm text-amber-200">
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
             Clients live in Supabase, and SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set. Run{" "}
-            <code className="text-amber-100">db/schema.sql</code> once in Supabase&apos;s SQL editor, add pa-06 to its exposed
+            <code className="text-amber-900">db/schema.sql</code> once in Supabase&apos;s SQL editor, add pa-06 to its exposed
             schemas, set those two (see .env.example), and reload.
           </p>
         </main>
