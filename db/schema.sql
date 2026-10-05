@@ -1,15 +1,19 @@
 -- Ava's clients, what she knows about each, and their meetings. Postgres (Supabase), with
 -- pgvector for searching a client's documents by meaning.
 --
+-- The database is shared with other projects, so everything here is in Ava's own schema,
+-- "pa-06", and names it: nothing is created, changed or read outside it. pgvector itself
+-- is not installed here — it must already be enabled in the database (Supabase: Database
+-- → Extensions → vector); db/migrate.mjs checks, and finds its schema for `vector`.
+--
 -- Safe to run again: every statement only creates what is missing. Apply it with
---   node db/migrate.mjs            (reads DATABASE_URL from .env.local)
--- or paste it into Supabase's SQL editor.
+--   npm run db:migrate            (reads DATABASE_URL from .env.local)
 
-create extension if not exists vector;
+create schema if not exists "pa-06";
 
 -- A company Ava works for. Invites whose organiser is on one of its domains (or is one of
 -- its exact addresses, for personal accounts) are its meetings.
-create table if not exists clients (
+create table if not exists "pa-06".clients (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   domains text[] not null default '{}',
@@ -27,9 +31,9 @@ create table if not exists clients (
 );
 
 -- People who can sign in to a client's portal. One client per address.
-create table if not exists members (
+create table if not exists "pa-06".members (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references clients(id) on delete cascade,
+  client_id uuid not null references "pa-06".clients(id) on delete cascade,
   email text not null unique,
   name text,
   role text not null default 'owner',
@@ -39,9 +43,9 @@ create table if not exists members (
 
 -- Meetings on Ava's calendar, one row per occurrence. client_id is null for invites from
 -- somebody who is not a client: she skips those, and admin lists them.
-create table if not exists meetings (
+create table if not exists "pa-06".meetings (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid references clients(id) on delete cascade,
+  client_id uuid references "pa-06".clients(id) on delete cascade,
   event_id text not null unique,
   title text not null,
   starts_at timestamptz not null,
@@ -64,14 +68,14 @@ create table if not exists meetings (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index if not exists meetings_client_starts on meetings (client_id, starts_at);
+create index if not exists meetings_client_starts on "pa-06".meetings (client_id, starts_at);
 
 -- A document, a link or a Drive file a client gave Ava. meeting_id set: only for that
 -- meeting's preparation.
-create table if not exists knowledge (
+create table if not exists "pa-06".knowledge (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references clients(id) on delete cascade,
-  meeting_id uuid references meetings(id) on delete cascade,
+  client_id uuid not null references "pa-06".clients(id) on delete cascade,
+  meeting_id uuid references "pa-06".meetings(id) on delete cascade,
   kind text not null,
   title text not null,
   mime text,
@@ -84,23 +88,24 @@ create table if not exists knowledge (
   created_at timestamptz not null default now(),
   created_by text
 );
-create index if not exists knowledge_client on knowledge (client_id, created_at desc);
+create index if not exists knowledge_client on "pa-06".knowledge (client_id, created_at desc);
 
 -- The passages Ava searches during a meeting (text-embedding-3-small: 1536 dimensions).
-create table if not exists chunks (
+-- `vector` and `vector_cosine_ops` are pgvector's, found where it is installed.
+create table if not exists "pa-06".chunks (
   id bigserial primary key,
-  knowledge_id uuid not null references knowledge(id) on delete cascade,
-  client_id uuid not null references clients(id) on delete cascade,
-  meeting_id uuid references meetings(id) on delete cascade,
+  knowledge_id uuid not null references "pa-06".knowledge(id) on delete cascade,
+  client_id uuid not null references "pa-06".clients(id) on delete cascade,
+  meeting_id uuid references "pa-06".meetings(id) on delete cascade,
   position integer not null,
   content text not null,
   embedding vector(1536) not null
 );
-create index if not exists chunks_client on chunks (client_id);
-create index if not exists chunks_embedding on chunks using hnsw (embedding vector_cosine_ops);
+create index if not exists chunks_client on "pa-06".chunks (client_id);
+create index if not exists chunks_embedding on "pa-06".chunks using hnsw (embedding vector_cosine_ops);
 
 -- Sign-in links sent by email: only a hash is kept, each works once.
-create table if not exists login_tokens (
+create table if not exists "pa-06".login_tokens (
   hash text primary key,
   email text not null,
   expires_at timestamptz not null,
@@ -108,6 +113,6 @@ create table if not exists login_tokens (
 );
 
 -- NDI is client number one, so meetings NDI people invite her to keep working.
-insert into clients (name, domains, created_by)
+insert into "pa-06".clients (name, domains, created_by)
 select 'NDI', array['new-digital-intelligence.com'], 'setup'
-where not exists (select 1 from clients where 'new-digital-intelligence.com' = any(domains));
+where not exists (select 1 from "pa-06".clients where 'new-digital-intelligence.com' = any(domains));

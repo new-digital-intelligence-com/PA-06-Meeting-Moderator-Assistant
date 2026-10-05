@@ -12,7 +12,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
-import { db, hasDb } from "./db";
+import { db, hasDb, table } from "./db";
 import { readSession, type PortalUser } from "./session";
 
 export const adminDomain = () => (process.env.ADMIN_DOMAIN || "new-digital-intelligence.com").trim().toLowerCase();
@@ -50,7 +50,7 @@ export async function accessFor(email: string): Promise<PortalUser | null> {
   if (isAdminEmail(e)) return { email: e, role: "admin" };
   if (!hasDb()) return null;
   const [m] = await db()<{ client_id: string; name: string | null }[]>`
-    select m.client_id, m.name from members m join clients c on c.id = m.client_id
+    select m.client_id, m.name from ${table("members")} m join ${table("clients")} c on c.id = m.client_id
     where m.email = ${e} and c.status = 'active'`;
   return m ? { email: e, name: m.name ?? undefined, role: "client", clientId: m.client_id } : null;
 }
@@ -60,7 +60,8 @@ export async function roleFor(email: string, name?: string): Promise<PortalUser 
   const user = await accessFor(email);
   if (!user) return null;
   if (user.role === "client") {
-    await db()`update members set last_login_at = now(), name = coalesce(name, ${name ?? null}) where email = ${user.email}`;
+    await db()`
+      update ${table("members")} set last_login_at = now(), name = coalesce(name, ${name ?? null}) where email = ${user.email}`;
   }
   return { ...user, name: name ?? user.name };
 }
@@ -128,7 +129,7 @@ export async function portalClient(request: Request): Promise<{ user: PortalUser
     return { user, clientId: id };
   }
   const [m] = await db()<{ client_id: string }[]>`
-    select m.client_id from members m join clients c on c.id = m.client_id
+    select m.client_id from ${table("members")} m join ${table("clients")} c on c.id = m.client_id
     where m.email = ${user.email} and c.status = 'active'`;
   if (!m) throw new HttpError(403, "This address no longer has access.");
   return { user, clientId: m.client_id };

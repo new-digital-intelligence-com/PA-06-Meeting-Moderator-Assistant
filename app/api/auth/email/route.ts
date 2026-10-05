@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { accessFor, appOrigin, safeNext, tokenHash } from "@/lib/auth";
 import { avaGoogle } from "@/lib/ava";
 import { cleanAddresses, escapeHtml } from "@/lib/clients";
-import { db, hasDb } from "@/lib/db";
+import { db, table, hasDb } from "@/lib/db";
 import { sendEmail } from "@/lib/workspace";
 
 export const runtime = "nodejs";
@@ -34,14 +34,14 @@ export async function POST(request: Request) {
   if (!user) return sent;
 
   const sql = db();
-  await sql`delete from login_tokens where expires_at < now() - interval '1 day'`;
+  await sql`delete from ${table("login_tokens")} where expires_at < now() - interval '1 day'`;
   const [{ waiting }] = await sql<{ waiting: number }[]>`
-    select count(*)::int as waiting from login_tokens where email = ${email} and used_at is null and expires_at > now()`;
+    select count(*)::int as waiting from ${table("login_tokens")} where email = ${email} and used_at is null and expires_at > now()`;
   if (waiting >= MAX_WAITING) return sent;
 
   const token = crypto.randomBytes(32).toString("base64url");
   await sql`
-    insert into login_tokens (hash, email, expires_at)
+    insert into ${table("login_tokens")} (hash, email, expires_at)
     values (${tokenHash(token)}, ${email}, now() + ${`${MINUTES} minutes`}::interval)`;
 
   const link = new URL("/login/verify", appOrigin(request));

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handle, portalClient } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, table } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ export async function PATCH(request: Request) {
     const { clientId } = await portalClient(request);
     const { instructions = "" } = (await request.json().catch(() => ({}))) as { instructions?: string };
     const [client] = await db()<{ instructions: string }[]>`
-      update clients set instructions = ${String(instructions).slice(0, 20_000)} where id = ${clientId} returning instructions`;
+      update ${table("clients")} set instructions = ${String(instructions).slice(0, 20_000)} where id = ${clientId} returning instructions`;
     return NextResponse.json({ instructions: client?.instructions ?? "" });
   });
 }

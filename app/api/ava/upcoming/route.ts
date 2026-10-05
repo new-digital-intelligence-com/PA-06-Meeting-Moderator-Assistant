@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
-import { db, hasDb, type Client, type MeetingRow } from "@/lib/db";
+import { db, table, hasDb, type Client, type MeetingRow } from "@/lib/db";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
 import { avaInvites, type Invite } from "@/lib/workspace";
@@ -83,7 +83,7 @@ async function documentCounts(meetings: MeetingRow[]): Promise<Map<string, numbe
   if (!meetings.length) return new Map();
   const rows = await db()<{ id: string; n: number }[]>`
     select m.id, count(k.id)::int as n
-    from meetings m join knowledge k on k.client_id = m.client_id and k.status = 'ready' and (k.meeting_id is null or k.meeting_id = m.id)
+    from ${table("meetings")} m join ${table("knowledge")} k on k.client_id = m.client_id and k.status = 'ready' and (k.meeting_id is null or k.meeting_id = m.id)
     where m.id = any(${db().array(meetings.map((m) => m.id))}::uuid[])
     group by m.id`;
   return new Map(rows.map((r) => [r.id, r.n]));

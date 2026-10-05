@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { roleFor, safeNext, tokenHash } from "@/lib/auth";
-import { db, hasDb } from "@/lib/db";
+import { db, table, hasDb } from "@/lib/db";
 import { readSession, sessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
   // Spent in the same statement that checks it, so two clicks cannot both get in.
   const [row] = await db()<{ email: string }[]>`
-    update login_tokens set used_at = now()
+    update ${table("login_tokens")} set used_at = now()
     where hash = ${tokenHash(token)} and used_at is null and expires_at > now()
     returning email`;
   if (!row) return fail("That sign-in link has expired or was already used. Ask for a new one.");

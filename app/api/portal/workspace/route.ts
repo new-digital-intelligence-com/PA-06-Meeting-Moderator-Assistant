@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { avaGoogle } from "@/lib/ava";
 import { handle, HttpError, portalClient } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
-import { db } from "@/lib/db";
+import { db, table } from "@/lib/db";
 import { listDocuments } from "@/lib/knowledge";
 import { clientMeetings, syncIfStale } from "@/lib/schedule";
 
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       listDocuments(clientId),
       clientMeetings(clientId),
       db()<{ meeting_id: string; n: number }[]>`
-        select meeting_id, count(*)::int as n from knowledge where client_id = ${clientId} and meeting_id is not null group by meeting_id`,
+        select meeting_id, count(*)::int as n from ${table("knowledge")} where client_id = ${clientId} and meeting_id is not null group by meeting_id`,
     ]);
     const counts = new Map(perMeeting.map((r) => [r.meeting_id, r.n]));
     return NextResponse.json({

@@ -11,7 +11,7 @@
  * documents themselves for anything more specific (lib/knowledge.ts).
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { db, type Client, type MeetingRow, type Prep } from "./db";
+import { db, table, type Client, type MeetingRow, type Prep } from "./db";
 import { FAST, WRITER } from "./moderator";
 
 const anthropic = () => new Anthropic();
@@ -58,10 +58,10 @@ export async function summarise(clientName: string, title: string, text: string)
 /* ----------------------------------------------------------------- digest */
 
 export async function rebuildDigest(clientId: string): Promise<string> {
-  const [client] = await db()<Client[]>`select * from clients where id = ${clientId}`;
+  const [client] = await db()<Client[]>`select * from ${table("clients")} where id = ${clientId}`;
   if (!client) throw new Error("No such client.");
   const docs = await db()<{ title: string; summary: string | null; created_at: Date }[]>`
-    select title, summary, created_at from knowledge
+    select title, summary, created_at from ${table("knowledge")}
     where client_id = ${clientId} and meeting_id is null and status = 'ready'
     order by created_at desc limit 200`;
 
@@ -97,7 +97,7 @@ export async function rebuildDigest(clientId: string): Promise<string> {
       1800,
     );
   }
-  await db()`update clients set digest = ${digest}, digest_at = now() where id = ${clientId}`;
+  await db()`update ${table("clients")} set digest = ${digest}, digest_at = now() where id = ${clientId}`;
   return digest;
 }
 
@@ -133,7 +133,7 @@ function inviteText(m: MeetingRow): string {
 export async function hasPreparation(m: MeetingRow): Promise<boolean> {
   if (prepText(m.prep)) return true;
   const [{ n }] = await db()<{ n: number }[]>`
-    select count(*)::int as n from knowledge where meeting_id = ${m.id} and status = 'ready'`;
+    select count(*)::int as n from ${table("knowledge")} where meeting_id = ${m.id} and status = 'ready'`;
   return n > 0;
 }
 
@@ -143,16 +143,16 @@ export async function briefIsStale(m: MeetingRow, client: Client): Promise<boole
   if (m.prep_at && m.prep_at > m.brief_at) return true;
   if (client.digest_at && client.digest_at > m.brief_at) return true;
   const [{ newer }] = await db()<{ newer: number }[]>`
-    select count(*)::int as newer from knowledge where meeting_id = ${m.id} and created_at > ${m.brief_at}`;
+    select count(*)::int as newer from ${table("knowledge")} where meeting_id = ${m.id} and created_at > ${m.brief_at}`;
   return newer > 0;
 }
 
 export async function writeBrief(meetingId: string): Promise<MeetingRow> {
-  const [m] = await db()<MeetingRow[]>`select * from meetings where id = ${meetingId}`;
+  const [m] = await db()<MeetingRow[]>`select * from ${table("meetings")} where id = ${meetingId}`;
   if (!m?.client_id) throw new Error("No such meeting.");
-  const [client] = await db()<Client[]>`select * from clients where id = ${m.client_id}`;
+  const [client] = await db()<Client[]>`select * from ${table("clients")} where id = ${m.client_id}`;
   const docs = await db()<{ title: string; summary: string | null }[]>`
-    select title, summary from knowledge where meeting_id = ${meetingId} and status = 'ready' order by created_at`;
+    select title, summary from ${table("knowledge")} where meeting_id = ${meetingId} and status = 'ready' order by created_at`;
 
   const brief = await write(
     WRITER,
@@ -185,7 +185,7 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
     1500,
   );
   const [updated] = await db()<MeetingRow[]>`
-    update meetings set brief = ${brief}, brief_at = now(), updated_at = now() where id = ${meetingId} returning *`;
+    update ${table("meetings")} set brief = ${brief}, brief_at = now(), updated_at = now() where id = ${meetingId} returning *`;
   return updated;
 }
 

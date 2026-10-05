@@ -6,7 +6,7 @@
  * is given to a client by its organiser (lib/clients.ts). An invite from nobody's company
  * is "skipped": she does not go, and admins see it listed.
  */
-import { db, type Client, type MeetingRow, type Prep } from "./db";
+import { db, table, type Client, type MeetingRow, type Prep } from "./db";
 import { matchClient } from "./clients";
 import type { GoogleClient } from "./google";
 import { redisOrMongoKey } from "./store";
@@ -18,7 +18,7 @@ const SYNCED = "calendar:synced";
 
 /** Reads her calendar and brings the meetings table up to date with it. */
 export async function syncCalendar(google: GoogleClient): Promise<{ invites: Invite[]; meetings: MeetingRow[]; clients: Client[] }> {
-  const [invites, clients] = await Promise.all([avaInvites(google, DAYS_AHEAD * 24, PAGE), db()<Client[]>`select * from clients`]);
+  const [invites, clients] = await Promise.all([avaInvites(google, DAYS_AHEAD * 24, PAGE), db()<Client[]>`select * from ${table("clients")}`]);
   const rows = invites.map((i) => {
     // A paused client's meetings stay theirs, marked paused: she skips them, they keep their preparation.
     const client = matchClient(clients, i.organizerEmail, true);
@@ -40,7 +40,8 @@ export async function syncCalendar(google: GoogleClient): Promise<{ invites: Inv
   let meetings: MeetingRow[] = [];
   if (rows.length) {
     meetings = await db()<MeetingRow[]>`
-      insert into meetings (client_id, event_id, title, starts_at, ends_at, meeting_url, organizer, organizer_name, guests, description, status)
+      insert into ${table("meetings")} as m
+        (client_id, event_id, title, starts_at, ends_at, meeting_url, organizer, organizer_name, guests, description, status)
       select x.client_id, x.event_id, x.title, x.starts_at, x.ends_at, x.meeting_url, x.organizer, x.organizer_name,
         coalesce(x.guests, '[]'::jsonb), x.description, x.status
       from jsonb_to_recordset(${db().json(rows)}::jsonb) as x(
@@ -50,7 +51,7 @@ export async function syncCalendar(google: GoogleClient): Promise<{ invites: Inv
         client_id = excluded.client_id, title = excluded.title, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
         meeting_url = excluded.meeting_url, organizer = excluded.organizer, organizer_name = excluded.organizer_name,
         guests = excluded.guests, description = excluded.description,
-        status = case when meetings.status = 'ended' then 'ended' else excluded.status end,
+        status = case when m.status = 'ended' then 'ended' else excluded.status end,
         updated_at = now()
       returning *`;
     meetings.sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime());
@@ -60,7 +61,7 @@ export async function syncCalendar(google: GoogleClient): Promise<{ invites: Inv
   // whole window was read: a cut-off list would cancel what it did not reach.
   if (invites.length < PAGE) {
     await db()`
-      update meetings set status = 'cancelled', updated_at = now()
+      update ${table("meetings")} set status = 'cancelled', updated_at = now()
       where status in ('upcoming', 'skipped', 'paused') and starts_at > now() and starts_at < now() + ${`${DAYS_AHEAD} days`}::interval
         and not (event_id = any(${db().array(invites.map((i) => i.id))}::text[]))`;
   }
@@ -80,20 +81,21 @@ export async function syncIfStale(google: GoogleClient, maxAgeMs = 60_000): Prom
 /** A client's meetings: the next two weeks, and the last thirty days. */
 export async function clientMeetings(clientId: string): Promise<MeetingRow[]> {
   return db()<MeetingRow[]>`
-    select * from meetings
+    select * from ${table("meetings")}
     where client_id = ${clientId} and status <> 'cancelled' and starts_at > now() - interval '30 days'
     order by starts_at`;
 }
 
 export async function clientMeeting(clientId: string, id: string): Promise<MeetingRow | null> {
-  const [m] = await db()<MeetingRow[]>`select * from meetings where id = ${id} and client_id = ${clientId}`;
+  const [m] = await db()<MeetingRow[]>`select * from ${table("meetings")} where id = ${id} and client_id = ${clientId}`;
   return m ?? null;
 }
 
 /** Invites she got from organisers who are nobody's client — for admins. */
 export async function skippedInvites(): Promise<MeetingRow[]> {
   return db()<MeetingRow[]>`
-    select * from meetings where status = 'skipped' and starts_at > now() - interval '7 days' order by starts_at desc limit 50`;
+    select * from ${table("meetings")}
+    where status = 'skipped' and starts_at > now() - interval '7 days' order by starts_at desc limit 50`;
 }
 
 export function cleanPrep(input: unknown): Prep {
@@ -104,7 +106,7 @@ export function cleanPrep(input: unknown): Prep {
 
 export async function savePrep(clientId: string, id: string, prep: Prep): Promise<MeetingRow | null> {
   const [m] = await db()<MeetingRow[]>`
-    update meetings set prep = ${db().json(prep)}::jsonb, prep_at = now(), updated_at = now()
+    update ${table("meetings")} set prep = ${db().json(prep)}::jsonb, prep_at = now(), updated_at = now()
     where id = ${id} and client_id = ${clientId} returning *`;
   return m ?? null;
 }
@@ -115,7 +117,8 @@ export async function saveNotes(
   notes: { to?: string; subject?: string; body?: string; summary?: string; sentAt?: number; actions?: unknown[] },
 ): Promise<void> {
   await db()`
-    update meetings set notes = coalesce(notes, '{}'::jsonb) || ${db().json(JSON.parse(JSON.stringify(notes)))}::jsonb, status = 'ended',
+    update ${table("meetings")}
+    set notes = coalesce(notes, '{}'::jsonb) || ${db().json(JSON.parse(JSON.stringify(notes)))}::jsonb, status = 'ended',
       ended_at = coalesce(ended_at, now()), updated_at = now()
     where id = ${meetingId}`;
 }

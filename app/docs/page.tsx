@@ -604,8 +604,9 @@ export default function Docs() {
                 </Card>
                 <Card tone="slate" title="Where it is kept">
                   The files: NDI’s Drive, one folder per client inside <C>CLIENTS_DRIVE_FOLDER</C>, written by Ava’s account.
-                  The passages, their vectors, summaries, briefs and notes: Postgres with pgvector (Supabase, Frankfurt). OpenAI
-                  only turns passages into vectors — nothing is stored there.
+                  The passages, their vectors, summaries, briefs and notes: Postgres with pgvector, in a Supabase database shared
+                  with other projects — all of it in her own schema, <C>pa-06</C>, which every query names. OpenAI only turns
+                  passages into vectors — nothing is stored there.
                 </Card>
               </div>
             </Section>
@@ -665,7 +666,12 @@ export default function Docs() {
                   The client’s page (meetings and preparation, documents, how she works for you) and NDI’s (clients, who signs
                   in, invites she skipped). Admins open any client’s page as the client sees it.
                 </FileRow>
-                <FileRow path="db/schema.sql · db/migrate.mjs">The tables, and the one command that creates them: npm run db:migrate.</FileRow>
+                <FileRow path="lib/db.ts · db/schema.sql · db/migrate.mjs">
+                  Her schema, <C>pa-06</C>, and its tables. The database is shared with other projects, so every query names the
+                  schema — never the search path, which the pooler does not keep and which would find another project’s tables
+                  of the same name — and pgvector’s type and operator are named where it is installed.{" "}
+                  <C>npm run db:migrate</C> creates the schema and touches nothing else.
+                </FileRow>
                 <FileRow path="lib/recall.ts · app/bot · components/Stage.tsx" tag={<Chip>retired</Chip>}>
                   The Recall bot she used before she had her own Chrome. Its stage is behind sign-in now, where Recall’s browser
                   cannot reach it, so this path no longer works.
@@ -759,7 +765,7 @@ export default function Docs() {
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
                       [<C key="v">AVA_ALIASES</C>, "Other spellings of her name (default Eva, Iva, Eeva, Ayva, Avah)"],
                       [<C key="v">BOT_NAME</C>, "Her name"],
-                      [<C key="v">DATABASE_URL</C>, "Clients, documents, meetings — Postgres with pgvector (Supabase transaction pooler)"],
+                      [<C key="v">DATABASE_URL</C>, "Clients, documents, meetings — Postgres with pgvector enabled (Supabase transaction pooler), all in her schema pa-06"],
                       [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
                       [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
                       [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],
@@ -826,7 +832,9 @@ http://localhost:8080/vnc.html`}</CodeBlock>
               </div>
               <div className="mt-4">
                 <CodeBlock title="clients: once, from the repository">{`# DATABASE_URL in .env.local (Supabase → Connect → Transaction pooler)
-npm run db:migrate             # creates the tables; NDI is client number one
+# pgvector enabled in the database (Database → Extensions → vector)
+npm run db:migrate             # creates schema pa-06 and its tables, nothing
+                               # else; NDI is client number one
 
 # then, signed in as anybody @new-digital-intelligence.com:
 /admin                         # set up a client, invite their people

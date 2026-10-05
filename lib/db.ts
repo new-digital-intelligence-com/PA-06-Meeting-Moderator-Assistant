@@ -9,10 +9,20 @@
  * Connect through Supabase's transaction pooler (port 6543): serverless functions open
  * and drop connections constantly, and the pooler is what absorbs that. It does not keep
  * prepared statements between transactions, hence `prepare: false`.
+ *
+ * The database is shared with other projects. Everything of hers is in one schema of her
+ * own, "pa-06", and every query names it (`table()`): never the search path, which the
+ * pooler does not carry from one transaction to the next, and which would happily find
+ * another project's `clients` or `meetings` instead.
  */
 import postgres from "postgres";
 
 type Sql = ReturnType<typeof postgres>;
+
+/** Her schema — created by db/migrate.mjs; nothing of hers lives outside it. */
+export const SCHEMA = "pa-06";
+
+const g = globalThis as { __avaSql?: Sql; __avaVector?: Promise<string> };
 
 export function hasDb(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -22,9 +32,31 @@ export function db(): Sql {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set: clients and their knowledge live in Postgres (see .env.example).");
   // One pool per server instance, kept across hot reloads in development.
-  const g = globalThis as { __avaSql?: Sql };
   g.__avaSql ??= postgres(url, { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 15, onnotice: () => {} });
   return g.__avaSql;
+}
+
+type Table = "clients" | "members" | "meetings" | "knowledge" | "chunks" | "login_tokens";
+
+/** One of her tables, schema and all, to put in a query: db()`select * from ${table("clients")}`. */
+export const table = (name: Table) => db()(`${SCHEMA}.${name}`);
+
+/**
+ * pgvector's schema ("extensions" on Supabase), asked once per instance: the vector type
+ * and its distance operator are named with it, for the same reason as the tables.
+ */
+export function vectorSchema(): Promise<string> {
+  g.__avaVector ??= db()<{ schema: string }[]>`
+    select n.nspname as schema from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname = 'vector'`
+    .then(([row]) => {
+      if (!row) throw new Error("pgvector is not enabled in this database (Supabase: Database → Extensions → vector).");
+      return row.schema;
+    })
+    .catch((e) => {
+      g.__avaVector = undefined;
+      throw e;
+    });
+  return g.__avaVector;
 }
 
 export type Client = {

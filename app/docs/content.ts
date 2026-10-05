@@ -30,6 +30,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Her tables in a schema of their own: pa-06",
+    points: [
+      "Her Supabase database is shared with other projects. Everything of hers — clients, who signs in, meetings, documents, passages, sign-in links — is in the schema pa-06, which npm run db:migrate creates; it touches nothing outside it.",
+      "Every query names the schema instead of relying on the search path, which the transaction pooler does not keep and which would find another project's clients or meetings first. pgvector's type and distance operator are named where it is installed (extensions, on Supabase).",
+      "pgvector is not installed by her: it is enabled once for the whole database (Database → Extensions → vector). Without it the migration stops and changes nothing.",
+      "Tested on a Postgres with another project's clients and meetings tables beside hers, pgvector off the search path: hers worked, theirs came out untouched.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-05",
     title: "Clients: one Ava, each company with its own knowledge",
     points: [
       "Everything is behind sign-in now, except signing in and these docs. NDI — every address on ADMIN_DOMAIN — signs in with Google and sees the control room and every client. A client's people sign in with Google or a link by email (15 minutes, once) and see only their own page. Nobody signs up: an admin adds them.",

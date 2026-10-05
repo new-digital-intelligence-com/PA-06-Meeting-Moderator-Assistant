@@ -8,7 +8,7 @@
  */
 import type postgres from "postgres";
 import { avaGoogle } from "./ava";
-import { db, type Client, type Member } from "./db";
+import { db, table, type Client, type Member } from "./db";
 import { sendEmail } from "./workspace";
 
 import { PERSONAL, emailDomain } from "./mail-domains";
@@ -39,11 +39,11 @@ export function matchClient(clients: Client[], organizer: string | null | undefi
 }
 
 export async function activeClients(): Promise<Client[]> {
-  return db()<Client[]>`select * from clients where status = 'active'`;
+  return db()<Client[]>`select * from ${table("clients")} where status = 'active'`;
 }
 
 export async function getClient(id: string): Promise<Client | null> {
-  const [c] = await db()<Client[]>`select * from clients where id = ${id}`;
+  const [c] = await db()<Client[]>`select * from ${table("clients")} where id = ${id}`;
   return c ?? null;
 }
 
@@ -57,15 +57,15 @@ export type ClientSummary = Client & {
 export async function listClients(): Promise<ClientSummary[]> {
   return db()<ClientSummary[]>`
     select c.*,
-      (select count(*)::int from members m where m.client_id = c.id) as members,
-      (select count(*)::int from knowledge k where k.client_id = c.id and k.meeting_id is null) as documents,
-      (select count(*)::int from meetings x where x.client_id = c.id and x.starts_at > now() and x.status <> 'cancelled') as upcoming,
-      (select max(x.starts_at) from meetings x where x.client_id = c.id and x.starts_at <= now() and x.status <> 'cancelled') as last_meeting
-    from clients c order by c.created_at`;
+      (select count(*)::int from ${table("members")} m where m.client_id = c.id) as members,
+      (select count(*)::int from ${table("knowledge")} k where k.client_id = c.id and k.meeting_id is null) as documents,
+      (select count(*)::int from ${table("meetings")} x where x.client_id = c.id and x.starts_at > now() and x.status <> 'cancelled') as upcoming,
+      (select max(x.starts_at) from ${table("meetings")} x where x.client_id = c.id and x.starts_at <= now() and x.status <> 'cancelled') as last_meeting
+    from ${table("clients")} c order by c.created_at`;
 }
 
 export async function listMembers(clientId: string): Promise<Member[]> {
-  return db()<Member[]>`select * from members where client_id = ${clientId} order by invited_at`;
+  return db()<Member[]>`select * from ${table("members")} where client_id = ${clientId} order by invited_at`;
 }
 
 export async function createClient(input: {
@@ -83,7 +83,7 @@ export async function createClient(input: {
   if (!domains.length && !addresses.length) throw new Error("Add the company's domain (or a person's exact address), so Ava knows which invites are theirs.");
   return db().begin(async (sql) => {
     const [client] = await sql<Client[]>`
-      insert into clients (name, domains, addresses, created_by)
+      insert into ${table("clients")} (name, domains, addresses, created_by)
       values (${name}, ${sql.array(domains)}::text[], ${sql.array(addresses)}::text[], ${input.by}) returning *`;
     for (const email of contacts) await addMemberWith(sql, client.id, email);
     return client;
@@ -102,24 +102,25 @@ export async function updateClient(
   const instructions = patch.instructions !== undefined ? patch.instructions.slice(0, 20_000) : current.instructions;
   const status = patch.status === "paused" || patch.status === "active" ? patch.status : current.status;
   const [c] = await db()<Client[]>`
-    update clients set name = ${name}, domains = ${db().array(domains)}::text[], addresses = ${db().array(addresses)}::text[],
+    update ${table("clients")} set name = ${name}, domains = ${db().array(domains)}::text[], addresses = ${db().array(addresses)}::text[],
       instructions = ${instructions}, status = ${status}
     where id = ${id} returning *`;
   return c;
 }
 
 export async function deleteClient(id: string): Promise<void> {
-  await db()`delete from clients where id = ${id}`;
+  await db()`delete from ${table("clients")} where id = ${id}`;
 }
 
 async function addMemberWith(sql: postgres.ISql, clientId: string, email: string, name?: string): Promise<Member> {
   const e = email.trim().toLowerCase();
   const [taken] = await sql<{ name: string }[]>`
-    select c.name from members m join clients c on c.id = m.client_id where m.email = ${e} and m.client_id <> ${clientId}`;
+    select c.name from ${table("members")} m join ${table("clients")} c on c.id = m.client_id
+    where m.email = ${e} and m.client_id <> ${clientId}`;
   if (taken) throw new Error(`${e} already signs in for ${taken.name}.`);
   const [m] = await sql<Member[]>`
-    insert into members (client_id, email, name) values (${clientId}, ${e}, ${name ?? null})
-    on conflict (email) do update set name = coalesce(excluded.name, members.name) returning *`;
+    insert into ${table("members")} as m (client_id, email, name) values (${clientId}, ${e}, ${name ?? null})
+    on conflict (email) do update set name = coalesce(excluded.name, m.name) returning *`;
   return m;
 }
 
@@ -129,7 +130,7 @@ export async function addMember(clientId: string, email: string, name?: string):
 }
 
 export async function removeMember(clientId: string, memberId: string): Promise<void> {
-  await db()`delete from members where id = ${memberId} and client_id = ${clientId}`;
+  await db()`delete from ${table("members")} where id = ${memberId} and client_id = ${clientId}`;
 }
 
 /**
