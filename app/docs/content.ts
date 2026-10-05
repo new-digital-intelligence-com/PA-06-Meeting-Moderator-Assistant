@@ -30,6 +30,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Clients can sign in with Google",
+    points: [
+      "The site's “Sign in with Google” can use its own OAuth client (GOOGLE_LOGIN_CLIENT_ID and _SECRET), in a Google project open to outside accounts — ava-avatar, which also has the Drive button. Ava's own connection to her calendar, Gmail and Drive stays on GOOGLE_CLIENT_ID; without the two new settings, sign-in uses it as before.",
+      "Who gets in is unchanged: NDI addresses, and the people a client was given. The emailed link still works for everyone.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "The Drive button can have a Google project of its own",
     points: [
       "Google's file picker needs an API key, a project number and an OAuth client — and they can come from their own Google Cloud project (\"Ava Avatar\"), apart from the one the sign-in uses. NEXT_PUBLIC_GOOGLE_CLIENT_ID is then that project's web client, not GOOGLE_CLIENT_ID. Nothing in the code changed: .env.example and the settings table say how.",
