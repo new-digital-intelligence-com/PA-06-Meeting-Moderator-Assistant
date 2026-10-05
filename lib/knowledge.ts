@@ -240,6 +240,41 @@ export async function listDocuments(clientId: string, meetingId: string | null =
   return found.map(asKnowledge);
 }
 
+/** One of the client's documents — none of anybody else's. */
+export async function getDocument(clientId: string, id: string): Promise<Knowledge | null> {
+  const found = await rows<Record<string, unknown> | null>(
+    db().from("knowledge").select("*").eq("id", id).eq("client_id", clientId).maybeSingle(),
+  );
+  return found ? asKnowledge(found) : null;
+}
+
+/**
+ * What she read from a document: its passages back in order, with the overlap between
+ * neighbours taken out again (each passage begins with the end of the one before).
+ */
+export async function documentText(clientId: string, id: string): Promise<string> {
+  const passages = await rows<{ content: string }[]>(
+    db().from("chunks").select("content").eq("knowledge_id", id).eq("client_id", clientId).order("position").limit(1000),
+  );
+  let text = "";
+  for (const { content } of passages) {
+    if (!text) {
+      text = content;
+      continue;
+    }
+    let joined = false;
+    for (let k = Math.min(400, text.length, content.length); k >= 20; k--) {
+      if (text.endsWith(content.slice(0, k))) {
+        text += content.slice(k);
+        joined = true;
+        break;
+      }
+    }
+    if (!joined) text += `\n\n${content}`;
+  }
+  return text;
+}
+
 /** Removes a document, its passages, and its copy in Drive. */
 export async function removeDocument(clientId: string, id: string): Promise<Knowledge | null> {
   const removed = await rows<Record<string, unknown> | null>(

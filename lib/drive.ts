@@ -182,6 +182,32 @@ export async function remove(google: GoogleClient, id: string): Promise<void> {
   }
 }
 
+/** Largest file sent back for a preview: a response from Vercel stays under 4.5 MB. */
+export const PREVIEW_MAX_BYTES = 4.3 * 1024 * 1024;
+
+/**
+ * A kept copy, to show the client: Google Docs, Sheets and Slides as a PDF, anything else
+ * as it is. Null when it is too large to send back through the site.
+ */
+export async function storedFile(google: GoogleClient, id: string): Promise<{ name: string; mime: string; data: Buffer } | null> {
+  const meta = await google.request<{ name: string; mimeType: string; size?: string }>(
+    `${DRIVE}/files/${encodeURIComponent(id)}?fields=name,mimeType,size&supportsAllDrives=true`,
+  );
+  if (Number(meta.size ?? 0) > PREVIEW_MAX_BYTES) return null;
+  const asPdf = Boolean(GOOGLE_TYPES[meta.mimeType]);
+  const token = await google.token();
+  const res = await fetch(
+    asPdf
+      ? `${DRIVE}/files/${encodeURIComponent(id)}/export?mimeType=application%2Fpdf`
+      : `${DRIVE}/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`Drive would not give back the file (${res.status}).`);
+  const data = Buffer.from(await res.arrayBuffer());
+  if (data.length > PREVIEW_MAX_BYTES) return null;
+  return { name: meta.name, mime: asPdf ? "application/pdf" : meta.mimeType, data };
+}
+
 /** Largest file taken from a client's Drive. */
 export const PICK_MAX_BYTES = 30 * 1024 * 1024;
 

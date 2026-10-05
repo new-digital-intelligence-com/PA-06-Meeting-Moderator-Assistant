@@ -6,7 +6,7 @@
  * admin sees any client's (`clientId`), the same page.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
 import Markdown from "./Markdown";
 import { Chip, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
@@ -433,6 +433,7 @@ function DocumentList({
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<Doc | null>(null);
   if (!documents.length) return null;
 
   async function remove(doc: Doc) {
@@ -449,6 +450,7 @@ function DocumentList({
   }
 
   return (
+    <>
     <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
       {documents.map((doc) => (
         <li key={doc.id} className="p-3">
@@ -468,6 +470,11 @@ function DocumentList({
             ) : (
               <Chip tone="info">Reading…</Chip>
             )}
+            {doc.status === "ready" && (
+              <button className="text-xs font-medium text-blue-600 hover:text-blue-700" onClick={() => setPreviewing(doc)}>
+                Preview
+              </button>
+            )}
             <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void remove(doc)} disabled={removing === doc.id}>
               {removing === doc.id ? "Removing…" : "Remove"}
             </button>
@@ -486,6 +493,154 @@ function DocumentList({
         </li>
       ))}
     </ul>
+    {previewing && <Preview doc={previewing} q={q} onClose={() => setPreviewing(null)} />}
+    </>
+  );
+}
+
+type Loaded<T> = T | { error: string } | null;
+
+/**
+ * One document, two ways: the file as it was given (the copy kept in NDI's Drive — Google
+ * files as a PDF), and the text she read from it, which is what she searches in a meeting.
+ * A link has only the second.
+ */
+function Preview({ doc, q, onClose }: { doc: Doc; q: string; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const heading = useId();
+  const hasFile = doc.kind !== "link";
+  const [view, setView] = useState<"file" | "text">(hasFile ? "file" : "text");
+  const [file, setFile] = useState<Loaded<{ url: string; type: string; text?: string }>>(null);
+  const [read, setRead] = useState<Loaded<{ text: string }>>(null);
+
+  useEffect(() => {
+    if (!dialog.current?.open) dialog.current?.showModal();
+  }, []);
+
+  // Fetched rather than framed: when there is no copy to show, the reason reads as a sentence, not as raw JSON.
+  useEffect(() => {
+    if (!hasFile) return;
+    let alive = true;
+    let url = "";
+    (async () => {
+      const res = await fetch(`/api/portal/knowledge/${doc.id}/file${q}`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const text = blob.type.startsWith("text/") ? await blob.text() : undefined;
+      if (!alive) return;
+      url = URL.createObjectURL(blob);
+      setFile({ url, type: blob.type, text });
+    })().catch((e) => alive && setFile({ error: e instanceof Error ? e.message : "Could not load it." }));
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [hasFile, doc.id, q]);
+
+  useEffect(() => {
+    if (view !== "text" || read) return;
+    let alive = true;
+    api<{ text: string }>(`/api/portal/knowledge/${doc.id}${q}`)
+      .then((d) => alive && setRead({ text: d.text }))
+      .catch((e) => alive && setRead({ error: e instanceof Error ? e.message : "Could not load it." }));
+    return () => {
+      alive = false;
+    };
+  }, [view, read, doc.id, q]);
+
+  const close = () => dialog.current?.close();
+  const original = doc.source && /^https?:/.test(doc.source) ? doc.source : null;
+  const loading = <p className="p-6 text-sm text-slate-500">Loading…</p>;
+
+  return (
+    <dialog
+      ref={dialog}
+      aria-labelledby={heading}
+      onClose={onClose}
+      onClick={(e) => e.target === e.currentTarget && close()}
+      className="m-auto h-[calc(100dvh-2rem)] max-h-[56rem] w-[calc(100vw-2rem)] max-w-5xl overflow-hidden rounded-2xl bg-white p-0 shadow-2xl backdrop:bg-slate-900/50"
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <h2 id={heading} className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900" title={doc.title}>
+            {doc.title}
+          </h2>
+          {hasFile && (
+            <div role="tablist" aria-label="Show" className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
+              {(["file", "text"] as const).map((v) => (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+                >
+                  {v === "file" ? "The file" : "What she read"}
+                </button>
+              ))}
+            </div>
+          )}
+          {original && (
+            <a href={original} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-600 hover:text-blue-700">
+              {doc.kind === "link" ? "Open the page ↗" : "Open the original ↗"}
+            </a>
+          )}
+          <button
+            onClick={close}
+            aria-label="Close"
+            className="rounded-md px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="relative min-h-0 flex-1 overflow-auto overscroll-contain bg-slate-50">
+          {view === "file" ? (
+            !file ? (
+              loading
+            ) : "error" in file ? (
+              <div className="space-y-3 p-6 text-sm text-slate-600">
+                <p>{file.error}</p>
+                <button className={quiet} onClick={() => setView("text")}>
+                  See what she read
+                </button>
+              </div>
+            ) : file.type.startsWith("image/") ? (
+              // A local object URL: next/image has nothing to optimise here.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={file.url} alt={doc.title} className="mx-auto max-h-full max-w-full object-contain p-4" />
+            ) : file.type === "application/pdf" ? (
+              <iframe src={file.url} title={doc.title} className="absolute inset-0 h-full w-full bg-white" />
+            ) : file.text !== undefined ? (
+              <pre className="whitespace-pre-wrap break-words p-5 font-mono text-xs leading-relaxed text-slate-800">{file.text}</pre>
+            ) : (
+              <div className="space-y-3 p-6 text-sm text-slate-600">
+                <p>This kind of file cannot be shown here.</p>
+                <a href={file.url} download={doc.title} className={quiet}>
+                  Download it
+                </a>
+              </div>
+            )
+          ) : !read ? (
+            loading
+          ) : "error" in read ? (
+            <p className="p-6 text-sm text-rose-700">{read.error}</p>
+          ) : (
+            <div className="p-5">
+              <p className="mb-3 text-xs text-slate-400">
+                {doc.chars.toLocaleString()} characters — what she searches when this comes up in a meeting.
+              </p>
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800">
+                {read.text || "Nothing was read from it."}
+              </pre>
+            </div>
+          )}
+        </div>
+      </div>
+    </dialog>
   );
 }
 

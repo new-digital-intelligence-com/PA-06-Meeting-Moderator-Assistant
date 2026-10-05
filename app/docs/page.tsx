@@ -593,7 +593,8 @@ export default function Docs() {
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
                   Docs, Sheets and Slides as they are stored, and are read as text (every tab of a sheet). Pages are fetched with
                   care: only public addresses, redirects checked, 8 MB at most. Up to 400,000 characters per document, 300
-                  documents per client.
+                  documents per client. Preview shows the kept copy (Google files as a PDF, up to 4.3 MB) or the text she
+                  read, joined back from its passages.
                 </Card>
                 <Card tone="amber" title="Her homework">
                   Each document is summarised as it arrives (Haiku). From the summaries she writes “What Ava knows about
@@ -747,7 +748,8 @@ export default function Docs() {
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
                   [<C key="r">/api/admin/clients · [id] · [id]/members</C>, "Admins", "List, create, edit, pause or delete clients; who signs in; invitations"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
-                  [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link) or remove one"],
+                  [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link); read back what she took from one, or remove it"],
+                  [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],
                   [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting; save its preparation and write her brief"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
                   [<C key="r">/api/calendar · /api/drive</C>, "Control room", "Your meetings; find and share files"],

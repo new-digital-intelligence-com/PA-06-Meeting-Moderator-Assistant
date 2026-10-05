@@ -30,6 +30,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-05",
+    title: "Preview a document",
+    points: [
+      "Every document that was read has a Preview, in the list and in a meeting's preparation. It opens over the page with two views: the file as it was given — the copy kept in NDI's Drive, Google Docs, Sheets and Slides (and so Word, Excel and PowerPoint) as a PDF — and “What she read”, the text she searches in a meeting, put back together from its passages. A link has only the second, and a button to open the page.",
+      "The file comes through the site, from Ava's Drive, to the client's own people and NDI only. Up to 4.3 MB (Vercel's limit for a response); a bigger one, or one read without a copy kept, says so and offers what she read. Nothing that could run in the page is shown as itself: HTML and other text as plain text, anything unknown as a download.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-05",
     title: "A client's page in three tabs, and what she knows as a README",
     points: [
       "A client's page has a tab bar — Meetings · What she knows · How she works for you — with a count beside the first two. All three stay loaded, so an upload in progress or unsaved text survives a switch.",
