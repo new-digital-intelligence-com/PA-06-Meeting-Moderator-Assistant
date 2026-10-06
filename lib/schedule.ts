@@ -7,7 +7,7 @@
  * is "skipped": she does not go, and admins see it listed.
  */
 import { asMeeting, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
-import { allClients, matchClient } from "./clients";
+import { allClients, clientPeople, matchClient } from "./clients";
 import type { GoogleClient } from "./google";
 import { redisOrMongoKey } from "./store";
 import { avaInvites, type Invite } from "./workspace";
@@ -25,10 +25,10 @@ const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000)
  * finished meeting finished, and marks what has gone from her calendar as cancelled.
  */
 export async function syncCalendar(google: GoogleClient): Promise<{ invites: Invite[]; meetings: MeetingRow[]; clients: Client[] }> {
-  const [invites, clients] = await Promise.all([avaInvites(google, DAYS_AHEAD * 24, PAGE), allClients()]);
+  const [invites, clients, people] = await Promise.all([avaInvites(google, DAYS_AHEAD * 24, PAGE), allClients(), clientPeople()]);
   const found = invites.map((i) => {
     // A paused client's meetings stay theirs, marked paused: she skips them, they keep their preparation.
-    const client = matchClient(clients, i.organizerEmail, true);
+    const client = matchClient(clients, people, i.organizerEmail, true);
     return {
       client_id: client?.id ?? null,
       event_id: i.id,

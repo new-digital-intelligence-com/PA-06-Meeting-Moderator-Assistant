@@ -18,7 +18,7 @@ export async function GET() {
   });
 }
 
-/** A new client: who they are, which invites are theirs, and who signs in for them. */
+/** A new client: who they are, which invites are theirs, and who can use her for them. */
 export async function POST(request: Request) {
   return handle(async () => {
     const admin = await requireAdmin();

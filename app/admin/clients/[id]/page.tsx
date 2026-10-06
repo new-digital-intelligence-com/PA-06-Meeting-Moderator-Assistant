@@ -11,7 +11,7 @@ import { getClient } from "@/lib/clients";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Client — Ava" };
 
-/** One client, as NDI sees it: who signs in and which invites are theirs, then their page as they see it. */
+/** One client, as NDI sees it: who can use her and which invites are theirs, then their page as they see it. */
 export default async function AdminClientPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireAdminPage();
   const { id } = await params;

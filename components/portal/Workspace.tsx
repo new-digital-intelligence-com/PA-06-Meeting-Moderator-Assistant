@@ -143,7 +143,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         <p className="max-w-3xl text-sm leading-relaxed text-slate-500">
           Invite <span className="text-slate-700">{ava}</span> to a Google Meet from your calendar, like a colleague, and she joins it.
           Here you give her what she should know about {client.name}, and prepare her for each meeting.
-          {routes.length > 0 && <> Meetings organised by {routes.join(", ")} are yours.</>}
+          {routes.length > 0 && <> Meetings organised by {routes.join(", ")} are yours too.</>}
         </p>
       </header>
 

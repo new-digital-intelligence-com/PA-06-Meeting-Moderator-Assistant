@@ -545,7 +545,7 @@ export default function Docs() {
                 items={[
                   {
                     title: "NDI sets the client up (/admin)",
-                    body: "Name, company domains — or exact addresses for personal accounts, since gmail.com is everybody — and who may sign in for them. Ava emails each an invitation from her own Gmail.",
+                    body: "Name, who can use her — they open the client’s page and she joins the meetings they invite her to, from any address — and, for anyone else whose invites count, the company domain or exact addresses (gmail.com is everybody). Ava emails each person who can use her an invitation from her own Gmail.",
                     tone: "sky",
                   },
                   {
@@ -578,10 +578,12 @@ export default function Docs() {
 
               <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <Card tone="sky" title="Whose meeting is it?">
-                  The organiser’s: an exact address first, then the company domain — never a guest, or anybody could put one
-                  client’s employee on an invite and have her for free. An invite from nobody’s client is skipped: she does not
-                  go, and admins see it under “Invites she skipped”, with one click to make that company a client. NDI is a
-                  client too, so NDI’s own meetings go on as before.
+                  The organiser’s: one of the client’s exact addresses first, then the people who can use her, then the company
+                  domain — never a guest, or anybody could put one client’s employee on an invite and have her for free. Someone
+                  who can use her brings every meeting they organise to that client, so NDI’s own people are not added to
+                  clients (admins see every client anyway). An invite from nobody’s client is skipped: she does not go, and
+                  admins see it under “Invites she skipped”, with one click to make that company a client. NDI is a client too,
+                  so NDI’s own meetings go on as before.
                 </Card>
                 <Card tone="emerald" title="Who sees what">
                   Admins — every address on <C>ADMIN_DOMAIN</C> — see every client, the control room and these docs. A client’s
@@ -662,7 +664,7 @@ export default function Docs() {
                   Signing in with Google (who you are, nothing more) or with a link by email: 15 minutes, once, stored only as a
                   hash, and used by a button — mail scanners open links, and would spend it.
                 </FileRow>
-                <FileRow path="lib/clients.ts">Clients, who signs in for them, matching an organiser to a client, the invitation email.</FileRow>
+                <FileRow path="lib/clients.ts">Clients, who can use her for them, matching an organiser to a client, the invitation email.</FileRow>
                 <FileRow path="lib/schedule.ts">
                   Her calendar copied into Postgres, each meeting given to a client by its organiser — or skipped. Preparation and
                   notes are kept on those rows.
@@ -753,7 +755,7 @@ export default function Docs() {
                   [<C key="r">POST /api/anam</C>, "Runner", "A short-lived token for her face"],
                   [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
-                  [<C key="r">/api/admin/clients · [id] · [id]/members</C>, "Admins", "List, create, edit, pause or delete clients; who signs in; invitations"],
+                  [<C key="r">/api/admin/clients · [id] · [id]/members</C>, "Admins", "List, create, edit, pause or delete clients; who can use her; invitations"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],

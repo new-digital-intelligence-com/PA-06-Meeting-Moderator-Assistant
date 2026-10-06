@@ -182,40 +182,39 @@ export default function Clients({ ava }: { ava: string | null }) {
               </div>
             </div>
 
-            {/* Two different questions, kept visibly apart: whose meetings, and who logs in. */}
+            {/* Whose invites she takes, and who uses her: the people in 2 count for both. */}
             <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <legend className="px-1 text-sm font-semibold text-slate-900">1 · Which meetings Ava joins for them</legend>
               <p className="-mt-1 text-xs leading-5 text-slate-500">
-                Ava joins a meeting when the person who <b>sent the invite</b> matches one of these. Fill in one or both.
+                Ava joins a meeting when the person who <b>sent the invite</b> is one of the people in 2, or matches one of these.
+                Leave both empty if the people in 2 are enough.
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1.5">
                   <span className="text-xs font-medium text-slate-700">Company domain</span>
                   <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
-                  <span className="block text-xs leading-5 text-slate-500">Everyone with an @acme.com address.</span>
+                  <span className="block text-xs leading-5 text-slate-500">Everyone with an @acme.com address can invite her.</span>
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-xs font-medium text-slate-700">Personal email addresses</span>
-                  <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="founder@gmail.com" />
+                  <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="assistant@gmail.com" />
                   <span className="block text-xs leading-5 text-slate-500">
-                    One person each — for people who use Gmail or another personal address instead of a company domain.
+                    One person each, who can invite her without opening their page — for Gmail or another personal address.
                   </span>
                 </label>
               </div>
             </fieldset>
 
             <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <legend className="px-1 text-sm font-semibold text-slate-900">2 · Who can open their page</legend>
+              <legend className="px-1 text-sm font-semibold text-slate-900">2 · Who can use her</legend>
               <p className="-mt-1 text-xs leading-5 text-slate-500">
-                The people who sign in to this site to give Ava their documents and prepare her for meetings (with Google or an
-                emailed link). This does not decide which meetings she joins.
+                They sign in to this site (with Google or an emailed link) to give Ava their documents and prepare her — and she
+                joins the meetings they invite her to.
               </p>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-700">Their email addresses</span>
-                <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="anna@acme.com, ben@acme.com" />
-                <span className="block text-xs leading-5 text-slate-500">
-                  Often the same person as above: a founder on Gmail goes in both boxes.
-                </span>
+                <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="anna@acme.com, founder@gmail.com" />
+                <span className="block text-xs leading-5 text-slate-500">Any address, company or personal: a founder on Gmail needs only this box.</span>
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.invite} onChange={set("invite")} className="accent-blue-600" />
@@ -261,7 +260,7 @@ export default function Clients({ ava }: { ava: string | null }) {
                   </div>
                   <p className="truncate text-xs text-slate-500">{[...c.domains.map((d) => `@${d}`), ...c.addresses].join(", ") || "No domain yet"}</p>
                   <p className="mt-3 text-xs text-slate-500">
-                    {c.members} with access · {c.documents} documents · {c.upcoming} upcoming
+                    {c.members} can use her · {c.documents} documents · {c.upcoming} upcoming
                   </p>
                   <p className="mt-1 text-xs text-slate-400">Last meeting: {c.last_meeting ? ago(c.last_meeting) : "none yet"}</p>
                 </Link>

@@ -4,8 +4,8 @@
  * write everything, so it never reaches a browser.
  *
  * The live meeting stays in Redis (lib/store.ts) — a small blob rewritten every couple of
- * seconds. Everything that has to be found again later is here: the clients and who may
- * sign in for them, their documents and the passages she searches, their meetings with
+ * seconds. Everything that has to be found again later is here: the clients and who can
+ * use her for them, their documents and the passages she searches, their meetings with
  * the preparation, her brief and the notes.
  *
  * The project is shared, so everything of hers is in a schema of her own, "pa-06"

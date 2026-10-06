@@ -1,10 +1,12 @@
 /**
- * Ava's clients: who they are, who may sign in for them, and which meetings are theirs.
+ * Ava's clients: who they are, who can use her for them, and which meetings are theirs.
  *
- * A meeting belongs to the client of whoever organised it — an exact address first (a
- * personal account, which cannot be matched by its domain: gmail.com is everybody), then
- * the company domain. The organiser, never a guest: otherwise a stranger could put one
- * client employee on an invite and have Ava for free.
+ * A meeting belongs to the client of whoever organised it — one of its exact addresses
+ * first (a personal account, which cannot be matched by its domain: gmail.com is
+ * everybody), then the people who can use her (members: they open the client's page, and
+ * their invites are the client's from whatever address), then the company domain. The
+ * organiser, never a guest: otherwise a stranger could put one client employee on an
+ * invite and have Ava for free.
  */
 import { avaGoogle } from "./ava";
 import { removeLogo } from "./cloudinary";
@@ -29,16 +31,36 @@ export function cleanAddresses(input: string[] | string | undefined): string[] {
   return [...new Set(list.map((a) => a.trim().toLowerCase()).filter((a) => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(a)))];
 }
 
-/** The active client an organiser's address belongs to (or a paused one too), from a list loaded once. */
-export function matchClient(clients: Client[], organizer: string | null | undefined, includePaused = false): Client | null {
+/**
+ * The active client an organiser's address belongs to (or a paused one too), from lists
+ * loaded once: the clients, and who can use her for each (`people`, address → client id).
+ */
+export function matchClient(
+  clients: Client[],
+  people: Map<string, string>,
+  organizer: string | null | undefined,
+  includePaused = false,
+): Client | null {
   const e = (organizer ?? "").trim().toLowerCase();
   if (!e.includes("@")) return null;
   const active = includePaused ? clients : clients.filter((c) => c.status === "active");
-  return active.find((c) => c.addresses.includes(e)) ?? active.find((c) => c.domains.includes(emailDomain(e))) ?? null;
+  const theirs = people.get(e);
+  return (
+    active.find((c) => c.addresses.includes(e)) ??
+    active.find((c) => c.id === theirs) ??
+    active.find((c) => c.domains.includes(emailDomain(e))) ??
+    null
+  );
 }
 
 export async function allClients(): Promise<Client[]> {
   return (await rows<Record<string, unknown>[]>(db().from("clients").select("*").order("created_at"))).map(asClient);
+}
+
+/** Everyone who can use her, with whose Ava — an address belongs to one client only. */
+export async function clientPeople(): Promise<Map<string, string>> {
+  const found = await rows<{ email: string; client_id: string }[]>(db().from("members").select("email, client_id"));
+  return new Map(found.map((m) => [m.email.toLowerCase(), m.client_id]));
 }
 
 export async function getClient(id: string): Promise<Client | null> {
@@ -97,7 +119,9 @@ export async function createClient(input: {
   const domains = cleanDomains(input.domains);
   const addresses = cleanAddresses(input.addresses);
   const contacts = cleanAddresses(input.contacts);
-  if (!domains.length && !addresses.length) throw new Error("Add the company's domain (or a person's exact address), so Ava knows which invites are theirs.");
+  if (!domains.length && !addresses.length && !contacts.length) {
+    throw new Error("Add someone who can use her, the company's domain or an exact address, so Ava knows which invites are theirs.");
+  }
   const [taken] = await takenElsewhere(contacts, null);
   if (taken) throw new Error(`${taken.email} already signs in for ${taken.client}.`);
 

@@ -30,6 +30,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "“Who can use her”: their invites count too",
+    points: [
+      "On a client's setup, “Who can open their page” is now “Who can use her”: the people listed sign in to the client's page as before and — new — Ava joins the meetings they invite her to, from whatever address. A founder on Gmail now needs only that one box.",
+      "Company domain and personal email addresses still work as before, for anyone else whose invites count: they can invite her without opening the page. A client can now be set up with only the people who can use her.",
+      "Which client a meeting is for: one of its exact addresses first, then the people who can use her, then its company domain — always the organiser, never a guest. Someone who can use her brings every meeting they organise to that client, so NDI's own people are not added to clients.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-06",
     title: "A logo for each client",
     points: [
       "A client's setup in /admin has their logo at the top: Add their logo, Change logo, Remove. It is on their page beside “Ava for …” and on their card in the list of clients; a new client can be given one as they are created. Without one, their initials, on a colour of their own.",

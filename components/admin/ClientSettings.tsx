@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * One client's setup, for NDI: which invites are theirs, who may sign in for them, and
+ * One client's setup, for NDI: which invites are theirs, who can use her for them, and
  * pausing or removing them. Their page itself follows below it (Workspace).
  */
 
@@ -115,7 +115,7 @@ export default function ClientSettings({ id, log = null }: { id: string; log?: s
   async function removeClient() {
     if (!client) return;
     const typed = window.prompt(
-      `This removes ${client.name}: who signs in, their documents, meetings and notes. Their files in NDI's Drive stay.\n\nType the name to confirm:`,
+      `This removes ${client.name}: who can use her, their documents, meetings and notes. Their files in NDI's Drive stay.\n\nType the name to confirm:`,
     );
     if (typed?.trim() !== client.name) return;
     const r = await step("delete", () => api(`/api/admin/clients/${id}`, { method: "DELETE" }));
@@ -195,7 +195,9 @@ export default function ClientSettings({ id, log = null }: { id: string; log?: s
               </label>
               <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <legend className="px-1 text-sm font-semibold text-slate-900">Which meetings Ava joins for them</legend>
-                <p className="-mt-1 text-xs leading-5 text-slate-500">When the person who sent the invite matches one of these.</p>
+                <p className="-mt-1 text-xs leading-5 text-slate-500">
+                  When the person who sent the invite is one of the people who can use her, or matches one of these.
+                </p>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-700">Company domain</span>
                   <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
@@ -224,9 +226,10 @@ export default function ClientSettings({ id, log = null }: { id: string; log?: s
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Who can open their page</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Who can use her</h3>
                 <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                  The people who sign in to give Ava documents and prepare her. This does not decide which meetings she joins.
+                  They sign in to give Ava documents and prepare her, and she joins the meetings they invite her to — from any
+                  address, company or personal.
                 </p>
               </div>
               {members.length === 0 ? (
