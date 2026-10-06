@@ -87,6 +87,38 @@ export async function clientMeeting(clientId: string, id: string): Promise<Meeti
   return m ? asMeeting(m) : null;
 }
 
+/**
+ * A meeting she is sent to right now from the client's page — one that is not on her
+ * calendar, kept like the others so its notes are filed with it and it shows in their
+ * past meetings. `now-…` marks it as not from her calendar, which never names one so.
+ */
+export async function startNowMeeting(clientId: string, m: { title: string; meetingUrl: string; by: string; note: string }): Promise<MeetingRow> {
+  const now = isoNow();
+  return asMeeting(
+    await rows<Raw>(
+      db()
+        .from("meetings")
+        .insert({
+          client_id: clientId,
+          event_id: `now-${crypto.randomUUID()}`,
+          title: m.title.slice(0, 300),
+          starts_at: now,
+          meeting_url: m.meetingUrl,
+          organizer: m.by,
+          description: m.note.slice(0, 20_000),
+          status: "upcoming",
+          updated_at: now,
+        })
+        .select("*")
+        .single(),
+    ),
+  );
+}
+
+export async function dropNowMeeting(clientId: string, id: string): Promise<void> {
+  await rows(db().from("meetings").delete().eq("id", id).eq("client_id", clientId).like("event_id", "now-%"));
+}
+
 /** Invites she got from organisers who are nobody's client — for admins. */
 export async function skippedInvites(): Promise<MeetingRow[]> {
   const found = await rows<Raw[]>(

@@ -162,7 +162,7 @@ async function avatarFor(account, first) {
 }
 
 /**
- * Has the control room sent her somewhere? Takes it if so — once — and returns the
+ * Has a client's page sent her somewhere? Takes it if so — once — and returns the
  * meeting `{ meetingUrl, title, context, recipients, platform }`, or null.
  */
 export const claimDispatch = async (earlySeconds) =>

@@ -1,21 +1,16 @@
-import ControlRoom from "@/components/ControlRoom";
+import ControlRoom, { type Now } from "@/components/ControlRoom";
 import TopBar from "@/components/TopBar";
 import { requireAdminPage } from "@/lib/auth";
-import { elapsed, getMeeting } from "@/lib/meeting";
-import { isConfigured as recallConfigured, signedIn } from "@/lib/recall";
+import { getMeeting, inMeeting, minutesIn } from "@/lib/meeting";
 import { avaEmail } from "@/lib/ava";
-import { readSession } from "@/lib/session";
 import { storeKind } from "@/lib/store";
-import { isConfigured as anamConfigured } from "@/lib/anam";
 
-// The meeting lives in this process, so the first paint reads it directly instead of
-// bouncing through /api/meeting. The client polls from there.
+// Read on every visit: what she is doing right now is part of the page.
 export const dynamic = "force-dynamic";
 
 /**
- * The OAuth callback reports back through `?google=`, and until now nothing read it —
- * a failed sign-in just left the pill red with no explanation. Reading it here rather
- * than from `window` keeps it out of the client's render path.
+ * The control room. The OAuth callback reports back through `?google=` — a failed sign-in
+ * is said here rather than leaving the card red with no explanation.
  */
 export default async function Home({
   searchParams,
@@ -24,42 +19,37 @@ export default async function Home({
 }) {
   // NDI only: clients have their own page.
   const user = await requireAdminPage();
-  const [meeting, session, params] = await Promise.all([getMeeting(), readSession(), searchParams]);
+  const [meeting, params, avaAccount] = await Promise.all([getMeeting(), searchParams, avaEmail()]);
   const publicUrl = process.env.PUBLIC_URL || process.env.APP_URL || "";
 
   const google = typeof params.google === "string" ? params.google : null;
   const oauthError = google?.startsWith("error:") ? google.slice("error:".length) : null;
 
+  const busy = inMeeting(meeting);
+  const now: Now = {
+    busy,
+    phase: !busy ? null : meeting.status === "joining" ? (meeting.dispatch?.takenAt ? "joining" : "sent") : "live",
+    title: busy ? meeting.title : "",
+    client: busy && meeting.client ? { id: meeting.client.id, name: meeting.client.name } : null,
+    minutes: busy ? minutesIn(meeting) : 0,
+  };
+
   return (
     <>
-    <TopBar user={user} active="room" />
-    <ControlRoom
-      initialMeeting={meeting}
-      initialElapsed={elapsed(meeting)}
-      oauthError={oauthError}
-      config={{
-        googleConnected: Boolean(session.google),
-        email: session.google?.email ?? null,
-        anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
-        recall: recallConfigured(),
-        anam: anamConfigured(),
-        publicUrl,
-        publicUrlReachable: Boolean(publicUrl) && !/localhost|127\.0\.0\.1/.test(publicUrl),
-        botName: process.env.BOT_NAME || "Ava — Moderator",
-        store: storeKind(),
-        signedIn: signedIn(),
-        // Her own Google account — the one she reads invites from and sends notes as.
-        avaAccount: await avaEmail(),
-        avaExpected: process.env.AVA_EMAIL || null,
-        runnerKey: Boolean(process.env.AVA_RUNNER_KEY),
-        // Both are needed to complete a sign-in, and a missing one fails it silently:
-        // without SESSION_SECRET the callback cannot encrypt the cookie it just earned.
-        sessionSecret: Boolean(process.env.SESSION_SECRET),
-        googleClient: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-        googleRedirectUri:
-          process.env.GOOGLE_REDIRECT_URI ?? `${publicUrl || "http://localhost:3000"}/api/auth/google/callback`,
-      }}
-    />
+      <TopBar user={user} active="room" />
+      <ControlRoom
+        oauthError={oauthError}
+        now={now}
+        config={{
+          publicUrl,
+          botName: process.env.BOT_NAME || "Ava — Moderator",
+          store: storeKind(),
+          // Her own Google account — the one she reads invites from and sends notes as.
+          avaAccount,
+          avaExpected: process.env.AVA_EMAIL || null,
+          runnerKey: Boolean(process.env.AVA_RUNNER_KEY),
+        }}
+      />
     </>
   );
 }

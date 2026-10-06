@@ -1,6 +1,6 @@
 // Ava, on duty: she watches her own calendar and walks into each meeting she is invited
 // to when it starts. Invite ava@ to a meeting the way you would invite anybody, and she
-// turns up. She also goes wherever the control room sends her — which is how she gets
+// turns up. She also goes wherever a client's page sends her ("Ava, now") — which is how she gets
 // into a Teams meeting.
 //
 //   npm run watch
@@ -16,7 +16,7 @@ import { ensureSignedIn } from "./lib/account.mjs";
 import { attend } from "./lib/meet.mjs";
 import { detectLanguage } from "./lib/language.mjs";
 
-/** Her calendar changes slowly; a send from the control room should feel immediate. */
+/** Her calendar changes slowly; a send from a client's page should feel immediate. */
 const POLL_MS = 60_000;
 const DISPATCH_MS = 10_000;
 
@@ -107,7 +107,7 @@ function briefingFrom(invite) {
 }
 
 /**
- * Meeting links she was sent to from the control room, and when. A meeting on her
+ * Meeting links she was sent to from a client's page, and when. A meeting on her
  * calendar that she was also sent to is the same meeting: without this she would walk
  * back into it from the calendar the moment the first visit ended.
  */
@@ -137,17 +137,23 @@ log(`  Ava is on duty. Watching her calendar every ${POLL_MS / 1000}s. Ctrl+C to
 // Signed in first. Everything below assumes she walks into meetings as herself.
 await ensureSignedIn({ log });
 
-/** Sent from the control room? Goes straight in, with the briefing typed there. */
+/**
+ * Sent from a client's page ("Ava, now")? Goes straight in, with the briefing the site
+ * wrote for that client — and, like a calendar meeting, logged in their log too.
+ */
 async function dispatched() {
   const meeting = await app.claimDispatch(EARLY_MS / 1000);
   if (!meeting) return false;
   sent.set(linkKey(meeting.meetingUrl), Date.now());
-  log(`  → sent from the control room: ${meeting.title || meeting.meetingUrl}`);
+  forClient = logFor(meeting.client);
   try {
+    log(`  → sent now${meeting.client ? ` for ${meeting.client.name}` : ""}: ${meeting.title || meeting.meetingUrl}`);
     await attend(meeting, { log, briefed: true });
     log(`  ← finished ${meeting.title || "the meeting"}`);
   } catch (e) {
     log(`  could not attend: ${e.message}`);
+  } finally {
+    forClient = null;
   }
   return true;
 }

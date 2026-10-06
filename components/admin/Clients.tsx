@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { PERSONAL, emailDomain } from "@/lib/mail-domains";
+import { UsersIcon } from "../portal/icons";
 import { Chip, CompanyLogo, Notice, Section, ago, api, field, primary, quiet, when } from "../portal/ui";
 
 type ClientSummary = {
@@ -122,14 +123,15 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-24 sm:p-6">
       <header className="flex flex-wrap items-end justify-between gap-4 pt-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">Clients</h1>
-          <p className="max-w-2xl text-sm text-slate-500">
+          <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
+          <p className="max-w-2xl text-sm leading-relaxed text-slate-500">
             One Ava, many clients. She attends a meeting when its organiser belongs to a client here, with that client&apos;s knowledge.
             Invites from anybody else she leaves alone.
           </p>
         </div>
         {!adding && (
           <button className={primary} onClick={() => setAdding(true)}>
+            <span className="text-lg leading-none">+</span>
             New client
           </button>
         )}
@@ -147,7 +149,8 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
       )}
 
       {adding && (
-        <Section title="New client">
+        <Section title="New client" icon={<span className="text-lg font-semibold leading-none">+</span>} description="Set them up in a minute: who they are, whose invites count, who can use her.">
+
           <form onSubmit={create} className="space-y-6">
             <div className="flex items-end gap-4">
               <label className="block min-w-0 flex-1 space-y-1.5">
@@ -243,14 +246,22 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
         </Section>
       )}
 
-      <Section title="Their Avas" aside={<span className="text-xs text-slate-400">{data?.clients.length ?? "…"} clients</span>}>
+      <Section
+        title="Their Avas"
+        icon={<UsersIcon />}
+        description="Open a client to set them up and see their page as they do."
+        aside={<span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{data?.clients.length ?? "…"} clients</span>}
+      >
         {!data ? (
           <p className="text-sm text-slate-500">Loading…</p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
             {data.clients.map((c) => (
               // The whole card opens the client (its name's link is stretched over it); her log is a link of its own on top.
-              <li key={c.id} className="relative h-full rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300">
+              <li
+                key={c.id}
+                className="relative h-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-900/5"
+              >
                 <div className="mb-2 flex items-center gap-3">
                   <CompanyLogo name={c.name} url={c.logo_url} size={40} decorative />
                   <Link href={`/admin/clients/${c.id}`} className="min-w-0 flex-1 truncate font-medium after:absolute after:inset-0 after:rounded-xl">

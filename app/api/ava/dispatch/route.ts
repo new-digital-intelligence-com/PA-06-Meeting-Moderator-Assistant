@@ -42,6 +42,8 @@ export async function POST(request: Request) {
     platform: string | null;
     startsAt: number;
     language: string;
+    /** Whose meeting: their documents become searchable to her, and her log is theirs too. */
+    client: { id: string; name: string; meetingId: string } | null;
   } = null;
   await updateMeeting((m) => {
     if (!due(m)) return;
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
       platform: platformOf(m.meetingUrl),
       startsAt: m.dispatch!.at,
       language: m.language,
+      client: m.client ?? null,
     };
   });
   return NextResponse.json({ meeting: taken });

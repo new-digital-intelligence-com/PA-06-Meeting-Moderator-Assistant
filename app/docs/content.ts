@@ -30,6 +30,19 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "“Need Ava now?”, her meeting on the client's page, and a new look",
+    points: [
+      "Every client's page has “Need Ava now?”: paste a Google Meet or Teams link, add a line about it if you like, and she goes at once — for that client, with what she knows about them, their documents searchable. No time to pick and no organiser to match: only the client's own people and NDI can press it. Refused while she is in any meeting; another client is told only that she is busy.",
+      "While she is in one of their meetings — from their calendar or sent now — their page shows it live: what she hears (her own lines set apart), the actions as she notes them, how many are in the call, a clock. They can tell her something mid-meeting (added to her briefing) or end it; the notes are then written as if she had left by herself — emailed to the invite's guests for a calendar meeting — and filed under Past meetings. A meeting sent now is kept with their meetings too.",
+      "The control room keeps only its three cards — her Google account, her server, the meeting storage — and “Ava's server” says what she is doing and links to the client's page to follow it. Gone: “Your Google account”, “Brief her”, booking a time, and “Files for the room” (and the /api/calendar and /api/drive routes behind them).",
+      "A new look: NDI's red logo beside Ava in the top bar (Archivo Black, as on NDI's own site); a coloured header on each client's page with their logo, her status and the button; tabs with icons; sections with coloured icons; files dropped straight onto “Her documents”; an icon for each kind of document; cards that lift under the pointer; and a page shape while it loads.",
+      "Her runner, for a meeting sent from a client's page: logs it in that client's log too, and says “sent now for <client>”.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-06",
     title: "Clients run their own setup",
     points: [
       "A client's page has a fourth tab, Setup: their logo, their company name, and who can use her — add someone (Ava emails the invitation), send it again, or remove someone (never yourself). Which meetings are theirs (domains, addresses) shows there to read: NDI changes it.",

@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner } from "@/lib/ava";
-import { platformOf } from "@/lib/platform";
-import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,12 +9,13 @@ export const maxDuration = 60;
 type Command =
   | "stop"      // she leaves the call and the meeting is closed
   | "rehearse"  // run her with no bot and no call, to hear her before a room does
-  | "attend"    // she is in the room in person, in her own signed-in Chrome
-  | "dispatch"; // send her own Chrome to the meeting link from the control room
+  | "attend";   // she is in the room in person, in her own signed-in Chrome
+
+// Sending her to a link now is a client's page's: /api/portal/live.
 
 export async function POST(request: Request) {
   let command: Command;
-  /** attend: where she came from — her calendar, or a send from the control room. */
+  /** attend: where she came from — her calendar, or sent from a client's page. */
   let from: "calendar" | "dispatch" | undefined;
   try {
     ({ command, from } = await request.json());
@@ -38,12 +37,12 @@ export async function POST(request: Request) {
     const meeting = await updateMeeting((m) => {
       m.status = "live";
       m.attendedBy = "self";
+      m.attendedAt = Date.now();
       // Calendar meetings' notes are emailed to the invite's guests; those she was sent to
-      // from the control room are not. A calendar meeting was sent from nowhere.
+      // from a client's page are filed there instead. A calendar meeting was sent from nowhere.
+      // Either way the client stays as it was set: by her runner, or by the page that sent her.
       m.attendedFrom = from === "dispatch" ? "dispatch" : "calendar";
       if (from !== "dispatch") m.dispatch = undefined;
-      // Sent from the control room: nobody's client (her runner names it for calendar meetings).
-      if (from === "dispatch") m.client = undefined;
       m.botId = undefined;
       m.startedAt = undefined;
       m.endedAt = undefined;
@@ -60,42 +59,6 @@ export async function POST(request: Request) {
       m.lastDecision = undefined;
       m.summary = undefined;
       m.followUp = undefined;
-    });
-    return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
-  }
-
-  /**
-   * Send her, from the control room, to whatever link the briefing has — how she gets
-   * into a Teams meeting, which never reaches her calendar. Her runner checks for this
-   * every few seconds and takes it once; at the briefing's start time if one is set.
-   *
-   * Only for somebody signed in to the control room: this sends her into a meeting, and
-   * a stranger who found the page should not be able to.
-   */
-  if (command === "dispatch") {
-    const session = await readSession();
-    if (!isRunner(request) && !session.google && session.user?.role !== "admin") {
-      return NextResponse.json({ error: "Sign in with Google in the control room first." }, { status: 401 });
-    }
-    if (!platformOf(before.meetingUrl)) {
-      return NextResponse.json(
-        { error: "That is not a Google Meet or Microsoft Teams link." },
-        { status: 400 },
-      );
-    }
-    const at = before.joinAt && before.joinAt > Date.now() ? before.joinAt : Date.now();
-    // Its notes are not emailed: they wait here, in the control room. Only meetings she
-    // is invited to on her calendar are emailed, to the invite's guests — so an earlier
-    // meeting's guests are not kept.
-    const meeting = await updateMeeting((m) => {
-      m.dispatch = { at };
-      m.recipients = [];
-      m.client = undefined;
-      m.status = at > Date.now() + 60_000 ? "scheduled" : "joining";
-      m.attendedBy = undefined;
-      m.botId = undefined;
-      m.startedAt = undefined;
-      m.endedAt = undefined;
     });
     return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
   }

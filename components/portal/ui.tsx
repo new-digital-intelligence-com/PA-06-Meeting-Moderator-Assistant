@@ -1,28 +1,59 @@
 /** Small pieces shared by the client and admin pages. */
 
 export const field =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
+  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 export const button =
-  "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50";
-export const primary = `${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`;
-export const quiet = `${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900`;
-export const danger = `${button} border border-rose-200 bg-white text-rose-700 hover:bg-rose-50`;
+  "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100";
+export const primary = `${button} bg-linear-to-b from-blue-500 to-blue-600 text-white shadow-md shadow-blue-600/20 hover:to-blue-700 hover:shadow-lg hover:shadow-blue-600/25`;
+export const quiet = `${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900`;
+export const danger = `${button} border border-rose-200 bg-white text-rose-700 hover:border-rose-300 hover:bg-rose-50`;
+
+const ICON_TONES = {
+  blue: "bg-blue-50 text-blue-600 ring-blue-600/15",
+  violet: "bg-violet-50 text-violet-600 ring-violet-600/15",
+  emerald: "bg-emerald-50 text-emerald-600 ring-emerald-600/15",
+  amber: "bg-amber-50 text-amber-600 ring-amber-600/20",
+  sky: "bg-sky-50 text-sky-600 ring-sky-600/15",
+  rose: "bg-rose-50 text-rose-600 ring-rose-600/15",
+};
+export type IconTone = keyof typeof ICON_TONES;
+
+/** A coloured square for an icon, as section headers and lists use them. */
+export function IconTile({ tone = "blue", children, className = "size-9" }: { tone?: IconTone; children: React.ReactNode; className?: string }) {
+  return <span className={`flex shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ${ICON_TONES[tone]} ${className}`}>{children}</span>;
+}
 
 export function Section({
   title,
   aside,
   children,
   id,
+  icon,
+  tone = "blue",
+  description,
 }: {
   title: string;
   aside?: React.ReactNode;
   children: React.ReactNode;
   id?: string;
+  /** An icon (components/portal/icons.tsx) beside the title, on a square of `tone`. */
+  icon?: React.ReactNode;
+  tone?: IconTone;
+  description?: React.ReactNode;
 }) {
   return (
-    <section id={id} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
+    <section
+      id={id}
+      className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.14)] sm:p-6"
+    >
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {icon && <IconTile tone={tone}>{icon}</IconTile>}
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
+            {description && <p className="mt-0.5 text-sm leading-snug text-slate-500">{description}</p>}
+          </div>
+        </div>
         {aside}
       </div>
       {children}

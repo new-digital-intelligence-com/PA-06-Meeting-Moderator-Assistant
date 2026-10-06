@@ -1,913 +1,177 @@
 "use client";
 
 /**
- * The control room — your side of the glass.
+ * The control room — what Ava needs in order to work, each said in words: her own Google
+ * account, her server, and where the meeting in progress is kept. Green is working, red
+ * stops her.
  *
- * Three steps, in order: brief her, send her in, read what came out. She does not need
- * running while the meeting is on — she listens, answers when somebody says her name,
- * and notes what was committed to. The only button that matters mid-meeting is the one
- * that ends it, and that is also what puts the notes in everyone's inbox.
+ * Nothing is run from here any more: she joins her clients' meetings from her calendar,
+ * a client's page sends her to one right now, and the meeting itself is followed on that
+ * client's page — which "Ava's server" links to while she is in one.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { platformOf } from "@/lib/platform";
-import { LANGUAGES, detectLang, type Lang } from "@/lib/languages";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { ArrowRightIcon, DatabaseIcon, MailIcon, ServerIcon } from "./portal/icons";
+import { IconTile, Notice, type IconTone } from "./portal/ui";
 
 type Config = {
-  googleConnected: boolean;
-  email: string | null;
-  anthropic: boolean;
-  recall: boolean;
-  anam: boolean;
   publicUrl: string;
-  publicUrlReachable: boolean;
   botName: string;
-  sessionSecret: boolean;
-  googleClient: boolean;
-  googleRedirectUri: string;
   store: "redis" | "mongo" | "file";
-  /** She has a Google account of her own, rather than knocking as a guest. */
-  signedIn: boolean;
   /** The Google account she reads invites from and sends notes as, if connected. */
   avaAccount: string | null;
   avaExpected: string | null;
   runnerKey: boolean;
 };
 
-type Action = { id: string; text: string; owner?: string; due?: string };
-type TranscriptLine = { id: string; speaker: string; text: string; at: number };
-type SharedFile = { id: string; name: string; link: string; sharedWith: string[] };
-
-type Meeting = {
-  id: string;
+/** What she is doing now, worked out on the server (lib/meeting.ts, inMeeting). */
+export type Now = {
+  busy: boolean;
+  phase: "sent" | "joining" | "live" | null;
   title: string;
-  meetingUrl: string;
-  context: string;
-  recipients: string[];
-  activity: "quiet" | "balanced" | "active";
-  language?: Lang;
-  status: "draft" | "scheduled" | "joining" | "live" | "ended";
-  botId?: string;
-  joinAt?: number;
-  attendedBy?: "self";
-  /** Invited on her calendar (notes emailed) or sent from here (not emailed). */
-  attendedFrom?: "calendar" | "dispatch";
-  dispatch?: { at: number; takenAt?: number };
-  transcript: TranscriptLine[];
-  actions: Action[];
-  files: SharedFile[];
-  lastDecision?: { at: number; reason: string };
-  stage?: {
-    face: string;
-    detail?: string;
-    at: number;
-    captions?: { socket: boolean; received: number; secondsSinceLast: number | null };
-    voice?: string;
-  };
-  summary?: string;
-  followUp?: { to: string; subject: string; body: string; sentAt?: number };
+  client: { id: string; name: string } | null;
+  minutes: number;
 };
 
-type DriveFile = { id: string; name: string; mimeType: string; link: string; owner?: string };
-type CalMeeting = { id: string; title: string; start: string; meetingUrl: string; attendees: string[] };
-
-/** "14:30", or "Tue 14:30" when it is not today. */
-function clock(ms?: number | null) {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const today = new Date();
-  return d.toDateString() === today.toDateString()
-    ? time
-    : `${d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} ${time}`;
-}
-
-/** Converts between epoch ms and the value a datetime-local input wants. */
-const toLocalInput = (ms: number | null) => {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-const mmss = (s: number) =>
-  `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-
-/* ------------------------------------------------------------ small pieces */
-
-/**
- * One thing she depends on, in words: what it is, how it stands, and what to do. Green is
- * working, grey is optional and off, red is broken — red only for what stops her.
- */
-function Status({
-  state,
+function Card({
+  ok,
+  icon,
+  tone,
   title,
   detail,
   hint,
   action,
 }: {
-  state: "ok" | "off" | "bad";
+  ok: boolean;
+  icon: React.ReactNode;
+  tone: IconTone;
   title: string;
   detail: React.ReactNode;
-  hint?: string;
+  hint: string;
   action?: React.ReactNode;
 }) {
-  const dot = { ok: "bg-emerald-500", off: "bg-slate-300", bad: "bg-rose-500" }[state];
   return (
     <div
-      title={hint}
-      className={`flex items-start gap-3 rounded-xl border bg-white px-4 py-3 shadow-sm ${state === "bad" ? "border-rose-200" : "border-slate-200"}`}
+      className={`flex flex-col rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.14)] transition hover:-translate-y-0.5 hover:shadow-lg ${
+        ok ? "border-slate-200/70" : "border-rose-200 ring-4 ring-rose-500/5"
+      }`}
     >
-      <span className={`mt-1.5 size-2 shrink-0 rounded-full ${dot}`} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-sm font-medium text-slate-900">{title}</p>
-          {action}
-        </div>
-        <p className={`mt-0.5 text-xs leading-5 ${state === "bad" ? "text-rose-700" : "text-slate-500"}`}>{detail}</p>
+      <div className="flex items-start justify-between gap-3">
+        <IconTile tone={ok ? tone : "rose"} className="size-11">
+          {icon}
+        </IconTile>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+            ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+          }`}
+        >
+          <span className={`size-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
+          {ok ? "Working" : "Needs you"}
+        </span>
       </div>
+      <h2 className="mt-4 text-base font-semibold text-slate-900">{title}</h2>
+      <div className={`mt-1 min-w-0 flex-1 break-words text-sm leading-relaxed ${ok ? "text-slate-600" : "text-rose-700"}`}>{detail}</div>
+      <p className="mt-3 text-xs leading-5 text-slate-400">{hint}</p>
+      {action && <div className="mt-4 border-t border-slate-100 pt-4">{action}</div>}
     </div>
   );
 }
 
-function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
-  return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
-        {aside}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-const field =
-  "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
-const button =
-  "rounded-lg px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50";
-
-/* ------------------------------------------------------------------- page */
-
-export default function ControlRoom({
-  config,
-  initialMeeting,
-  initialElapsed,
-  oauthError,
-}: {
-  config: Config;
-  initialMeeting: Meeting;
-  initialElapsed: number;
-  oauthError: string | null;
-}) {
-  const [meeting, setMeeting] = useState<Meeting>(initialMeeting);
-  const [secs, setSecs] = useState(initialElapsed);
-  // Render must not read the clock directly — React treats that as impure, and it is:
-  // two renders a millisecond apart would disagree. The poll advances this instead.
-  const [now, setNow] = useState(() => Date.now());
-  const [calendar, setCalendar] = useState<CalMeeting[]>([]);
-  const [drive, setDrive] = useState<DriveFile[]>([]);
-  const [driveQuery, setDriveQuery] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(
-    oauthError ? `Google sign-in failed: ${oauthError}` : null,
-  );
-  const [note, setNote] = useState<string | null>(null);
-
-  // Seeded once from the server. Deliberately not driven by the poll — a field that
-  // rewrites itself under the cursor is unusable.
-  const [draft, setDraft] = useState({
-    title: initialMeeting.title === "Untitled meeting" ? "" : initialMeeting.title,
-    meetingUrl: initialMeeting.meetingUrl,
-    context: initialMeeting.context,
-    /** When she should walk in, epoch ms. Null means "as soon as I press the button". */
-    joinAt: initialMeeting.joinAt ?? (null as number | null),
-  });
-  // The notes as she wrote them — from the poll, so notes she writes when a meeting ends by
-  // itself show up without a reload — until you edit them here, for this meeting.
-  const [edited, setEdited] = useState<{ meetingId: string; notes: NonNullable<Meeting["followUp"]> } | null>(null);
-  const followUp =
-    edited?.meetingId === meeting.id ? edited.notes : (meeting.followUp ?? { to: "", subject: "", body: "" });
-  const setFollowUp = (notes: NonNullable<Meeting["followUp"]>) => setEdited({ meetingId: meeting.id, notes });
-
-  const say = (message: string) => {
-    setNote(message);
-    window.setTimeout(() => setNote((n) => (n === message ? null : n)), 6000);
-  };
-
-  /* ── poll ──────────────────────────────────────────────────────────────── */
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch("/api/meeting");
-      const data = await res.json();
-      setMeeting(data.meeting);
-      setSecs(data.elapsed);
-    } catch {
-      /* the poll retries */
-    }
-  }, []);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setNow(Date.now());
-      void refresh();
-    }, 2000);
-    return () => window.clearInterval(id);
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!config.googleConnected) return;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    fetch(`/api/calendar?tz=${encodeURIComponent(tz)}`)
-      .then((r) => r.json())
-      .then((d) => setCalendar(d.meetings ?? []))
-      .catch(() => undefined);
-  }, [config.googleConnected]);
-
-  /* ── actions ───────────────────────────────────────────────────────────── */
-
-  const call = async (label: string, fn: () => Promise<Response>) => {
-    setBusy(label);
-    setError(null);
-    try {
-      const res = await fn();
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? `Failed (${res.status})`);
-      await refresh();
-      return data;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-      return null;
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const savePlan = () =>
-    call("save", () =>
-      fetch("/api/meeting", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: draft.title,
-          meetingUrl: draft.meetingUrl,
-          context: draft.context,
-          // Where she starts: the briefing's language. She then follows what is spoken.
-          language: detectLang(`${draft.title}\n${draft.context}`),
-          joinAt: draft.joinAt,
-        }),
-      }),
-    );
-
-  /**
-   * Sends her own Chrome — on her server — to the link: Google Meet as her own account,
-   * Teams as a guest. (It used to send a Recall bot for Meet links, which needed Recall,
-   * an Anam face on this app and a public URL, none of which her own Chrome uses.)
-   */
-  const sendAva = async () => {
-    await savePlan();
-    const product = platformOf(draft.meetingUrl) === "teams" ? "Teams" : "Meet";
-    const sent = await call("start", () =>
-      fetch("/api/meeting/control", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "dispatch" }),
-      }),
-    );
-    if (!sent) return;
-    say(
-      sent.meeting?.status === "scheduled"
-        ? `Booked. She will open the ${product} link by herself at ${clock(sent.meeting.joinAt)}.`
-        : product === "Teams"
-          ? "Sent. She opens the Teams link within a few seconds — admit her from the lobby."
-          : "Sent. She opens the Meet link within a few seconds — straight in if she is on the invite, otherwise admit her.",
-    );
-  };
-
-  /**
-   * Ending the meeting is also what sends the notes out, which is the point of her
-   * being there at all. Two requests rather than one: ending is instant, the write-up
-   * needs a model call and a Gmail round trip, and folding them together would mean
-   * staring at a spinner wondering whether she had even left the call.
-   */
-  const endAndSend = async () => {
-    const stopped = await call("stop", () =>
-      fetch("/api/meeting/control", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "stop" }),
-      }),
-    );
-    if (!stopped) return;
-    if (stopped.cancelled) {
-      say("Booking cancelled. She will not join.");
-      return;
-    }
-    if (stopped.rehearsal) {
-      say("Rehearsal over.");
-      return;
-    }
-
-    const written = await call("write", () =>
-      fetch("/api/meeting/followup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: meeting.recipients.length ? "send" : "compose" }),
-      }),
-    );
-    if (written?.followUp) setFollowUp(written.followUp);
-    if (written?.delivered?.sent) say(`Notes sent to ${written.followUp.to}.`);
-    else if (written) say("Notes written — they are below.");
-  };
-
-  const deliver = async (mode: "draft" | "send") => {
-    if (mode === "send" && !window.confirm(`Send this to ${followUp.to}? This cannot be undone.`)) return;
-    const data = await call(mode, () =>
-      fetch("/api/meeting/followup", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, ...followUp }),
-      }),
-    );
-    if (data) say(mode === "send" ? "Sent." : "Saved to your Gmail drafts.");
-  };
-
-  const searchDrive = async () => {
-    const data = await call("drive", () => fetch(`/api/drive?q=${encodeURIComponent(driveQuery)}`));
-    if (data) setDrive(data.files ?? []);
-  };
-
-  const share = async (file: DriveFile) => {
-    if (!meeting.recipients.length) {
-      setError("Files are shared with the invite's guests — that works for meetings she is invited to on her calendar.");
-      return;
-    }
-    if (!window.confirm(`Give ${meeting.recipients.length} recipient(s) access to "${file.name}"? They each get a notification email.`)) return;
-    const data = await call(`share:${file.id}`, () =>
-      fetch("/api/drive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId: file.id, emails: meeting.recipients }),
-      }),
-    );
-    if (data) {
-      const failed = (data.results ?? []).filter((r: { ok: boolean }) => !r.ok);
-      say(failed.length ? `Shared, ${failed.length} address(es) refused.` : "Shared with everyone.");
-    }
-  };
-
-  /* ── render ────────────────────────────────────────────────────────────── */
-
-  const status = meeting.status;
-  const planning = status === "draft";
-  // No Recall bot and not her own Chrome either: nobody is in a call.
-  const rehearsing = status === "live" && !meeting.botId && meeting.attendedBy !== "self";
-  // Her own Chrome, on her server, does the joining: it only needs the runner key.
-  const ready = config.runnerKey;
-  const teams = platformOf(draft.meetingUrl) === "teams";
-  const validLink = Boolean(platformOf(draft.meetingUrl));
+export default function ControlRoom({ config, now, oauthError }: { config: Config; now: Now; oauthError: string | null }) {
+  const router = useRouter();
   const name = config.botName.split("—")[0].trim();
 
+  // What she is doing changes by itself: look again every fifteen seconds.
+  useEffect(() => {
+    const id = window.setInterval(() => router.refresh(), 15_000);
+    return () => window.clearInterval(id);
+  }, [router]);
+
+  const storeOk = config.store !== "file" || !config.publicUrl.includes("vercel.app");
+  const link = "inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700";
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 pb-24 pt-6 sm:px-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-24 pt-6 sm:px-6">
       <header className="pt-2">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Control room</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {name} sits in on your Google Meet or Teams call, answers when asked, and emails the notes afterwards.{" "}
-          <a href="/docs" className="text-blue-600 underline decoration-blue-300 hover:text-blue-700">
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
+          What {name} needs in order to work. She joins her clients&apos; meetings from her calendar, or right away when a client
+          sends her from their page — where the meeting is followed live.{" "}
+          <Link href="/docs" className="font-medium text-blue-600 hover:text-blue-700">
             How she works →
-          </a>
+          </Link>
         </p>
       </header>
 
-      {/* What she needs in order to work, and what is only for you — each said in words. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Status
-          state={config.avaAccount ? "ok" : "bad"}
+      {oauthError && <Notice tone="error">Google sign-in failed: {oauthError}</Notice>}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card
+          ok={Boolean(config.avaAccount)}
+          icon={<MailIcon className="size-5" />}
+          tone="blue"
           title="Ava's Google account"
-          detail={config.avaAccount ?? "Not connected: she can't read her invites or send the notes"}
+          detail={config.avaAccount ?? "Not connected: she can't read her invites or send the notes."}
           hint="Her own account: she reads her calendar invites from it and sends the meeting notes as her."
           action={
-            <a
-              href="/api/auth/google?as=ava"
-              title={`Sign in as ${config.avaExpected ?? "her"}, not as yourself.`}
-              className="text-xs font-medium text-blue-600 hover:text-blue-700"
-            >
-              {config.avaAccount ? "Reconnect" : "Connect"}
+            <a href="/api/auth/google?as=ava" title={`Sign in as ${config.avaExpected ?? "her"}, not as yourself.`} className={link}>
+              {config.avaAccount ? "Reconnect" : "Connect her account"}
+              <ArrowRightIcon className="size-4" />
             </a>
           }
         />
-        <Status
-          state={config.runnerKey ? "ok" : "bad"}
+        <Card
+          ok={config.runnerKey}
+          icon={<ServerIcon className="size-5" />}
+          tone="emerald"
           title="Ava's server"
-          detail={config.runnerKey ? "Set up: it takes her into meetings" : "AVA_RUNNER_KEY is not set on this app"}
+          detail={
+            !config.runnerKey ? (
+              "AVA_RUNNER_KEY is not set on this site."
+            ) : now.busy ? (
+              <span className="flex min-w-0 items-start gap-2">
+                <span className="relative mt-1.5 flex size-2 shrink-0">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                </span>
+                <span className="min-w-0">
+                  {now.phase === "live" ? "In a meeting" : "On her way to a meeting"}
+                  {now.client ? ` for ${now.client.name}` : ""}
+                  {now.phase === "live" && now.minutes > 0 ? ` · ${now.minutes} min` : ""}
+                  {now.title ? <span className="block truncate text-slate-400">{now.title}</span> : null}
+                </span>
+              </span>
+            ) : (
+              "Free — she joins her clients' meetings by herself."
+            )
+          }
           hint="The computer with her Chrome, which joins the calls."
+          action={
+            now.busy && now.client ? (
+              <Link href={`/admin/clients/${now.client.id}`} className={link}>
+                Follow the meeting
+                <ArrowRightIcon className="size-4" />
+              </Link>
+            ) : undefined
+          }
         />
-        <Status
-          state={config.store !== "file" || !config.publicUrl.includes("vercel.app") ? "ok" : "bad"}
+        <Card
+          ok={storeOk}
+          icon={<DatabaseIcon className="size-5" />}
+          tone="violet"
           title="Meeting storage"
           detail={
             config.store === "file"
               ? config.publicUrl.includes("vercel.app")
-                ? "A local file: set up Redis for the live site"
-                : "A local file (this computer)"
-              : `${config.store === "redis" ? "Redis" : "MongoDB"}: shared by her and this page`
+                ? "A local file: set up Redis for the live site."
+                : "A local file (this computer)."
+              : `${config.store === "redis" ? "Redis" : "MongoDB"}: shared by her and this site.`
           }
-          hint="Where the meeting in progress is kept, so her server and this page see the same one."
-        />
-        <Status
-          state={config.googleConnected ? "ok" : "off"}
-          title="Your Google account (optional)"
-          detail={config.googleConnected ? (config.email ?? "Connected") : "Only to pick a meeting from your calendar and share Drive files from here"}
-          hint={
-            config.googleConnected
-              ? "Your own account, for this page: your calendar and your Drive."
-              : !config.googleClient
-                ? "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set."
-                : `Google must have this exact redirect URI registered: ${config.googleRedirectUri}`
-          }
-          action={
-            <a href="/api/auth/google" className="text-xs font-medium text-blue-600 hover:text-blue-700">
-              {config.googleConnected ? "Reconnect" : "Connect"}
-            </a>
-          }
+          hint="Where the meeting in progress is kept, so her server and the pages see the same one."
         />
       </div>
-
-      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
-      {note && <p className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">{note}</p>}
-
-      {/* ── brief her ────────────────────────────────────────────────────── */}
-      {planning ? (
-        <Section
-          title="Brief her"
-          aside={
-            calendar.length > 0 ? (
-              <select
-                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                defaultValue=""
-                onChange={(e) => {
-                  const found = calendar.find((c) => c.id === e.target.value);
-                  if (found) {
-                    setDraft((d) => ({
-                      ...d,
-                      title: found.title,
-                      meetingUrl: found.meetingUrl,
-                      // Picking a meeting from the calendar books her for its start
-                      // time — which is the whole reason to pick it from there.
-                      joinAt: Date.parse(found.start) || null,
-                    }));
-                  }
-                }}
-              >
-                <option value="">Fill from calendar…</option>
-                {calendar.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </select>
-            ) : null
-          }
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">Title</span>
-              <input
-                className={`${field} w-full`}
-                value={draft.title}
-                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                placeholder="Generative AI — client workshop"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">Google Meet or Microsoft Teams link</span>
-              <input
-                className={`${field} w-full`}
-                value={draft.meetingUrl}
-                onChange={(e) => setDraft({ ...draft, meetingUrl: e.target.value })}
-                placeholder="https://meet.google.com/abc-defg-hij  or a Teams link"
-              />
-            </label>
-          </div>
-
-          <label className="mt-4 block space-y-1">
-            <span className="text-xs text-slate-500">
-              What is this meeting about?{" "}
-              <span className="text-slate-400">
-                The subject, who is attending, anything she should know walking in. This is the only
-                briefing she gets — it is what she answers from when somebody asks her something.
-              </span>
-            </span>
-            <textarea
-              className={`${field} h-44 w-full resize-y leading-relaxed`}
-              value={draft.context}
-              onChange={(e) => setDraft({ ...draft, context: e.target.value })}
-              placeholder={
-                "Quarterly review with Acme. Sam (their CTO) and Priya (procurement) are joining.\n\n" +
-                "We are proposing the enterprise tier. They pushed back on price last time and want to see\n" +
-                "the security review before committing. Budget sign-off sits with Priya.\n\n" +
-                "If anyone asks about timelines: pilot in March, full rollout by June."
-              }
-            />
-          </label>
-
-          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
-            The notes of a meeting she is sent to from here are not emailed — they appear here when it ends. To have them
-            emailed to everybody, invite {config.avaAccount ?? config.avaExpected ?? "her"} to the meeting in the calendar:
-            she joins by herself and mails the notes to the invite&apos;s guests.
-          </p>
-
-          <div className="mt-4 space-y-1">
-            <span className="text-xs text-slate-500">
-              When does she join?{" "}
-              <span className="text-slate-400">
-                Now, or a time to book her: she opens the link a minute before. Meetings she is
-                invited to on her calendar she joins by herself, without being sent.
-              </span>
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setDraft({ ...draft, joinAt: null })}
-                className={`${button} ${
-                  !draft.joinAt ? "bg-blue-100 text-blue-700 ring-1 ring-blue-500/30" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                }`}
-              >
-                Now
-              </button>
-              <input
-                type="datetime-local"
-                className={`${field} ${draft.joinAt ? "ring-1 ring-blue-500/30" : ""}`}
-                value={toLocalInput(draft.joinAt)}
-                onChange={(e) => setDraft({ ...draft, joinAt: e.target.value ? new Date(e.target.value).getTime() : null })}
-              />
-              {draft.joinAt && draft.joinAt < now && (
-                <span className="text-xs text-amber-700">That time has passed — she will join now.</span>
-              )}
-            </div>
-          </div>
-
-          {validLink && (
-            <p className="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-              {teams ? (
-                <>
-                  <strong>Teams:</strong> she opens the link in her own Chrome as a guest named {name} and waits in the
-                  lobby — somebody in the meeting has to admit her. She asks for emails for the notes in the chat.
-                </>
-              ) : (
-                <>
-                  <strong>Google Meet:</strong> she joins as {config.avaAccount ?? "her own Google account"} — straight in
-                  if she is on the invite, otherwise somebody admits her.
-                </>
-              )}
-            </p>
-          )}
-          {draft.meetingUrl && !validLink && (
-            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              That is not a Google Meet or Microsoft Teams link.
-            </p>
-          )}
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              className={`${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`}
-              disabled={!ready || !validLink || busy !== null}
-              onClick={sendAva}
-            >
-              {busy === "start"
-                ? "Sending…"
-                : draft.joinAt && draft.joinAt - now > 10 * 60_000
-                  ? `Book ${name} for ${clock(draft.joinAt)}`
-                  : `Send ${name} to the meeting`}
-            </button>
-            <button className={`${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`} onClick={savePlan}>
-              Save
-            </button>
-            {!ready && <span className="text-xs text-slate-400">AVA_RUNNER_KEY is not set on this app.</span>}
-          </div>
-        </Section>
-      ) : (
-        /* ── in the room ──────────────────────────────────────────────────── */
-        <Section
-          title={
-            status === "live" && meeting.attendedBy === "self"
-              ? "In the meeting — as herself"
-              : status === "scheduled"
-              ? `Booked for ${clock(meeting.joinAt)}`
-              : status === "joining"
-                ? meeting.dispatch
-                  ? meeting.dispatch.takenAt
-                    ? platformOf(meeting.meetingUrl) === "teams"
-                      ? "On her way in — admit her from the Teams lobby"
-                      : "On her way in"
-                    : "Sent — waiting for her server to pick it up"
-                  : config.signedIn
-                    ? "On her way in"
-                    : "Knocking — admit her in Google Meet"
-                : rehearsing
-                  ? "Rehearsing — no bot, no call"
-                  : status === "ended"
-                    ? "Ended"
-                    : "In the meeting"
-          }
-          aside={
-            status !== "ended" ? (
-              <button
-                className={`${button} ${
-                  status === "scheduled"
-                    ? "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
-                    : "bg-rose-600 text-white shadow-sm hover:bg-rose-700"
-                }`}
-                onClick={endAndSend}
-                disabled={busy !== null}
-              >
-                {busy === "stop"
-                  ? status === "scheduled"
-                    ? "Cancelling…"
-                    : "Ending…"
-                  : busy === "write"
-                    ? "Writing the notes…"
-                    : status === "scheduled"
-                      ? "Cancel booking"
-                      : rehearsing
-                        ? "Stop rehearsal"
-                        : meeting.attendedFrom === "dispatch"
-                          ? "End meeting"
-                          : "End & send notes"}
-              </button>
-            ) : null
-          }
-        >
-          {status !== "scheduled" && meeting.meetingUrl && (
-            <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <p className="text-lg font-medium text-slate-800">{meeting.title}</p>
-              <a
-                href={meeting.meetingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-blue-600 underline decoration-blue-300 hover:text-blue-700"
-              >
-                {platformOf(meeting.meetingUrl) === "teams" ? "Teams" : "Google Meet"} link
-              </a>
-              <span className="text-xs text-slate-400">
-                {meeting.attendedFrom === "dispatch" || meeting.dispatch ? "sent from here — notes not emailed" : "from her calendar invite"} ·{" "}
-                {LANGUAGES[(meeting.language ?? "en") as Lang].name}
-              </span>
-            </div>
-          )}
-          {status === "scheduled" && (
-            <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              She will join{" "}
-              <a href={meeting.meetingUrl} target="_blank" rel="noreferrer" className="underline decoration-blue-300">
-                the meeting
-              </a>{" "}
-              by herself at <strong>{clock(meeting.joinAt)}</strong>
-              {meeting.dispatch
-                ? platformOf(meeting.meetingUrl) === "teams"
-                  ? " from her server — somebody will need to admit her from the lobby."
-                  : " from her server, as herself."
-                : config.signedIn
-                  ? " as her own account."
-                  : " — somebody will need to let her in."}{" "}
-              You can close this page;
-              she does not need it open.
-            </div>
-          )}
-          {/* Her tile lives inside Recall's browser where nobody can inspect it, so
-              what it reports about itself, and why she last said nothing, are shown
-              here. Without this "she stopped talking" is unanswerable. */}
-          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-inset ring-slate-200">
-            {meeting.stage?.voice && (
-              <span>
-                <span className="text-slate-400">her voice: </span>
-                <span className={meeting.stage.voice.startsWith("GPT-Live open") ? "text-emerald-700" : "text-slate-600"}>
-                  {meeting.stage.voice}
-                </span>
-              </span>
-            )}
-            <span>
-              <span className="text-slate-400">her face: </span>
-              <span className={meeting.stage?.face === "live" || meeting.stage?.face === "speaking" ? "text-emerald-700" : "text-amber-700"}>
-                {meeting.stage?.face ?? "no word from the tile yet"}
-              </span>
-            </span>
-            <span>
-              <span className="text-slate-400">her ears: </span>
-              {meeting.stage?.captions ? (
-                <span className={meeting.stage.captions.socket ? "text-emerald-700" : "text-rose-700"}>
-                  {meeting.stage.captions.socket ? "listening" : "caption feed down"}
-                  <span className="text-slate-500">
-                    {" "}· {meeting.stage.captions.received} captions
-                    {meeting.stage.captions.secondsSinceLast !== null
-                      ? `, last ${meeting.stage.captions.secondsSinceLast}s ago`
-                      : ", none yet"}
-                  </span>
-                </span>
-              ) : (
-                <span className="text-slate-500">no word yet</span>
-              )}
-            </span>
-            {meeting.stage?.detail && <span className="text-rose-700">{meeting.stage.detail}</span>}
-            {meeting.lastDecision && (
-              <span>
-                <span className="text-slate-400">last decision: </span>
-                <span className="text-slate-600">{meeting.lastDecision.reason}</span>
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-baseline gap-6">
-            <p className="font-mono text-3xl font-semibold tabular-nums text-slate-900">{mmss(secs)}</p>
-            <p className="text-sm text-slate-500">
-              {meeting.transcript.length} line{meeting.transcript.length === 1 ? "" : "s"} heard ·{" "}
-              {meeting.actions.length} action{meeting.actions.length === 1 ? "" : "s"}
-            </p>
-          </div>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Heard</p>
-              <div className="h-64 space-y-1.5 overflow-y-auto rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-inset ring-slate-200">
-                {meeting.transcript.length ? (
-                  meeting.transcript.slice(-80).map((l) => (
-                    <p key={l.id}>
-                      <span className="text-blue-600">{l.speaker}</span>{" "}
-                      <span className="text-slate-600">{l.text}</span>
-                    </p>
-                  ))
-                ) : (
-                  <p className="text-slate-400">
-                    Nothing yet. Captions start once she is admitted and somebody speaks — turn on live
-                    captions in the Meet window if this stays empty.
-                  </p>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Actions</p>
-              <div className="h-64 space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-inset ring-slate-200">
-                {meeting.actions.length ? (
-                  meeting.actions.map((a) => (
-                    <p key={a.id}>
-                      {a.owner && <span className="font-medium">{a.owner} — </span>}
-                      <span className="text-slate-700">{a.text}</span>
-                      {a.due && <span className="text-slate-400"> ({a.due})</span>}
-                    </p>
-                  ))
-                ) : (
-                  <p className="text-slate-400">She adds them as people commit to things.</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {status !== "ended" && (
-            <label className="mt-4 block space-y-1">
-              <span className="text-xs text-slate-500">
-                Tell her something mid-meeting{" "}
-                <span className="text-slate-400">— added to her briefing; the next answer will know it.</span>
-              </span>
-              <div className="flex gap-2">
-                <textarea
-                  className={`${field} h-16 min-w-0 flex-1 resize-y`}
-                  value={draft.context}
-                  onChange={(e) => setDraft({ ...draft, context: e.target.value })}
-                />
-                <button className={`${button} shrink-0 border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`} onClick={savePlan}>
-                  Update
-                </button>
-              </div>
-            </label>
-          )}
-        </Section>
-      )}
-
-      {/* ── files ────────────────────────────────────────────────────────── */}
-      <Section title="Files for the room">
-        <div className="flex gap-2">
-          <input
-            className={`${field} min-w-0 flex-1`}
-            value={driveQuery}
-            placeholder="Search your Drive…"
-            onChange={(e) => setDriveQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && searchDrive()}
-          />
-          <button
-            className={`${button} shrink-0 border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`}
-            onClick={searchDrive}
-            disabled={!config.googleConnected}
-          >
-            Search
-          </button>
-        </div>
-        {!config.googleConnected && (
-          <p className="mt-2 text-xs text-slate-500">
-            To search your Drive and give the guests access to a file, connect <span className="font-medium text-slate-700">Your Google account</span> above.
-          </p>
-        )}
-        {drive.length > 0 && (
-          <ul className="mt-3 divide-y divide-slate-100">
-            {drive.map((f) => {
-              const already = meeting.files.find((s) => s.id === f.id);
-              return (
-                <li key={f.id} className="flex items-center justify-between gap-3 py-2">
-                  <div className="min-w-0">
-                    <a href={f.link} target="_blank" rel="noreferrer" className="block truncate text-sm hover:text-blue-600">
-                      {f.name}
-                    </a>
-                    <p className="text-xs text-slate-400">
-                      {already ? `shared with ${already.sharedWith.length}` : f.owner}
-                    </p>
-                  </div>
-                  <button
-                    className={`${button} shrink-0 border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`}
-                    onClick={() => share(f)}
-                    disabled={busy === `share:${f.id}`}
-                  >
-                    {busy === `share:${f.id}` ? "Sharing…" : already ? "Share again" : "Grant access"}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Section>
-
-      {/* ── what went out ────────────────────────────────────────────────── */}
-      {followUp.subject && (
-        <Section
-          title={meeting.followUp?.sentAt ? "Sent" : "Notes — not sent yet"}
-          aside={
-            <span className="text-xs text-slate-400">
-              {meeting.followUp?.sentAt ? `to ${followUp.to}` : "edit below, then send"}
-            </span>
-          }
-        >
-          <div className="space-y-3">
-            <label className="block space-y-1">
-              <span className="text-xs text-slate-500">To</span>
-              <input
-                className={`${field} w-full`}
-                value={followUp.to}
-                onChange={(e) => setFollowUp({ ...followUp, to: e.target.value })}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs text-slate-500">Subject</span>
-              <input
-                className={`${field} w-full`}
-                value={followUp.subject}
-                onChange={(e) => setFollowUp({ ...followUp, subject: e.target.value })}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs text-slate-500">Body</span>
-              <textarea
-                className={`${field} h-72 w-full resize-y font-mono text-xs leading-relaxed`}
-                value={followUp.body}
-                onChange={(e) => setFollowUp({ ...followUp, body: e.target.value })}
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                className={`${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50`}
-                onClick={() => deliver("draft")}
-                disabled={busy !== null}
-              >
-                Save as Gmail draft
-              </button>
-              <button
-                className={`${button} bg-blue-600 text-white shadow-sm hover:bg-blue-700`}
-                onClick={() => deliver("send")}
-                disabled={busy !== null}
-              >
-                {meeting.followUp?.sentAt ? "Send again" : "Send"}
-              </button>
-            </div>
-          </div>
-        </Section>
-      )}
-
-      <footer className="flex items-center justify-between pt-2 text-xs text-slate-400">
-        <span>
-          Her tile:{" "}
-          <a href="/bot" target="_blank" rel="noreferrer" className="hover:text-blue-600">
-            /bot
-          </a>{" "}
-          — what the meeting sees
-        </span>
-        <button
-          className="hover:text-rose-700"
-          onClick={() => {
-            if (window.confirm("Throw this meeting away and start a new one?")) {
-              call("reset", () => fetch("/api/meeting", { method: "DELETE" }));
-            }
-          }}
-        >
-          New meeting
-        </button>
-      </footer>
     </div>
   );
 }

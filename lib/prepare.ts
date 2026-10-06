@@ -203,6 +203,23 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
 }
 
 /**
+ * For a meeting she is sent to right now from the client's page: no invite and no
+ * preparation — what they wrote about it, and what she knows about them.
+ */
+export function briefingNow(client: Client, note: string, documents: number): string {
+  const sections = [`You are attending this meeting for ${client.name}. Someone at ${client.name} sent you to it just now.`];
+  if (client.instructions.trim()) sections.push(`How ${client.name} wants you to work:\n${client.instructions.trim()}`);
+  if (note.trim()) sections.push(`What they told you about this meeting:\n${note.trim()}`);
+  if (client.digest.trim()) sections.push(`What you know about ${client.name}:\n${client.digest.trim()}`);
+  if (documents) {
+    sections.push(
+      `${client.name}'s documents can be searched during the meeting: look up what you are not sure of before saying you don't know.`,
+    );
+  }
+  return sections.join("\n\n").slice(0, 28_000);
+}
+
+/**
  * What she is told before she walks in — handed to her runner as the meeting's briefing.
  * The brief when there is one, their preparation otherwise, and always the invite and
  * what she knows about the client.

@@ -66,8 +66,8 @@ export default function Docs() {
             <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">
               Ava joins your <strong className="font-semibold text-slate-800">Google Meet</strong> as a normal member, with her own
               Google account. Invite her like anybody else: she turns up at the start time, listens, answers and joins in out
-              loud, takes notes, and emails the write-up to the guests when it ends. She can also be sent into a{" "}
-              <strong className="font-semibold text-slate-800">Microsoft Teams</strong> meeting from the control room. She hears
+              loud, takes notes, and emails the write-up to the guests when it ends. A client can also send her into any Meet or{" "}
+              <strong className="font-semibold text-slate-800">Microsoft Teams</strong> meeting right away, from their page. She hears
               and talks through <strong className="font-semibold text-slate-800">OpenAI GPT-Live</strong>, which listens while she
               speaks — so she answers almost at once, and can be interrupted like anybody else.
             </p>
@@ -104,7 +104,7 @@ export default function Docs() {
               id="flow"
               eyebrow="The flow"
               title="A meeting, start to finish"
-              intro="Nothing to click during a meeting. It starts from a calendar invite — or from the control room, where you paste any Meet or Teams link and press Send."
+              intro="Nothing to click during a meeting. It starts from a calendar invite — or from a client's page: “Need Ava now?”, paste any Meet or Teams link, and she joins."
             >
               <Steps
                 items={[
@@ -154,7 +154,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, one minute after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the control room. She knows she is alone from the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people, and the chat button's unread count is never taken for a head count — and from its “you're the only one here”. A bot she does not know by name cannot keep her either (one kept her in an empty meeting for over an hour): once everybody who has spoken has gone and whoever is left — two at most — has not said a word for a minute, she leaves; and after ten minutes in which nobody has said anything, she leaves whoever is on screen. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
+                    body: "When the meeting ends, when she is removed, one minute after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the client's page. She knows she is alone from the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people, and the chat button's unread count is never taken for a head count — and from its “you're the only one here”. A bot she does not know by name cannot keep her either (one kept her in an empty meeting for over an hour): once everybody who has spoken has gone and whoever is left — two at most — has not said a word for a minute, she leaves; and after ten minutes in which nobody has said anything, she leaves whoever is on screen. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
                     tone: "violet",
                   },
                   {
@@ -258,8 +258,8 @@ export default function Docs() {
                   briefing, what was said, or her backend — otherwise she says she does not know.
                 </Card>
                 <Card title="Why is she quiet?">
-                  The control room shows whether her voice session is open, and her face’s state. Her runner logs every line she
-                  says (<C>▸</C>) and every hand-over.
+                  The client’s page shows what she hears as she hears it, and how many are in the call. Her runner logs every line
+                  she says (<C>▸</C>), every hand-over, and her voice session opening and closing — that client’s log alone, too.
                 </Card>
               </div>
 
@@ -434,18 +434,18 @@ export default function Docs() {
               id="teams"
               eyebrow="Second platform"
               title="Microsoft Teams"
-              intro="Teams meetings never reach her calendar, so she is sent from the control room. Everything after she is in — listening, talking, notes — is the same as in Meet."
+              intro="Teams meetings never reach her calendar, so she is sent from the client's page. Everything after she is in — listening, talking, notes — is the same as in Meet."
             >
               <Steps
                 items={[
                   {
-                    title: "Paste the Teams link in the control room",
-                    body: "With the briefing and anybody you already know should get the notes, then press Send (or set a time to book her for later).",
+                    title: "“Need Ava now?” on the client’s page",
+                    body: "Paste the Teams link, and a line about the meeting if you like, then Send Ava. She goes at once, for that client, with what she knows about them.",
                     tone: "sky",
                   },
                   {
                     title: "Her container picks it up",
-                    body: "It asks the app every 10 seconds whether she has been sent anywhere, and takes each meeting once.",
+                    body: "It asks the app every 10 seconds whether she has been sent anywhere, and takes each meeting once — with its client.",
                     tone: "sky",
                   },
                   {
@@ -486,7 +486,7 @@ export default function Docs() {
               <Table
                 head={["Step", "How the language is used"]}
                 rows={[
-                  ["Where it starts", "Nothing to choose. Calendar meetings: from the invite — “Language: German” decides, otherwise the language it is written in. Sent from the control room: the language of the title and briefing."],
+                  ["Where it starts", "Nothing to choose. Calendar meetings: from the invite — “Language: German” decides, otherwise the language it is written in. Sent from a client’s page: the language of what they wrote about it."],
                   ["Following the room", "When what she hears is clearly another of the three — twice in a row, and not more than every half minute — she switches the captions to it."],
                   ["The captions", "Meet’s “Meeting language”, Teams’ spoken language. Arabic uses Maghrebi captions unless AVA_ARABIC_CAPTIONS says otherwise."],
                   ["Her replies", "GPT-Live answers in the language she is spoken to in — Arabic dialects understood, answered in Modern Standard Arabic."],
@@ -517,10 +517,10 @@ export default function Docs() {
                   invite, with nothing to press. Not meeting rooms, not herself; once per meeting. (An invite with nobody on it but
                   her: she asks in the meeting chat for addresses.)
                 </Card>
-                <Card tone="amber" title="Sent from the control room: not emailed">
-                  A meeting she was sent to from the control room — every Teams meeting, and any Meet link pasted there: the notes
-                  are written and wait in the control room, and she does not promise an email in her hello. Meet and Teams show
-                  names, never addresses. To have them emailed, invite her on the calendar.
+                <Card tone="amber" title="Sent from a client’s page: filed, not emailed">
+                  A meeting she was sent to with “Need Ava now?” — every Teams meeting, and any Meet link pasted there: the notes
+                  are written and filed with the meeting on that client’s page (Past meetings), and she does not promise an email
+                  in her hello. Meet and Teams show names, never addresses. To have them emailed, invite her on the calendar.
                 </Card>
                 <Card tone="slate" title="A designed email">
                   NDI-branded HTML — the actions first, each with its owner and due date, then the summary and any files — with the
@@ -644,16 +644,21 @@ export default function Docs() {
                 <FileRow path="lib/ava.ts">Her own Google access, stored encrypted on the server; the runner-key check.</FileRow>
                 <FileRow path="lib/workspace.ts">Calendar (her invites), Gmail (drafts and sending), Drive (search and sharing).</FileRow>
                 <FileRow path="lib/email.ts">The NDI-branded notes email, built from the plain-text notes.</FileRow>
-                <FileRow path="lib/google.ts · lib/session.ts">Google OAuth and the encrypted session cookie for whoever uses the control room.</FileRow>
+                <FileRow path="lib/google.ts · lib/session.ts">Google OAuth — Ava’s own account, and signing in — and the encrypted session cookie.</FileRow>
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
                 <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams.</FileRow>
                 <FileRow path="app/api/ava/dispatch">
-                  Where her runner asks “have I been sent anywhere?” — each meeting sent from the control room is taken once.
+                  Where her runner asks “have I been sent anywhere?” — each meeting sent from a client’s page is taken once, with
+                  its client.
+                </FileRow>
+                <FileRow path="app/api/portal/live · components/portal/Live.tsx">
+                  Her meeting on the client’s page, only when it is theirs: sending her now (“Need Ava now?” — a link and a line,
+                  for that client, refused while she is in any meeting), what she hears and the actions as they come, telling her
+                  something mid-meeting, ending it — after which the site writes the notes as her runner would.
                 </FileRow>
                 <FileRow path="components/ControlRoom.tsx">
-                  The page at <C>/</C>: what she depends on, each said in words (her Google account, her server, the meeting storage, and your own Google account, which is optional); brief her, send her to any Meet or Teams link (or book her for later), see the meeting she
-                  is in — sent from here or from her calendar — with her voice and face live, the transcript and actions, end a
-                  meeting, edit and resend notes.
+                  The page at <C>/</C>: the three things she depends on, each said in words — her Google account, her server (and
+                  what she is doing now, with the client’s page to follow it on), the meeting storage.
                 </FileRow>
                 <FileRow path="proxy.ts · lib/auth.ts · lib/seal.ts" tag={<Chip tone="emerald">the door</Chip>}>
                   Nothing opens without signing in — or the runner’s key — except signing in and these docs. Who is an admin, who
@@ -706,7 +711,7 @@ export default function Docs() {
             <Section id="runner" eyebrow="Modules" title="The runner — bot/" intro="One Docker container: Node, Google Chrome, a virtual screen, and a web view of that screen.">
               <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-5">
                 <FileRow path="watch.mjs" tag={<Chip tone="sky">entry point</Chip>}>
-                  On duty: checks she is signed in, reads her calendar every minute and the control room every 10 seconds, attends
+                  On duty: checks she is signed in, reads her calendar every minute and asks every 10 seconds whether a client’s page sent her somewhere, attends
                   each meeting — with the app’s briefing for its client — and remembers which ones she already did.
                 </FileRow>
                 <FileRow path="lib/meet.mjs">
@@ -752,10 +757,11 @@ export default function Docs() {
                   [<C key="r">POST /api/moderator/record</C>, "Runner (key)", "The meeting so far for GPT-Live’s OpenAI backend; note an action"],
                   [<C key="r">POST /api/moderator/knowledge</C>, "Runner (key)", "search_knowledge: passages from the documents of the client whose meeting she is in"],
                   [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her clients’ invites for the next hours, each with its briefing (every invite when no clients are set up)"],
-                  [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from the control room"],
-                  [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, control room", "Read, brief or clear the meeting"],
-                  [<C key="r">POST /api/meeting/control</C>, "Runner, control room", "attend · dispatch · stop · rehearse"],
-                  [<C key="r">POST · PUT /api/meeting/followup</C>, "Runner, control room", "Write the notes; send or re-send them"],
+                  [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from a client’s page, with its client"],
+                  [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, admins", "Read, brief or clear the meeting"],
+                  [<C key="r">POST /api/meeting/control</C>, "Runner, admins", "attend · stop · rehearse"],
+                  [<C key="r">POST · PUT /api/meeting/followup</C>, "Runner (key), admins", "Write the notes; send or re-send them"],
+                  [<C key="r">GET · POST /api/portal/live</C>, "Clients, admins", "Her meeting if it is theirs; send her now, tell her something, end it"],
                   [<C key="r">POST · PUT /api/moderator/notes</C>, "Recall stage", "Pull actions from new transcript as it goes; edit them"],
                   [<C key="r">POST /api/anam</C>, "Runner", "A short-lived token for her face"],
                   [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
@@ -767,8 +773,7 @@ export default function Docs() {
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],
                   [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting; save its preparation and write her brief"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
-                  [<C key="r">/api/calendar · /api/drive</C>, "Control room", "Your meetings; find and share files"],
-                  [<C key="r">POST /api/meeting/start</C>, "Control room", "Send the Recall bot (older path)"],
+                  [<C key="r">POST /api/meeting/start</C>, "Admins", "Send the Recall bot (older path, nothing calls it)"],
                 ]}
               />
             </Section>

@@ -8,9 +8,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
+import { BoltIcon, BookIcon, CalendarIcon, DriveIcon, FileIcon, LinkIcon, SettingsIcon, SparkIcon, TextIcon, UploadIcon } from "./icons";
+import { LivePanel, SendNow, useLive } from "./Live";
 import Markdown from "./Markdown";
 import Setup from "./Setup";
-import { Chip, CompanyLogo, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
+import { Chip, CompanyLogo, IconTile, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
 type Doc = {
   id: string;
@@ -79,6 +81,9 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   const [tab, setTab] = useState<Tab>("meetings");
   // Which meetings are past and which are about to start: read with the data, and each minute.
   const [now, setNow] = useState(() => Date.now());
+  // Her meeting, if it is theirs, followed live; and "Need Ava now?" open or not.
+  const live = useLive(q);
+  const [sendingNow, setSendingNow] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -115,8 +120,17 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
 
   if (!data) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-6">
-        {error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-slate-500">Loading…</p>}
+      <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
+        {error ? (
+          <Notice tone="error">{error}</Notice>
+        ) : (
+          // The page's shape while it loads: header, tabs, a section.
+          <div className="space-y-5" aria-label="Loading">
+            <div className="h-44 animate-pulse rounded-3xl bg-linear-to-br from-blue-200/70 to-indigo-200/60" />
+            <div className="h-14 animate-pulse rounded-2xl bg-slate-200/70" />
+            <div className="h-72 animate-pulse rounded-2xl bg-slate-200/50" />
+          </div>
+        )}
       </div>
     );
   }
@@ -126,47 +140,91 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   const past = data.meetings.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() <= now).reverse();
   const ava = data.ava ?? "Ava";
   const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "meetings", label: "Meetings", count: upcoming.length },
-    { id: "knowledge", label: "What she knows", count: data.documents.filter((d) => d.status === "ready").length },
-    { id: "instructions", label: "How she works for you" },
+  const paused = client.status !== "active";
+  const tabs: { id: Tab; label: string; icon: (p: { className?: string }) => React.ReactNode; count?: number }[] = [
+    { id: "meetings", label: "Meetings", icon: CalendarIcon, count: upcoming.length },
+    { id: "knowledge", label: "What she knows", icon: BookIcon, count: data.documents.filter((d) => d.status === "ready").length },
+    { id: "instructions", label: "How she works for you", icon: SparkIcon },
     // Their logo, name and who can use her. NDI has the whole setup above this page instead.
-    ...(clientId ? [] : [{ id: "setup" as const, label: "Setup" }]),
+    ...(clientId ? [] : [{ id: "setup" as const, label: "Setup", icon: SettingsIcon }]),
   ];
+  const mine = live.live && live.live.phase !== "ended";
+  const state = paused
+    ? { text: "Paused — she skips your meetings", dot: "bg-amber-300" }
+    : mine
+      ? { text: live.live!.phase === "live" ? "In your meeting right now" : "On her way to your meeting", dot: "bg-emerald-300 animate-pulse" }
+      : live.busy
+        ? { text: "In another meeting right now", dot: "bg-amber-300" }
+        : { text: "Free — she can join a meeting now", dot: "bg-emerald-300" };
 
   return (
     <PickerContext.Provider value={picker}>
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-24 sm:p-6">
-      <header className="space-y-2 pt-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <CompanyLogo name={client.name} url={client.logo_url} size={44} decorative />
-          <h1 className="text-2xl font-semibold">Ava for {client.name}</h1>
-          {client.status !== "active" && <Chip tone="warn">Paused</Chip>}
+      <header className="relative overflow-hidden rounded-3xl bg-linear-to-br from-blue-600 via-blue-600 to-indigo-700 p-6 text-white shadow-xl shadow-blue-900/15 sm:p-8">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-28 size-80 rounded-full bg-sky-300/25 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-36 left-1/4 size-80 rounded-full bg-indigo-400/30 blur-3xl" />
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="shrink-0 rounded-2xl bg-white p-1.5 shadow-lg shadow-blue-950/20">
+              <CompanyLogo name={client.name} url={client.logo_url} size={56} decorative />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-200">Ava for</p>
+              <h1 className="mt-0.5 truncate text-2xl font-semibold tracking-tight sm:text-3xl">{client.name}</h1>
+              <p className="mt-1.5 flex items-center gap-2 text-sm text-blue-100">
+                <span className={`size-2 rounded-full ${state.dot}`} />
+                {state.text}
+              </p>
+            </div>
+          </div>
+          {/* Not while she is already in a meeting — theirs is below, another client's is not theirs to see. */}
+          <button
+            onClick={() => setSendingNow(true)}
+            disabled={paused || live.busy}
+            title={live.busy ? (mine ? "She is in your meeting — it is below." : "Ava is in another meeting right now.") : undefined}
+            className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-blue-700 shadow-lg shadow-blue-950/20 transition duration-150 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:w-auto"
+          >
+            <BoltIcon className="size-5 transition group-hover:scale-110" />
+            {mine ? "She is in your meeting" : live.busy ? "In another meeting" : "Need Ava now?"}
+          </button>
         </div>
-        <p className="max-w-3xl text-sm leading-relaxed text-slate-500">
-          Invite <span className="text-slate-700">{ava}</span> to a Google Meet from your calendar, like a colleague, and she joins it.
-          Here you give her what she should know about {client.name}, and prepare her for each meeting.
+        <p className="relative mt-6 max-w-3xl text-sm leading-relaxed text-blue-50/90">
+          Invite <span className="font-semibold text-white">{ava}</span> to your meetings from your calendar, like a colleague — or send
+          her to one right now. Here you give her what she should know about {client.name}, and prepare her for each meeting.
           {routes.length > 0 && <> Meetings organised by {routes.join(", ")} are yours too.</>}
         </p>
       </header>
 
-      {/* One part at a time. All three stay loaded, so a file uploading or a note being typed survives a switch. */}
-      <nav role="tablist" aria-label={`Ava for ${client.name}`} className="flex gap-1 overflow-x-auto border-b border-slate-200">
+      {live.live && <LivePanel live={live.live} at={live.at} q={q} onChanged={live.refresh} />}
+      {sendingNow && (
+        <SendNow q={q} clientName={client.name} busy={live.busy && !mine} onClose={() => setSendingNow(false)} onSent={live.refresh} />
+      )}
+
+      {/* One part at a time. All stay loaded, so a file uploading or a note being typed survives a switch. */}
+      <nav
+        role="tablist"
+        aria-label={`Ava for ${client.name}`}
+        className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white p-1.5 shadow-sm"
+      >
         {tabs.map((t) => {
           const on = tab === t.id;
+          const Icon = t.icon;
           return (
             <button
               key={t.id}
               role="tab"
               aria-selected={on}
               onClick={() => setTab(t.id)}
-              className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-                on ? "border-blue-600 text-slate-900" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900"
+              className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition duration-150 ${
+                on ? "bg-blue-600 text-white shadow-md shadow-blue-600/25" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
+              <Icon className="size-4" />
               {t.label}
               {t.count !== undefined && (
-                <span className={`rounded-full px-2 py-0.5 text-xs ${on ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${on ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
+                  {t.count}
+                </span>
               )}
             </button>
           );
@@ -180,11 +238,28 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
       )}
 
       <div role="tabpanel" hidden={tab !== "meetings"}>
-      <Section title="Meetings" aside={<span className="text-xs text-slate-400">{upcoming.length} coming up</span>}>
+      <Section
+        title="Meetings"
+        icon={<CalendarIcon />}
+        description={upcoming.length ? `${upcoming.length} coming up — prepare her for each` : "Nothing coming up yet"}
+      >
         {upcoming.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            None coming up. Invite {ava} to a meeting from your calendar — it shows here within a minute.
-          </p>
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center">
+            <IconTile className="size-12">
+              <CalendarIcon className="size-6" />
+            </IconTile>
+            <p className="font-medium text-slate-800">No meetings coming up</p>
+            <p className="max-w-md text-sm leading-relaxed text-slate-500">
+              Invite {ava} to a meeting from your calendar — it shows here within a minute, ready to prepare. Or send her to one
+              right now.
+            </p>
+            {!paused && !live.busy && (
+              <button className={primary} onClick={() => setSendingNow(true)}>
+                <BoltIcon className="size-4" />
+                Need Ava now?
+              </button>
+            )}
+          </div>
         ) : (
           <ul className="space-y-3">
             {upcoming.map((m) => (
@@ -208,11 +283,15 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
       <div role="tabpanel" hidden={tab !== "knowledge"} className="space-y-5">
       <Section
         title="Her documents"
-        aside={<span className="text-xs text-slate-400">{data.documents.filter((d) => d.status === "ready").length} read</span>}
+        icon={<BookIcon />}
+        tone="violet"
+        description="She reads them now, and in a meeting looks up what she needs. Files are kept in NDI's Google Drive; nothing is shared."
+        aside={
+          <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+            {data.documents.filter((d) => d.status === "ready").length} read
+          </span>
+        }
       >
-        <p className="mb-4 max-w-3xl text-sm text-slate-500">
-          Your documents, pages and files, or text you write here: she reads them now, and in a meeting she looks up what she needs. Files are kept in NDI&apos;s Google Drive; nothing is shared.
-        </p>
         <AddDocuments
           q={q}
           onAdded={(doc) => setData((prev) => (prev ? { ...prev, documents: [doc, ...prev.documents] } : prev))}
@@ -233,12 +312,12 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
       </Section>
 
       {/* What she took from them, shown like a project's README under its files. */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
-          <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800">
-            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 shrink-0 text-slate-500" fill="currentColor">
-              <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z" />
-            </svg>
+      <section className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.14)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-linear-to-r from-emerald-50/80 to-white px-5 py-3.5">
+          <div className="flex min-w-0 items-center gap-3 text-sm font-semibold text-slate-800">
+            <IconTile tone="emerald" className="size-8">
+              <SparkIcon className="size-4" />
+            </IconTile>
             <span className="truncate">What Ava knows about {client.name}</span>
           </div>
           <div className="flex items-center gap-3">
@@ -297,6 +376,7 @@ function AddDocuments({
   const [linking, setLinking] = useState(false);
   const [link, setLink] = useState("");
   const [writing, setWriting] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [note, setNote] = useState({ title: "", text: "" });
   const input = useRef<HTMLInputElement>(null);
   const picker = useContext(PickerContext);
@@ -402,37 +482,72 @@ function AddDocuments({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <input ref={input} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => uploadFiles(e.target.files)} />
-        <button className={quiet} onClick={() => input.current?.click()}>
-          Upload files
-        </button>
-        {picker && (
-          <button className={quiet} onClick={() => void fromDrive()}>
-            From Google Drive
+      <input ref={input} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => uploadFiles(e.target.files)} />
+      {/* Files can be dropped anywhere on it; the buttons are every other way in. */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          uploadFiles(e.dataTransfer.files);
+        }}
+        className={`rounded-2xl border-2 border-dashed p-5 transition duration-150 ${
+          dragging ? "scale-[1.01] border-blue-400 bg-blue-50/80" : "border-slate-200 bg-slate-50/50 hover:border-slate-300"
+        }`}
+      >
+        <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
+          <IconTile tone={dragging ? "blue" : "violet"} className="size-11">
+            <UploadIcon className="size-5" />
+          </IconTile>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-800">{dragging ? "Drop them — she reads them at once" : "Drop files here, or add them another way"}</p>
+            <p className="mt-0.5 text-xs leading-5 text-slate-500">
+              PDF, Word, Excel, PowerPoint, Google Docs, Sheets and Slides, images and text — up to 4 MB here
+              {picker ? "; bigger files through Google Drive (its Upload tab takes them from your computer)." : "."}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+          <button className={quiet} onClick={() => input.current?.click()}>
+            <UploadIcon className="size-4" />
+            Upload files
           </button>
-        )}
-        <button
-          className={quiet}
-          onClick={() => {
-            setLinking((v) => !v);
-            setWriting(false);
-          }}
-        >
-          Add a link
-        </button>
-        {/* A meeting has its own notes in its preparation; this is for what she knows about them. */}
-        {!meetingId && (
+          {picker && (
+            <button className={quiet} onClick={() => void fromDrive()}>
+              <DriveIcon className="size-4" />
+              From Google Drive
+            </button>
+          )}
           <button
-            className={quiet}
+            className={`${quiet} ${linking ? "border-blue-300 bg-blue-50 text-blue-700" : ""}`}
             onClick={() => {
-              setWriting((v) => !v);
-              setLinking(false);
+              setLinking((v) => !v);
+              setWriting(false);
             }}
           >
-            Add text
+            <LinkIcon className="size-4" />
+            Add a link
           </button>
-        )}
+          {/* A meeting has its own notes in its preparation; this is for what she knows about them. */}
+          {!meetingId && (
+            <button
+              className={`${quiet} ${writing ? "border-blue-300 bg-blue-50 text-blue-700" : ""}`}
+              onClick={() => {
+                setWriting((v) => !v);
+                setLinking(false);
+              }}
+            >
+              <TextIcon className="size-4" />
+              Add text
+            </button>
+          )}
+        </div>
       </div>
       {writing && (
         <form onSubmit={(e) => void addText(e)} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -477,16 +592,12 @@ function AddDocuments({
           </button>
         </form>
       )}
-      <p className="text-xs text-slate-400">
-        PDF, Word, Excel, PowerPoint, Google Docs, Sheets and Slides, images and text — up to 4 MB here
-        {picker ? "; bigger files through Google Drive (its Upload tab takes them from your computer)." : "."}
-      </p>
       {pending.length > 0 && (
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {pending.map((label, i) => (
-            <li key={`${label}-${i}`} className="flex items-center gap-2 text-sm text-blue-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-              Reading {label}…
+            <li key={`${label}-${i}`} className="flex items-center gap-3 rounded-xl bg-blue-50 px-3 py-2.5 text-sm text-blue-800 ring-1 ring-inset ring-blue-200">
+              <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+              <span className="min-w-0 truncate">Reading {label}…</span>
             </li>
           ))}
         </ul>
@@ -495,7 +606,12 @@ function AddDocuments({
   );
 }
 
-const KIND = { upload: "File", drive: "Drive", link: "Link", text: "Text" } as const;
+const KIND = {
+  upload: { label: "File", icon: FileIcon, tone: "violet" },
+  drive: { label: "From Drive", icon: DriveIcon, tone: "emerald" },
+  link: { label: "Link", icon: LinkIcon, tone: "sky" },
+  text: { label: "Text", icon: TextIcon, tone: "amber" },
+} as const;
 
 function DocumentList({
   documents,
@@ -528,47 +644,64 @@ function DocumentList({
 
   return (
     <>
-    <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
-      {documents.map((doc) => (
-        <li key={doc.id} className="p-3">
+    <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80">
+      {documents.map((doc) => {
+        const kind = KIND[doc.kind];
+        const KindIcon = kind.icon;
+        return (
+        <li key={doc.id} className="p-3 transition hover:bg-slate-50/80">
           <div className="flex flex-wrap items-center gap-3">
+            <span title={kind.label}>
+              <IconTile tone={kind.tone} className="size-8">
+                <KindIcon className="size-4" />
+              </IconTile>
+            </span>
             <button
-              className="min-w-0 flex-1 truncate text-left text-sm text-slate-800 hover:text-slate-900"
+              className="min-w-0 flex-1 truncate text-left text-sm font-medium text-slate-800 hover:text-blue-700"
               onClick={() => setOpen(open === doc.id ? null : doc.id)}
               title={doc.title}
             >
               {doc.title}
             </button>
-            <Chip>{KIND[doc.kind]}</Chip>
             {doc.status === "ready" ? (
-              <span className="text-xs text-slate-400">{doc.chars.toLocaleString()} characters · {ago(doc.created_at)}</span>
+              <span className="text-xs text-slate-400">
+                {kind.label} · {doc.chars.toLocaleString()} characters · {ago(doc.created_at)}
+              </span>
             ) : doc.status === "failed" ? (
               <Chip tone="bad">Could not read</Chip>
             ) : (
               <Chip tone="info">Reading…</Chip>
             )}
             {doc.status === "ready" && (
-              <button className="text-xs font-medium text-blue-600 hover:text-blue-700" onClick={() => setPreviewing(doc)}>
+              <button
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                onClick={() => setPreviewing(doc)}
+              >
                 Preview
               </button>
             )}
-            <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void remove(doc)} disabled={removing === doc.id}>
+            <button
+              className="rounded-lg px-2 py-1 text-xs text-slate-400 transition hover:bg-rose-50 hover:text-rose-700"
+              onClick={() => void remove(doc)}
+              disabled={removing === doc.id}
+            >
               {removing === doc.id ? "Removing…" : "Remove"}
             </button>
           </div>
           {open === doc.id && (
-            <div className="mt-2 space-y-2 text-sm text-slate-600">
+            <div className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200/70 sm:ml-11">
               {doc.status === "failed" && <p className="text-rose-700">{doc.error}</p>}
               {doc.summary && <p className="whitespace-pre-wrap leading-relaxed">{doc.summary}</p>}
               {doc.source && /^https?:/.test(doc.source) && (
-                <a href={doc.source} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:text-blue-700">
+                <a href={doc.source} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-600 hover:text-blue-700">
                   Open the original ↗
                 </a>
               )}
             </div>
           )}
         </li>
-      ))}
+        );
+      })}
     </ul>
     {previewing && <Preview doc={previewing} q={q} onClose={() => setPreviewing(null)} />}
     </>
@@ -748,11 +881,15 @@ function UpcomingMeeting({
   const soon = new Date(meeting.starts_at).getTime() - now < 15 * 60_000;
   const start = new Date(meeting.starts_at);
   return (
-    <li className={`rounded-xl border bg-slate-50 transition ${open ? "border-blue-200 ring-4 ring-blue-500/5" : "border-slate-200"}`}>
+    <li
+      className={`rounded-2xl border bg-white transition duration-150 ${
+        open ? "border-blue-200 shadow-lg shadow-blue-900/5 ring-4 ring-blue-500/5" : "border-slate-200/80 hover:-translate-y-px hover:border-slate-300 hover:shadow-md"
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-4 p-4">
         {/* The day, as on a calendar page. */}
-        <div className="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-center shadow-sm">
-          <span className="w-full bg-blue-600 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+        <div className="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-center shadow-sm">
+          <span className="w-full bg-linear-to-b from-blue-500 to-blue-600 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             {start.toLocaleDateString([], { month: "short" })}
           </span>
           <span className="py-1 text-lg font-semibold leading-none text-slate-900">{start.getDate()}</span>
@@ -908,9 +1045,9 @@ function PastMeeting({ meeting }: { meeting: Meeting }) {
   const [open, setOpen] = useState(false);
   const notes = meeting.notes;
   return (
-    <li className="rounded-xl border border-slate-100 bg-slate-50">
-      <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left" onClick={() => setOpen((v) => !v)} disabled={!notes}>
-        <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{meeting.title}</span>
+    <li className={`rounded-xl border bg-slate-50/70 transition ${open ? "border-slate-300 bg-white" : "border-slate-200/70 hover:border-slate-300 hover:bg-white"}`}>
+      <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left disabled:cursor-default" onClick={() => setOpen((v) => !v)} disabled={!notes}>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{meeting.title}</span>
         <span className="text-xs text-slate-400">{when(meeting.starts_at)}</span>
         {notes ? <Chip tone="good">Notes</Chip> : <Chip>No notes</Chip>}
       </button>
@@ -952,10 +1089,12 @@ function Instructions({ initial, name, q, onError }: { initial: string; name: st
   }
 
   return (
-    <Section title="How she works for you">
-      <p className="mb-3 max-w-3xl text-sm text-slate-500">
-        In your own words: who {name} is, the tone she should take, what she may and may not say. She reads this before every meeting.
-      </p>
+    <Section
+      title="How she works for you"
+      icon={<SparkIcon />}
+      tone="amber"
+      description={`In your own words: who ${name} is, the tone she should take, what she may and may not say. She reads this before every meeting.`}
+    >
       <textarea
         rows={6}
         className={field}
@@ -972,6 +1111,7 @@ function Instructions({ initial, name, q, onError }: { initial: string; name: st
             Undo
           </button>
         )}
+        {text === saved && saved && !saving && <span className="text-xs font-medium text-emerald-600">Saved — she has it</span>}
       </div>
     </Section>
   );

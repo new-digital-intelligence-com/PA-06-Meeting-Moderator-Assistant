@@ -11,7 +11,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Chip, CompanyLogo, Notice, Section, ago, api, danger, field, primary, quiet } from "./ui";
+import { SettingsIcon, UsersIcon } from "./icons";
+import { Chip, CompanyLogo, IconTile, Notice, Section, ago, api, danger, field, primary, quiet } from "./ui";
 
 type Client = {
   id: string;
@@ -158,6 +159,9 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
       <Section
         title={admin ? "Client setup" : "Setup"}
+        icon={<SettingsIcon />}
+        tone="sky"
+        description={admin ? "Everything about this client — NDI sees all of it." : "Your company on Ava, and the people who can use her."}
         aside={
           admin && (
             <span className="text-xs text-slate-400">
@@ -244,13 +248,18 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
             </div>
           </form>
 
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Who can use her</h3>
-              <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                They sign in to give Ava documents and prepare her, and she joins the meetings they invite her to — from any
-                address, company or personal.
-              </p>
+          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <IconTile tone="blue" className="size-8">
+                <UsersIcon className="size-4" />
+              </IconTile>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Who can use her</h3>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  They sign in to give Ava documents and prepare her, and she joins the meetings they invite her to — from any
+                  address, company or personal.
+                </p>
+              </div>
             </div>
             {people.length === 0 ? (
               <p className="text-sm text-slate-500">Nobody yet.</p>

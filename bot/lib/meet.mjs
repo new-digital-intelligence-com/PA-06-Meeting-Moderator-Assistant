@@ -218,7 +218,7 @@ function readIdleClip(avatarId) {
  *   `startsAt`: when the meeting is due to start — she may be early, and waits for people from then.
  *   `client`: the client she attends for — their documents become searchable to her.
  * @param {{ log?: (m: string) => void, briefed?: boolean }} options `briefed`: sent from the
- *   control room, whose briefing is already on the server and must not be overwritten.
+ *   client's page, whose briefing is already on the server and must not be overwritten.
  */
 export async function attend(meeting, { log = console.log, briefed = false } = {}) {
   const platform = platformOf(meeting.meetingUrl);
@@ -227,9 +227,9 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   // With GPT-Live it follows what people actually speak, from what she hears (below).
   let lang = langOf(meeting.language);
   // Nobody's email shows in Teams, or in Meet: with no invite guests or addresses from the
-  // control room, she asks in the meeting chat — otherwise the notes go to nobody.
+  // site, she asks in the meeting chat — otherwise the notes go to nobody.
   // Only meetings she is invited to on her calendar have their notes emailed — to the
-  // invite's guests. Those she is sent to from the control room do not: their notes wait
+  // invite's guests. Those she is sent to from a client's page are not: their notes are filed
   // there. An invite with nobody on it but her, she asks in the chat instead.
   const emailed = !briefed;
   const askForEmails = emailed && !meeting.recipients?.length;
@@ -248,7 +248,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     });
   }
   await app.attend(briefed ? "dispatch" : "calendar");
-  log(`  ${briefed ? "sent from the control room" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
+  log(`  ${briefed ? "sent from a client's page" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
 
   // 2 — her browser.
   const context = await chromium.launchPersistentContext(PROFILE, {
@@ -469,7 +469,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     await page.evaluate(() => window.__ava?.end?.()).catch(() => {});
     await context.close().catch(() => {});
     // Nobody let her in, or the page was not what we expected: close the meeting so the
-    // control room does not show her as in it.
+    // site does not show her as in it.
     await app.stop().catch(() => {});
     throw e;
   }
@@ -507,7 +507,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let over = false;
   let lastReason = null;
   let faceState = MODE === "avatar" ? "down" : "voice";
-  /** Ended from the control room, which then writes and sends the notes itself. */
+  /** Ended from the site, which then writes and sends the notes itself. */
   let endedElsewhere = false;
 
   const finish = async (why) => {
@@ -701,7 +701,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         deliveredAt: delivered?.at,
         dropped,
         face: resting ? "resting — nobody else here" : speaking ? "speaking" : faceState,
-        // Her GPT-Live session, so the control room shows it is closed when nobody is here.
+        // Her GPT-Live session, so the site shows it is closed when nobody is here.
         voice: live
           ? rt
             ? `GPT-Live open (${lang})`
@@ -748,11 +748,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         out.say = null;
       }
 
-      // Ended from the control room: leave the call. Without this her Chrome stayed in
+      // Ended from the site: leave the call. Without this her Chrome stayed in
       // the meeting after you had ended it, then sent the notes again when it finally left.
       if (out.status && out.status !== "live") {
         endedElsewhere = true;
-        await finish(`the meeting was ended from the control room (${out.status})`);
+        await finish(`the meeting was ended from the site (${out.status})`);
         break;
       }
 
@@ -965,10 +965,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   await platform.leave(page).catch(() => {});
   await context.close().catch(() => {});
 
-  // The control room is already writing the notes when it ended the meeting. Writing
+  // The site is already writing the notes when it ended the meeting. Writing
   // them here as well, a second later, would race it and mail the guests twice.
   if (endedElsewhere) {
-    log("  notes are being sent from the control room");
+    log("  the site is writing the notes");
     return;
   }
 
@@ -983,7 +983,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       r.delivered?.sent
         ? `  notes sent to ${r.followUp?.to}`
         : r.notEmailed
-          ? "  notes written — sent from the control room, so not emailed: they are there"
+          ? "  notes written — filed on the client's page, not emailed"
           : "  notes written — nobody to send them to",
     );
   } catch (e) {

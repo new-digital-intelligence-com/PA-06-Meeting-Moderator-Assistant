@@ -134,10 +134,12 @@ export type Meeting = {
    */
   attendedFrom?: "calendar" | "dispatch";
   /**
-   * The client she is attending for, from her calendar: whose documents she searches,
-   * and the meeting (in Postgres) her notes are filed under afterwards.
+   * The client she is attending for — from her calendar, or sent from the client's page:
+   * whose documents she searches, and the meeting (in Postgres) her notes are filed under.
    */
   client?: { id: string; name: string; meetingId: string };
+  /** When her runner said she was walking in — a sign of life before anything is heard. */
+  attendedAt?: number;
   startedAt?: number;
   endedAt?: number;
   transcript: TranscriptLine[];
@@ -247,6 +249,7 @@ function normalise(raw: unknown): Meeting {
     attendedFrom: o.attendedFrom === "calendar" || o.attendedFrom === "dispatch" ? o.attendedFrom : undefined,
     dispatch: o.dispatch && typeof o.dispatch === "object" ? (o.dispatch as Meeting["dispatch"]) : undefined,
     client: clientOf(o.client),
+    attendedAt: typeof o.attendedAt === "number" ? o.attendedAt : undefined,
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
     endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,
@@ -329,7 +332,40 @@ export async function resetMeeting(): Promise<Meeting> {
   });
 }
 
+/**
+ * A new meeting in place of the last one — only if she is free, decided inside the lock,
+ * so a calendar meeting starting at the same instant cannot be overwritten. Null if busy.
+ */
+export async function startMeeting(fields: Partial<Meeting>): Promise<Meeting | null> {
+  return store().withLock(async () => {
+    const current = parse(await store().read());
+    if (current && inMeeting(current)) return null;
+    const fresh: Meeting = { ...blank(), ...fields };
+    await store().write(JSON.stringify(fresh));
+    return fresh;
+  });
+}
+
+/** Her server stopped reporting on a meeting this long ago: it is over, whatever it says. */
+const QUIET_MS = 15 * 60_000;
+
+/**
+ * She is taken: sent somewhere and not yet there, or in a meeting her server still reports
+ * on. One meeting at a time — this is what keeps a second one from being started over it.
+ */
+export function inMeeting(m: Meeting, now = Date.now()): boolean {
+  if (m.status === "joining") return Boolean(m.dispatch) && now - (m.dispatch!.takenAt ?? m.dispatch!.at) < QUIET_MS;
+  if (m.status !== "live" || m.attendedBy !== "self") return false;
+  const lastSign = Math.max(m.attendedAt ?? 0, m.stage?.at ?? 0, m.startedAt ?? 0, m.transcript.at(-1)?.at ?? 0);
+  return now - lastSign < QUIET_MS;
+}
+
 /* ------------------------------------------------------------------ derived */
+
+/** Minutes since she walked in. */
+export function minutesIn(m: Meeting, now = Date.now()): number {
+  return m.attendedAt ? Math.max(0, Math.floor((now - m.attendedAt) / 60_000)) : 0;
+}
 
 export function elapsed(m: Meeting, now = Date.now()): number {
   if (!m.startedAt) return 0;
