@@ -4,7 +4,7 @@ import { getClient } from "@/lib/clients";
 import type { Client, MeetingRow } from "@/lib/db";
 import { pickedFile } from "@/lib/drive";
 import { addDocument, listDocuments } from "@/lib/knowledge";
-import { clientMeeting } from "@/lib/schedule";
+import { clientMeeting, prepLocked } from "@/lib/schedule";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -92,11 +92,13 @@ export async function POST(request: Request) {
   });
 }
 
-/** The meeting a document is for — one of this client's, or none. */
+/** The meeting a document is for — one of this client's whose preparation can still change, or none. */
 async function meetingOf(client: Client, raw: FormDataEntryValue | string | null): Promise<MeetingRow | null> {
   if (!raw || typeof raw !== "string") return null;
   if (!isUuid(raw)) throw new HttpError(400, "Which meeting?");
   const meeting = await clientMeeting(client.id, raw);
   if (!meeting) throw new HttpError(404, "That meeting is not one of yours.");
+  const locked = prepLocked(meeting);
+  if (locked) throw new HttpError(409, locked);
   return meeting;
 }

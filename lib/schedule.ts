@@ -10,6 +10,7 @@ import { asMeeting, db, isoNow, rows, type Client, type MeetingRow, type Prep } 
 import { allClients, clientPeople, matchClient } from "./clients";
 import type { GoogleClient } from "./google";
 import { changeKey, record, type HistoryEntry, type HistoryKind } from "./history";
+import { prepLocksAt } from "./prepLock";
 import { redisOrMongoKey } from "./store";
 import { avaInvites, type Invite } from "./workspace";
 
@@ -153,6 +154,34 @@ export async function clientMeetings(clientId: string): Promise<MeetingRow[]> {
 export async function clientMeeting(clientId: string, id: string): Promise<MeetingRow | null> {
   const m = await rows<Raw | null>(db().from("meetings").select("*").eq("id", id).eq("client_id", clientId).maybeSingle());
   return m ? asMeeting(m) : null;
+}
+
+/** Why this meeting's preparation can no longer change — or null while it still can. */
+export function prepLocked(m: MeetingRow, now = Date.now()): string | null {
+  if (m.status === "cancelled") return "This meeting was called off.";
+  if (m.status === "ended" || m.ended_at) return "This meeting is over — its preparation is kept as it was.";
+  if (now >= m.starts_at.getTime()) return "This meeting has started — her preparation is locked: it is what she walked in with.";
+  if (now >= prepLocksAt(m.starts_at)) return "This meeting starts in less than a minute — her preparation is locked now.";
+  return null;
+}
+
+/**
+ * A client's meetings that have already started, newest first — all of them, not only the
+ * last 30 days: a preparation looks back on what earlier meetings prepared and decided.
+ */
+export async function earlierMeetings(clientId: string, exceptId: string, limit = 40): Promise<MeetingRow[]> {
+  const found = await rows<Raw[]>(
+    db()
+      .from("meetings")
+      .select("*")
+      .eq("client_id", clientId)
+      .neq("id", exceptId)
+      .neq("status", "cancelled")
+      .lt("starts_at", isoNow())
+      .order("starts_at", { ascending: false })
+      .limit(limit),
+  );
+  return found.map(asMeeting);
 }
 
 /**

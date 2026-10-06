@@ -18,14 +18,20 @@ export const CAPTION_LANGUAGE = {
   },
 };
 
-/** What she types in the Teams chat to collect emails for the notes. */
+/** "Grand Automative's", "Siemens'": whose assistant she is, in English. */
+export const possessive = (name) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+
+/**
+ * What she types in the Teams chat to collect emails for the notes. `owner` is whose
+ * assistant she is: the client's in a client's meeting — never NDI's there — NDI's otherwise.
+ */
 export const CHAT_ASK = {
-  en: (name) =>
-    `Hi, I'm ${name}, NDI's meeting assistant. I'll email a summary with the actions after the meeting — type your email address here if you'd like it.`,
-  de: (name) =>
-    `Hallo, ich bin ${name}, die Besprechungsassistentin von NDI. Nach der Besprechung schicke ich eine Zusammenfassung mit den Aufgaben per E-Mail — schreiben Sie Ihre E-Mail-Adresse hier in den Chat, wenn Sie sie möchten.`,
-  ar: (name) =>
-    `مرحباً، أنا ${name === "Ava" ? "آفا" : name}، مساعدة الاجتماعات في NDI. سأرسل ملخصاً بالمهام بعد الاجتماع — اكتبوا بريدكم الإلكتروني هنا إذا أردتموه.`,
+  en: (name, owner = "NDI") =>
+    `Hi, I'm ${name}, ${possessive(owner)} meeting assistant. I'll email a summary with the actions after the meeting — type your email address here if you'd like it.`,
+  de: (name, owner = "NDI") =>
+    `Hallo, ich bin ${name}, die Besprechungsassistentin von ${owner}. Nach der Besprechung schicke ich eine Zusammenfassung mit den Aufgaben per E-Mail — schreiben Sie Ihre E-Mail-Adresse hier in den Chat, wenn Sie sie möchten.`,
+  ar: (name, owner = "NDI") =>
+    `مرحباً، أنا ${name === "Ava" ? "آفا" : name}، مساعدة الاجتماعات في ${owner}. سأرسل ملخصاً بالمهام بعد الاجتماع — اكتبوا بريدكم الإلكتروني هنا إذا أردتموه.`,
 };
 
 export const langOf = (v) => (v === "de" || v === "ar" ? v : "en");

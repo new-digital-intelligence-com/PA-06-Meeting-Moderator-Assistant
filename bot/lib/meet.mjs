@@ -9,7 +9,7 @@ import { BRAIN, DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requ
 import { DELEGATE, EFFORT, connectLive } from "./live.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
-import { CHAT_ASK, detectLanguage, langOf } from "./language.mjs";
+import { CHAT_ASK, detectLanguage, langOf, possessive } from "./language.mjs";
 
 /** The heartbeat. Somebody pausing cuts it short — see `wake`. */
 const TICK_MS = 1200;
@@ -57,15 +57,25 @@ const LANGUAGE_NAME = { en: "English", de: "German", ar: "Arabic" };
 const BOT = new RegExp(PEOPLE.bots, "i");
 
 /**
+ * Whose assistant she is in this meeting: the client's in a client's meeting — there she
+ * is theirs, and NDI is not hers to mention — NDI's in NDI's own.
+ */
+const ownerOf = (meeting) => meeting.client?.name?.trim() || "NDI";
+
+/**
  * What GPT-Live is told at the start of a session: who she is, the briefing, and the
  * policies OpenAI's Live prompting guide asks for — backchannels, interruptions, and
  * what to hand over to Claude.
  */
 function liveInstructions(meeting, lang, product, emailed) {
   const language = LANGUAGE_NAME[lang];
+  const owner = ownerOf(meeting);
   return [
     "# Role",
-    `You are ${DISPLAY_NAME}, NDI's meeting assistant, taking part in a live ${product} meeting as one of the participants — a colleague on the call, not a phone agent. You hear the meeting's sound; several people may be in it, and silent notes like "[Helmi is speaking]" tell you who is talking. You are taking notes${emailed ? ": after the meeting a summary with the actions is emailed to the participants" : ""}.`,
+    `You are ${DISPLAY_NAME}, ${possessive(owner)} meeting assistant, taking part in a live ${product} meeting as one of the participants — a colleague on the call, not a phone agent. You hear the meeting's sound; several people may be in it, and silent notes like "[Helmi is speaking]" tell you who is talking. You are taking notes${emailed ? ": after the meeting a summary with the actions is emailed to the participants" : ""}.`,
+    ...(owner === "NDI"
+      ? []
+      : [`Here you are ${possessive(owner)} own assistant: whenever you say who you are, you are ${possessive(owner)} meeting assistant. Never mention NDI.`]),
     "",
     "# This meeting",
     `Title: ${meeting.title || "Meeting"}`,
@@ -112,7 +122,7 @@ function liveInstructions(meeting, lang, product, emailed) {
 function backendInstructions(meeting, lang) {
   const client = meeting.client?.name;
   return [
-    `You are the backend of ${DISPLAY_NAME}, NDI's meeting assistant, who is taking part in a live meeting by voice${client ? ` for ${client}` : ""}. Her voice model hands you what needs thought, the meeting's record${client ? `, ${client}'s documents` : ""} or the web; your answer is spoken aloud by her, in her own words.`,
+    `You are the backend of ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant, who is taking part in a live meeting by voice${client ? ` for ${client}` : ""}. Her voice model hands you what needs thought, the meeting's record${client ? `, ${client}'s documents` : ""} or the web; your answer is spoken aloud by her, in her own words.`,
     "",
     `Meeting: ${meeting.title || "Meeting"}`,
     "What she was told beforehand:",
@@ -127,6 +137,7 @@ function backendInstructions(meeting, lang) {
     `- Current or public facts: search the web. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
     `- Answer in ${LANGUAGE_NAME[lang]} unless the request is in another language, then in that one.`,
     "- Short and speakable: the answer itself in one to three sentences. No lists, no markdown, no links; say numbers the way they are spoken.",
+    ...(client ? [`- Here she is ${possessive(client)} own meeting assistant: never mention NDI.`] : []),
   ].join("\n");
 }
 
@@ -596,7 +607,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     if (!rtGreeted) {
       rtGreeted = true;
       rt.say(
-        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, NDI's meeting assistant; you will follow along and take notes${emailed ? " and send everyone a summary with the actions afterwards" : ""}${
+        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant; you will follow along and take notes${emailed ? " and send everyone a summary with the actions afterwards" : ""}${
           askForEmails ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
         }.`,
       );
@@ -864,7 +875,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
         await platform.askForEmails(
           page,
           log,
-          CHAT_ASK[lang](DISPLAY_NAME),
+          CHAT_ASK[lang](DISPLAY_NAME, ownerOf(meeting)),
         );
       }
       wake();

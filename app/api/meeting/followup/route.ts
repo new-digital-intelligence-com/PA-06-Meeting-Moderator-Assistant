@@ -185,7 +185,10 @@ export async function PUT(request: Request) {
   }
 }
 
-/** The NDI-branded version of the notes, built from the text being sent — edits included. */
+/**
+ * The designed version of the notes, built from the text being sent — edits included. In a
+ * client's meeting it carries their name, not NDI's: there she is their assistant.
+ */
 function designed(m: Meeting, subject: string, body: string) {
   return renderNotesEmail({
     subject,
@@ -197,6 +200,7 @@ function designed(m: Meeting, subject: string, body: string) {
       participants: speakers(m).filter((s) => s.toLowerCase() !== botName().toLowerCase()),
     },
     assistant: botName(),
+    client: m.client?.name,
     // The notes are always in English, whatever the meeting was held in.
     language: "en",
   });

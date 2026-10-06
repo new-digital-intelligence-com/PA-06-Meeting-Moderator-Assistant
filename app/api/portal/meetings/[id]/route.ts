@@ -4,7 +4,7 @@ import type { MeetingRow } from "@/lib/db";
 import { meetingHistory, record, type HistoryRow } from "@/lib/history";
 import { listDocuments } from "@/lib/knowledge";
 import { hasPreparation, writeBrief } from "@/lib/prepare";
-import { cleanPrep, clientMeeting, savePrep } from "@/lib/schedule";
+import { cleanPrep, clientMeeting, prepLocked, savePrep } from "@/lib/schedule";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,11 +51,14 @@ export async function GET(request: Request, { params }: Params) {
 /**
  * Prepares her: the goal, agenda, people, what to avoid, notes. Saving writes her brief
  * there and then, so the client reads back what she will walk in with. Each version is
- * kept in the meeting's history, with who saved it and what changed.
+ * kept in the meeting's history, with who saved it and what changed. Not from a minute
+ * before it starts: then it is what she walks in with.
  */
 export async function PUT(request: Request, { params }: Params) {
   return handle(async () => {
     const { user, clientId, meeting } = await mine(request, params);
+    const locked = prepLocked(meeting);
+    if (locked) throw new HttpError(409, locked);
     const { prep } = (await request.json().catch(() => ({}))) as { prep?: unknown };
     const next = cleanPrep(prep);
     const before = meeting.prep ?? {};
@@ -72,6 +75,8 @@ export async function PUT(request: Request, { params }: Params) {
 export async function POST(request: Request, { params }: Params) {
   return handle(async () => {
     const { meeting } = await mine(request, params);
+    const locked = prepLocked(meeting);
+    if (locked) throw new HttpError(409, locked);
     if (!(await hasPreparation(meeting))) throw new HttpError(400, "Prepare her first: a goal, an agenda, notes or a document.");
     return NextResponse.json({ meeting: await writeBrief(meeting.id) });
   });

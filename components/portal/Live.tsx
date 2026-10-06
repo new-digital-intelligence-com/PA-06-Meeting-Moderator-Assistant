@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { PLATFORM_NAME, platformOf } from "@/lib/platform";
 import { BoltIcon, ChatIcon, CheckIcon, ClockIcon, UsersIcon, VideoIcon } from "./icons";
+import Markdown from "./Markdown";
 import { api, quiet } from "./ui";
 
 export type Live = {
@@ -181,14 +182,16 @@ export function LivePanel({ live, at, q, onChanged }: { live: Live; at: number; 
         {live.phase === "ended" ? (
           <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
             <CheckIcon className="mt-0.5 size-5 shrink-0 text-emerald-600" />
-            <div className="space-y-1">
+            <div className="min-w-0 flex-1 space-y-1">
               {live.endedBy && <p className="text-xs text-slate-500">Ended by {live.endedBy === "her runner" ? "Ava herself" : live.endedBy}.</p>}
               {live.summary ? (
                 <>
                   <p className="font-medium text-slate-800">
                     Notes written{live.notes?.sentAt ? ` and sent to ${live.notes.to}` : " and filed under Past meetings"}.
                   </p>
-                  <p className="leading-relaxed">{live.summary}</p>
+                  <div className="mt-2 max-h-96 overflow-y-auto rounded-lg bg-white p-3 ring-1 ring-inset ring-slate-200">
+                    <Markdown>{live.summary}</Markdown>
+                  </div>
                 </>
               ) : live.heard === 0 ? (
                 <p>Nothing was said while she was there, so there are no notes. Its history is under Past meetings.</p>

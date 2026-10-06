@@ -144,3 +144,17 @@ export const ArrowRightIcon = (p: IconProps) => (
     <path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5" />
   </Icon>
 );
+
+export const LockIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="5" y="10.5" width="14" height="10" rx="2.5" />
+    <path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />
+  </Icon>
+);
+
+export const HistoryIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5" />
+    <path d="M4 4v4.5h4.5M12 8v4.5l3 1.8" />
+  </Icon>
+);

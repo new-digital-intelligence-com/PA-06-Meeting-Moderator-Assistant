@@ -30,6 +30,19 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "In a client's meeting she is theirs; preparation locks a minute before",
+    points: [
+      "In a client's meeting she introduces herself as the client's meeting assistant — “Hi, I'm Ava, Grand Automative's meeting assistant” — not NDI's, and never mentions NDI: in her hello, what she types in the Teams chat, her answers, and the notes email, which carries the client's name where NDI's was. NDI's own meetings are unchanged.",
+      "From a minute before a meeting starts its preparation is locked: “Edit preparation” becomes “View preparation” (read-only), and the server refuses changes to the preparation, the brief and the meeting's documents. The page locks on the minute, and warns in the last 15 minutes.",
+      "A meeting she has finished moves to Past meetings straight away, instead of staying under “coming up” until its calendar slot ends — Grand Automative's 20:35 meeting still offered “Edit preparation” after she had left.",
+      "Preparing a meeting, “Earlier meetings” lists every earlier one of that client — the same meeting first — each with its notes, preparation and history; an earlier meeting's notes and actions can be given to her for this one.",
+      "The ended-meeting panel shows the notes formatted, not as raw Markdown.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-06",
     title: "Every meeting has a history; past meetings show all of it",
     points: [
       "Each meeting keeps what happened to it, and who did it, in a new table (meeting_history): from her calendar, what the host changed — invited, moved, renamed, description, guests, link, called off, back on; from the page, each saved preparation (the version itself and which parts changed), documents added or removed, “Need Ava now?”, ending it; from her, her brief, joining, leaving and why, the notes written and emailed.",

@@ -7,8 +7,22 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import { prepLocksAt } from "@/lib/prepLock";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
-import { BoltIcon, BookIcon, CalendarIcon, DriveIcon, FileIcon, LinkIcon, SettingsIcon, SparkIcon, TextIcon, UploadIcon } from "./icons";
+import {
+  BoltIcon,
+  BookIcon,
+  CalendarIcon,
+  DriveIcon,
+  FileIcon,
+  HistoryIcon,
+  LinkIcon,
+  LockIcon,
+  SettingsIcon,
+  SparkIcon,
+  TextIcon,
+  UploadIcon,
+} from "./icons";
 import { LivePanel, SendNow, useLive } from "./Live";
 import Markdown from "./Markdown";
 import MeetingRecord from "./MeetingRecord";
@@ -105,6 +119,14 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
     return () => window.clearInterval(id);
   }, []);
 
+  // The next meeting's preparation locks a minute before it starts — on the dot, not at the next minute's tick.
+  useEffect(() => {
+    const next = Math.min(...(data?.meetings ?? []).map((m) => prepLocksAt(m.starts_at)).filter((t) => t > now));
+    if (!Number.isFinite(next)) return;
+    const id = window.setTimeout(() => setNow(Date.now()), Math.min(next - now + 200, 2 ** 31 - 1));
+    return () => window.clearTimeout(id);
+  }, [data, now]);
+
   const reload = useCallback(() => setVersion((v) => v + 1), []);
 
   const rebuildDigest = useCallback(async () => {
@@ -140,8 +162,10 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   // Called off — deleted by the host, or she was taken off the invite — kept apart, with their history.
   const cancelled = data.meetings.filter((m) => m.status === "cancelled").reverse();
   const held = data.meetings.filter((m) => m.status !== "cancelled");
-  const upcoming = held.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() > now);
-  const past = held.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() <= now).reverse();
+  // Over once she has finished it (its notes are filed) or its time on the calendar is up — whichever comes first.
+  const over = (m: Meeting) => m.status === "ended" || Boolean(m.ended_at) || new Date(m.ends_at ?? m.starts_at).getTime() <= now;
+  const upcoming = held.filter((m) => !over(m));
+  const past = held.filter(over).reverse();
   const ava = data.ava ?? "Ava";
   const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
   const paused = client.status !== "active";
@@ -928,8 +952,11 @@ function UpcomingMeeting({
 }) {
   const [open, setOpen] = useState(false);
   const state = briefState(meeting);
-  const soon = new Date(meeting.starts_at).getTime() - now < 15 * 60_000;
   const start = new Date(meeting.starts_at);
+  const soon = start.getTime() - now < 15 * 60_000;
+  // From a minute before it starts, her preparation is what she walks in with: read, not edited.
+  const locked = now >= prepLocksAt(meeting.starts_at);
+  const started = now >= start.getTime();
   return (
     <li
       className={`rounded-2xl border bg-white transition duration-150 ${
@@ -952,13 +979,34 @@ function UpcomingMeeting({
             {meeting.guests?.length > 0 && <> · {meeting.guests.length} invited</>}
           </p>
         </div>
-        {soon && <Chip tone="info">Starting soon</Chip>}
+        {started ? <Chip tone="info">Happening now</Chip> : locked ? <Chip tone="info">Starting now</Chip> : soon && <Chip tone="info">Starting soon</Chip>}
         <Chip tone={state.tone}>{state.label}</Chip>
-        <button className={open || state.tone === "good" ? quiet : primary} onClick={() => setOpen((v) => !v)}>
-          {open ? "Close" : state.tone === "good" ? "Edit preparation" : "Prepare her"}
+        <button className={open || locked || state.tone === "good" ? quiet : primary} onClick={() => setOpen((v) => !v)}>
+          {open ? "Close" : locked ? (
+            <>
+              <LockIcon className="size-4" />
+              View preparation
+            </>
+          ) : state.tone === "good" ? (
+            "Edit preparation"
+          ) : (
+            "Prepare her"
+          )}
         </button>
       </div>
-      {open && <PrepPanel meeting={meeting} q={q} onSaved={onChange} onError={onError} />}
+      {open &&
+        (locked ? (
+          <div className="border-t border-slate-200">
+            <p className="flex items-center gap-2 bg-amber-50/70 px-4 py-2.5 text-xs text-amber-800">
+              <LockIcon className="size-4 shrink-0" />
+              Locked from a minute before the meeting: this is what she walks in with. It stays with the meeting, under Past meetings
+              once it is over.
+            </p>
+            <MeetingRecord meetingId={meeting.id} q={q} views={["prep", "history"]} />
+          </div>
+        ) : (
+          <PrepPanel meeting={meeting} now={now} q={q} onSaved={onChange} onError={onError} />
+        ))}
     </li>
   );
 }
@@ -973,15 +1021,18 @@ const PREP_FIELDS: { key: keyof Prep; label: string; hint: string; rows: number 
 
 function PrepPanel({
   meeting,
+  now,
   q,
   onSaved,
   onError,
 }: {
   meeting: Meeting;
+  now: number;
   q: string;
   onSaved: () => void;
   onError: (message: string) => void;
 }) {
+  const locksIn = prepLocksAt(meeting.starts_at) - now;
   const [prep, setPrep] = useState<Prep>(meeting.prep ?? {});
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [brief, setBrief] = useState<{ text: string | null; at: string | null }>({ text: meeting.brief, at: meeting.brief_at });
@@ -1017,6 +1068,13 @@ function PrepPanel({
 
   return (
     <div className="space-y-5 border-t border-slate-200 p-4">
+      {locksIn < 15 * 60_000 && (
+        <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/15">
+          <LockIcon className="size-4 shrink-0" />
+          Save soon: her preparation locks a minute before the meeting —{" "}
+          {new Date(prepLocksAt(meeting.starts_at)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.
+        </p>
+      )}
       {meeting.description.trim() && (
         <details className="text-sm text-slate-500">
           <summary className="cursor-pointer text-slate-500 hover:text-slate-600">The invite&apos;s description</summary>
@@ -1092,10 +1150,23 @@ function PrepPanel({
         </div>
       )}
 
+      <EarlierMeetings
+        meeting={meeting}
+        q={q}
+        onAdded={(doc) => {
+          setDocs((d) => [doc, ...(d ?? [])]);
+          setChanged(true);
+        }}
+        onError={onError}
+      />
+
       {/* What happened to it so far: the host's changes, each saved preparation, documents. */}
       <details className="group rounded-xl border border-slate-200 bg-white">
         <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-700">
-          History of this meeting
+          <span className="flex items-center gap-2">
+            <HistoryIcon className="size-4 text-slate-400" />
+            History of this meeting
+          </span>
           <span className="text-xs text-slate-400 transition group-open:rotate-180" aria-hidden="true">
             ▾
           </span>
@@ -1103,6 +1174,136 @@ function PrepPanel({
         <MeetingRecord meetingId={meeting.id} q={q} views={["history"]} />
       </details>
     </div>
+  );
+}
+
+type Earlier = {
+  id: string;
+  title: string;
+  starts_at: string;
+  status: string;
+  notes: { summary: string | null; sentAt: number | null; to: string | null; actions: { text: string; owner?: string; due?: string }[] } | null;
+  prepared: boolean;
+  documents: number;
+  /** The same meeting before: its recurring series, or its title. */
+  same: boolean;
+};
+
+/**
+ * Their earlier meetings, to look back on while preparing this one: each one's notes, its
+ * preparation and its history — kept for good, not only the last 30 days. An earlier
+ * meeting's notes can be handed to her for this one, as a document of this meeting's.
+ */
+function EarlierMeetings({
+  meeting,
+  q,
+  onAdded,
+  onError,
+}: {
+  meeting: Meeting;
+  q: string;
+  onAdded: (doc: Doc) => void;
+  onError: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<Earlier[] | null>(null);
+  const [shown, setShown] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [given, setGiven] = useState<string[]>([]);
+
+  // Read when first opened, not with every preparation.
+  useEffect(() => {
+    if (!open || list) return;
+    let alive = true;
+    api<{ meetings: Earlier[] }>(`/api/portal/meetings/${meeting.id}/earlier${q}`)
+      .then((d) => alive && setList(d.meetings))
+      .catch((e) => {
+        if (!alive) return;
+        setList([]);
+        onError(e instanceof Error ? e.message : "Could not load the earlier meetings.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, list, meeting.id, q, onError]);
+
+  async function give(m: Earlier) {
+    setAdding(m.id);
+    try {
+      const date = new Date(m.starts_at).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+      const actions = m.notes?.actions ?? [];
+      const text = [
+        `Notes from an earlier meeting, “${m.title}”, on ${date}.`,
+        "",
+        m.notes?.summary ?? "",
+        ...(actions.length
+          ? ["", "Actions agreed:", ...actions.map((a) => `- ${a.text}${a.owner ? ` — ${a.owner}` : ""}${a.due ? `, due ${a.due}` : ""}`)]
+          : []),
+      ].join("\n");
+      const { document } = await api<{ document: Doc }>(`/api/portal/knowledge${q}`, {
+        method: "POST",
+        body: JSON.stringify({ kind: "text", title: `Notes from ${m.title} — ${date}`, text, meeting: meeting.id }),
+      });
+      setGiven((g) => [...g, m.id]);
+      onAdded(document);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not add them.");
+    } finally {
+      setAdding(null);
+    }
+  }
+
+  return (
+    <details className="group rounded-xl border border-slate-200 bg-white" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-700">
+        <span className="flex items-center gap-2">
+          <CalendarIcon className="size-4 text-slate-400" />
+          Earlier meetings — what was prepared and what came out of it
+        </span>
+        <span className="text-xs text-slate-400 transition group-open:rotate-180" aria-hidden="true">
+          ▾
+        </span>
+      </summary>
+      <div className="border-t border-slate-200 p-3">
+        {!list ? (
+          <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
+        ) : list.length === 0 ? (
+          <p className="px-1 py-2 text-sm text-slate-500">No earlier meetings yet — after this one, it shows here for the next.</p>
+        ) : (
+          <ul className="space-y-2">
+            {list.map((m) => {
+              const isOpen = shown === m.id;
+              return (
+                <li key={m.id} className={`overflow-hidden rounded-xl border transition ${isOpen ? "border-slate-300 bg-slate-50/40" : "border-slate-200/70 bg-slate-50/70 hover:border-slate-300 hover:bg-white"}`}>
+                  <button className="flex w-full flex-wrap items-center gap-2 p-3 text-left" onClick={() => setShown(isOpen ? null : m.id)} aria-expanded={isOpen}>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{m.title}</span>
+                    {m.same && <Chip tone="info">Same meeting</Chip>}
+                    <span className="text-xs text-slate-400">{when(m.starts_at)}</span>
+                    {m.notes?.summary ? <Chip tone="good">Notes</Chip> : <Chip>No notes</Chip>}
+                    <span className={`text-xs text-slate-400 transition ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <>
+                      <MeetingRecord meetingId={m.id} q={q} views={["notes", "prep", "history"]} />
+                      {m.notes?.summary && (
+                        <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/70 px-4 py-3">
+                          <button className={quiet} disabled={adding === m.id || given.includes(m.id)} onClick={() => void give(m)}>
+                            {given.includes(m.id) ? "Given to her for this meeting" : adding === m.id ? "Adding…" : "Give her these notes for this meeting"}
+                          </button>
+                          <span className="text-xs text-slate-500">Added to this meeting&apos;s documents — then save to brief her.</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </details>
   );
 }
 

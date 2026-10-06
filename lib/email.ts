@@ -1,6 +1,7 @@
 /**
- * The meeting notes as an email people want to open: NDI-branded HTML, built from the
- * same plain text that is sent alongside it for mail apps that do not show HTML.
+ * The meeting notes as an email people want to open: branded HTML — the client's name in a
+ * client's meeting, NDI's otherwise — built from the same plain text that is sent alongside
+ * it for mail apps that do not show HTML.
  *
  * Built from the text rather than from the model's parts, on purpose: the text is what
  * you can edit in the control room before sending, and an edit there has to show up in
@@ -16,6 +17,9 @@
 
 type Lang = "en" | "de" | "ar";
 
+/** "Grand Automative's", "Siemens'". */
+const possessive = (name: string) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+
 const WORDS: Record<Lang, {
   kicker: string;
   actions: string;
@@ -25,7 +29,7 @@ const WORDS: Record<Lang, {
   due: string;
   people: (n: number) => string;
   length: (mins: number) => string;
-  wrote: (name: string) => string;
+  wrote: (name: string, owner: string) => string;
   locale: string;
 }> = {
   en: {
@@ -37,7 +41,7 @@ const WORDS: Record<Lang, {
     due: "Due",
     people: (n) => `${n} ${n === 1 ? "participant" : "participants"}`,
     length: (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`),
-    wrote: (name) => `<b>${name}</b>, NDI's meeting assistant, wrote these notes from the live transcript. Captions can mishear — reply to this email to correct anything.`,
+    wrote: (name, owner) => `<b>${name}</b>, ${possessive(owner)} meeting assistant, wrote these notes from the live transcript. Captions can mishear — reply to this email to correct anything.`,
     locale: "en-GB",
   },
   de: {
@@ -49,7 +53,7 @@ const WORDS: Record<Lang, {
     due: "Fällig",
     people: (n) => `${n} ${n === 1 ? "Teilnehmer" : "Teilnehmende"}`,
     length: (m) => (m >= 60 ? `${Math.floor(m / 60)} Std. ${m % 60} Min.` : `${m} Min.`),
-    wrote: (name) => `<b>${name}</b>, die Besprechungsassistentin von NDI, hat diese Notizen aus dem Live-Transkript erstellt. Untertitel können sich verhören — antworten Sie auf diese E-Mail, um etwas zu korrigieren.`,
+    wrote: (name, owner) => `<b>${name}</b>, die Besprechungsassistentin von ${owner}, hat diese Notizen aus dem Live-Transkript erstellt. Untertitel können sich verhören — antworten Sie auf diese E-Mail, um etwas zu korrigieren.`,
     locale: "de-DE",
   },
   ar: {
@@ -61,7 +65,7 @@ const WORDS: Record<Lang, {
     due: "الموعد",
     people: (n) => `${n} ${n === 1 ? "مشارك" : "مشاركين"}`,
     length: (m) => (m >= 60 ? `${Math.floor(m / 60)} ساعة و${m % 60} دقيقة` : `${m} دقيقة`),
-    wrote: (name) => `<b>${name}</b>، مساعدة الاجتماعات في NDI، كتبت هذه الملاحظات من النص المباشر للاجتماع. قد تخطئ الترجمة النصية في بعض الكلمات — ردّوا على هذا البريد لتصحيح أي شيء.`,
+    wrote: (name, owner) => `<b>${name}</b>، مساعدة الاجتماعات في ${owner}، كتبت هذه الملاحظات من النص المباشر للاجتماع. قد تخطئ الترجمة النصية في بعض الكلمات — ردّوا على هذا البريد لتصحيح أي شيء.`,
     locale: "ar",
   },
 };
@@ -83,6 +87,8 @@ export type NotesEmail = {
   };
   /** Her name, for the sign-off. */
   assistant?: string;
+  /** The client whose meeting it was: there she is their assistant, and their name is where NDI's would be. */
+  client?: string;
   /** The meeting's language: the labels, the date, and right to left for Arabic. */
   language?: Lang;
 };
@@ -224,8 +230,9 @@ const section = (title: string, content: string) => `
   ${content}
 </td></tr>`;
 
-export function renderNotesEmail({ subject, body, meeting, assistant = "Ava", language = "en" }: NotesEmail): string {
+export function renderNotesEmail({ subject, body, meeting, assistant = "Ava", language = "en", client }: NotesEmail): string {
   const w = WORDS[language];
+  const owner = client?.trim() || "NDI";
   const rtl = language === "ar";
   const start = rtl ? "right" : "left";
   const { intro, actions, notes, files } = parts(body);
@@ -289,10 +296,17 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava", la
 
   <tr><td style="padding:28px 40px 0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td style="font-size:26px;line-height:28px;font-weight:800;letter-spacing:-0.5px;color:${RED}">NDI</td>
+      ${
+        client?.trim()
+          ? `<td style="font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.3px;color:${INK}">${esc(owner)}</td>
+      <td align="${rtl ? "left" : "right"}" style="font-size:12px;line-height:16px;color:${MUTED}">
+        <span style="font-weight:600;color:${INK}">Meeting Assistant</span><br>${esc(assistant)}
+      </td>`
+          : `<td style="font-size:26px;line-height:28px;font-weight:800;letter-spacing:-0.5px;color:${RED}">NDI</td>
       <td align="${rtl ? "left" : "right"}" style="font-size:12px;line-height:16px;color:${MUTED}">
         <span style="font-weight:600;color:${INK}">Meeting Assistant</span><br>New Digital Intelligence · PA-06
-      </td>
+      </td>`
+      }
     </tr></table>
   </td></tr>
 
@@ -332,13 +346,13 @@ export function renderNotesEmail({ subject, body, meeting, assistant = "Ava", la
         <div style="width:32px;height:32px;border-radius:16px;background:${RED};color:#ffffff;font-size:15px;line-height:32px;font-weight:700;text-align:center">${esc(assistant.charAt(0).toUpperCase())}</div>
       </td>
       <td valign="top" style="padding:20px 0 0;font-size:13px;line-height:20px;color:${MUTED}">
-        ${w.wrote(`<span style="color:${INK};font-weight:600">${esc(assistant)}</span>`).replace(/<\/?b>/g, "")}
+        ${w.wrote(`<span style="color:${INK};font-weight:600">${esc(assistant)}</span>`, esc(owner)).replace(/<\/?b>/g, "")}
       </td>
     </tr></table>
   </td></tr>
 </table>
 
-<p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#9CA3AF">New Digital Intelligence · Meeting Assistant PA-06</p>
+<p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#9CA3AF">${client?.trim() ? `${esc(owner)} · ${w.kicker}` : "New Digital Intelligence · Meeting Assistant PA-06"}</p>
 </td></tr>
 </table>
 </body>

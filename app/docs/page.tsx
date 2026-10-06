@@ -132,7 +132,7 @@ export default function Docs() {
                   },
                   {
                     title: "She introduces herself",
-                    body: "Once somebody else is there — never to an empty room: that is when her GPT-Live session opens. Briefly, in her own words: who she is, that she takes notes and emails a summary.",
+                    body: "Once somebody else is there — never to an empty room: that is when her GPT-Live session opens. Briefly, in her own words: who she is, that she takes notes and emails a summary. In a client’s meeting she is the client’s meeting assistant — “Hi, I’m Ava, Grand Automative’s meeting assistant” — and never mentions NDI; in NDI’s own, NDI’s.",
                     tone: "emerald",
                   },
                   {
@@ -523,8 +523,9 @@ export default function Docs() {
                   in her hello. Meet and Teams show names, never addresses. To have them emailed, invite her on the calendar.
                 </Card>
                 <Card tone="slate" title="A designed email">
-                  NDI-branded HTML — the actions first, each with its owner and due date, then the summary and any files — with the
+                  Designed HTML — the actions first, each with its owner and due date, then the summary and any files — with the
                   plain text alongside for mail apps that do not show HTML. Built from the text you can edit, so edits show up too.
+                  A client’s meeting carries the client’s name where NDI’s would be, and she signs as their meeting assistant.
                   Nobody came, no email.
                 </Card>
                 <Card tone="sky" title="Kept for the client">
@@ -560,7 +561,7 @@ export default function Docs() {
                   },
                   {
                     title: "They invite her to a meeting",
-                    body: "From their calendar, like a colleague. Within a minute it is on their page, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only. Saving writes her brief, which they read back.",
+                    body: "From their calendar, like a colleague. Within a minute it is on their page, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only — with their earlier meetings to look back on. Saving writes her brief, which they read back. A minute before it starts, the preparation locks.",
                     tone: "emerald",
                   },
                   {
@@ -591,6 +592,23 @@ export default function Docs() {
                   version itself, and what changed), documents added or removed, her brief, her joining and leaving (and why),
                   who ended it from the site, and the notes written and emailed. A past meeting opens on its notes — the email as
                   it went out — its preparation and its history; called-off meetings are listed apart.
+                </Card>
+                <Card tone="rose" title="Locked a minute before">
+                  From a minute before a meeting starts, its preparation is what she walks in with: the page shows it read-only
+                  (“View preparation”), and the server refuses any change to it — the preparation, her brief, the meeting’s
+                  documents — whatever a page sends. A meeting is over once she has finished it (its notes are filed) or its
+                  time on the calendar is up, whichever comes first, and then it is under Past meetings. Nothing of a meeting is
+                  deleted: its preparation, documents, brief, notes and history stay with it for good.
+                </Card>
+                <Card tone="violet" title="Earlier meetings">
+                  Preparing a meeting, “Earlier meetings” lists every earlier one of that client — not only the last 30 days —
+                  the same meeting first (its recurring series, or its title). Each opens on its notes, its preparation and its
+                  history. “Give her these notes for this meeting” adds an earlier meeting’s notes and actions to this meeting’s
+                  documents, so she knows what was decided last time.
+                </Card>
+                <Card tone="sky" title="Theirs, not NDI’s">
+                  In a client’s meeting she is that client’s meeting assistant: she introduces herself as theirs, types it in the
+                  Teams chat, signs the notes email with their name, and never mentions NDI. In NDI’s own meetings, NDI’s.
                 </Card>
                 <Card tone="emerald" title="Who sees what">
                   Admins — every address on <C>ADMIN_DOMAIN</C> — see every client, the control room and these docs. A client’s
@@ -652,7 +670,7 @@ export default function Docs() {
                 <FileRow path="lib/store.ts">Where it is kept: Redis, MongoDB, or a local file in development.</FileRow>
                 <FileRow path="lib/ava.ts">Her own Google access, stored encrypted on the server; the runner-key check.</FileRow>
                 <FileRow path="lib/workspace.ts">Calendar (her invites), Gmail (drafts and sending), Drive (search and sharing).</FileRow>
-                <FileRow path="lib/email.ts">The NDI-branded notes email, built from the plain-text notes.</FileRow>
+                <FileRow path="lib/email.ts">The designed notes email — the client’s name in a client’s meeting, NDI’s otherwise — built from the plain-text notes.</FileRow>
                 <FileRow path="lib/google.ts · lib/session.ts">Google OAuth — Ava’s own account, and signing in — and the encrypted session cookie.</FileRow>
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
                 <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams.</FileRow>
@@ -684,7 +702,9 @@ export default function Docs() {
                 <FileRow path="lib/clients.ts">Clients, who can use her for them, matching an organiser to a client, the invitation email.</FileRow>
                 <FileRow path="lib/schedule.ts">
                   Her calendar copied into Postgres, each meeting given to a client by its organiser — or skipped. Preparation and
-                  notes are kept on those rows; what the host changed since the last read goes into the meeting’s history.
+                  notes are kept on those rows; what the host changed since the last read goes into the meeting’s history. When a
+                  meeting’s preparation is locked (with <C>lib/prepLock.ts</C>, which the page shares), and a client’s earlier
+                  meetings.
                 </FileRow>
                 <FileRow path="lib/history.ts · components/portal/MeetingRecord.tsx">
                   Each meeting’s history, append-only — kept by whatever did it (the calendar read, the page, her runner), never
@@ -784,7 +804,8 @@ export default function Docs() {
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],
-                  [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting with its documents and history; save its preparation (kept as a version) and write her brief"],
+                  [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting with its documents and history; save its preparation (kept as a version) and write her brief — refused from a minute before it starts"],
+                  [<C key="r">GET /api/portal/meetings/[id]/earlier</C>, "Clients, admins", "The client’s earlier meetings, the same meeting first — for a preparation to look back on"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
                   [<C key="r">POST /api/meeting/start</C>, "Admins", "Send the Recall bot (older path, nothing calls it)"],
                 ]}

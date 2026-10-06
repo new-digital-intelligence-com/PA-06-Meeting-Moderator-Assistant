@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handle, HttpError, isUuid, portalClient } from "@/lib/auth";
 import { record } from "@/lib/history";
 import { documentText, getDocument, removeDocument } from "@/lib/knowledge";
+import { clientMeeting, prepLocked } from "@/lib/schedule";
 
 export const runtime = "nodejs";
 
@@ -19,12 +20,22 @@ export async function GET(request: Request, { params }: Params) {
   });
 }
 
-/** Removes a document: its passages, and its copy in NDI's Drive. A meeting's own is noted in its history. */
+/**
+ * Removes a document: its passages, and its copy in NDI's Drive. A meeting's own is noted in
+ * its history — and stays once the meeting's preparation is locked, as what she had.
+ */
 export async function DELETE(request: Request, { params }: Params) {
   return handle(async () => {
     const { user, clientId } = await portalClient(request);
     const { id } = await params;
     if (!isUuid(id)) throw new HttpError(400, "Which document?");
+    const document = await getDocument(clientId, id);
+    if (!document) throw new HttpError(404, "No such document.");
+    if (document.meeting_id) {
+      const meeting = await clientMeeting(clientId, document.meeting_id);
+      const locked = meeting && prepLocked(meeting);
+      if (locked) throw new HttpError(409, locked);
+    }
     const removed = await removeDocument(clientId, id);
     if (!removed) throw new HttpError(404, "No such document.");
     if (removed.meeting_id) {

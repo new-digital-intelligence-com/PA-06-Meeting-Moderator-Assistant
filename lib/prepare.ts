@@ -33,7 +33,7 @@ async function write(model: string, system: string, prompt: string, maxTokens: n
 }
 
 const ABOUT_AVA =
-  "Ava is an AI meeting assistant made by NDI (New Digital Intelligence). She joins video meetings as a participant for NDI's clients: she listens, answers when asked, notes the actions and emails the summary afterwards.";
+  "Ava is an AI meeting assistant made by NDI (New Digital Intelligence). Each client has her as their own meeting assistant: in a client's meetings she is that client's assistant and never mentions NDI. She joins video meetings as a participant, listens, answers when asked, notes the actions and emails the summary afterwards.";
 
 /* ----------------------------------------------------------- per document */
 
