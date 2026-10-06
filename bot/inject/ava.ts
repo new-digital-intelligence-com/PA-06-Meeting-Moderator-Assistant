@@ -62,6 +62,8 @@ declare global {
     __avaIdleClip?: (frames: string[]) => void;
     /** Her face's account ran out of minutes: the number of the account taking over, or null. */
     __avaAnamUsedUp?: () => Promise<number | null>;
+    /** No Anam account can give her a face in this meeting: her runner turns her camera off. */
+    __avaFaceGone?: (why: string) => Promise<void>;
     /** GPT-Live: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
     __avaHear?: (base64: string) => void;
   }
@@ -82,7 +84,7 @@ type AvaApi = {
   rest(): void;
   interrupt(): void;
   speaking(): boolean;
-  /** "live", "connecting" or "down" — and "voice" in voice mode. */
+  /** "live", "connecting" or "down" — "voice" in voice mode, "off" once her face was given up for this meeting. */
   face(): string;
   /**
    * Whether `start` has run on this page. A page that navigates (Teams' launcher does)
@@ -392,6 +394,17 @@ if (window.top === window && platform && !window.__ava) {
    * gets a short pause before the next try.
    */
   let faceRetryAt = 0;
+  /** Tries in a row that did not give her a face. */
+  let faceFailures = 0;
+  /** Her face given up for this meeting: her camera is off, and she carries on with her voice. */
+  let faceOff = false;
+  const giveUpFace = (why: string) => {
+    if (faceOff) return;
+    faceOff = true;
+    faceRetryAt = Number.POSITIVE_INFINITY;
+    log(`no face for this meeting (${why}) — her camera goes off; she carries on with her voice`);
+    void window.__avaFaceGone?.(why).catch(() => {});
+  };
 
   const openFace = (): Promise<boolean> => {
     if (mode !== "avatar" || Date.now() < faceRetryAt) return Promise.resolve(false);
@@ -451,6 +464,7 @@ if (window.top === window && platform && !window.__ava) {
         faceGonePromise = new Promise<void>((r) => (faceGone = r));
         face = "live";
         sessionAt = Date.now();
+        faceFailures = 0;
         log(`face live (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
         return true;
       } catch (e) {
@@ -468,9 +482,11 @@ if (window.top === window && platform && !window.__ava) {
               if (face === "down" && Date.now() - lastActive < options.idleSeconds * 1000) void openFace();
             }, 300);
           } else {
-            faceRetryAt = Number.POSITIVE_INFINITY;
-            log(`Anam refused: ${why} — she carries on with her voice and her resting face`);
+            giveUpFace("every Anam account is out of minutes");
           }
+        } else if (++faceFailures >= 3) {
+          // Three tries in a row, half a minute apart: Anam is not giving her a face today.
+          giveUpFace(`it could not connect three times in a row: ${why}`);
         } else {
           faceRetryAt = Date.now() + 30_000;
         }
@@ -1013,7 +1029,7 @@ if (window.top === window && platform && !window.__ava) {
     },
 
     speaking: () => isSpeaking || rtSources.length > 0 || Date.now() < rtFaceEnd,
-    face: () => (mode === "voice" ? "voice" : face),
+    face: () => (mode === "voice" ? "voice" : faceOff ? "off" : face),
     started: () => startCalled,
 
     listen(on) {

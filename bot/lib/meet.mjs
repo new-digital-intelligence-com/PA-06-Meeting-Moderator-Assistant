@@ -266,6 +266,25 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   await api.attend(briefed ? "dispatch" : "calendar");
   log(`  ${briefed ? "sent from a client's page" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
 
+  // Her face for this meeting, asked for before her browser opens: with every Anam account
+  // out of minutes she joins as in voice mode — camera off, the meeting showing her profile
+  // photo — and her voice works as always. Anam failing for another reason: she joins with
+  // her camera, and the face keeps trying (her page gives up after three tries in a row).
+  let mode = MODE;
+  let firstFace = null;
+  if (MODE === "avatar") {
+    try {
+      firstFace = await app.anamSession();
+    } catch (e) {
+      if (e.message === app.NO_FACE) {
+        mode = "voice";
+        log("  no Anam account has minutes left — she joins with her voice only, camera off");
+      } else {
+        log(`  no face to start with (${e.message}) — she will speak without it until it connects`);
+      }
+    }
+  }
+
   // 2 — her browser.
   const context = await chromium.launchPersistentContext(profileFor(seat), {
     executablePath: requireChrome(),
@@ -405,7 +424,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
 
     // One-on-one, she answers everything — so have her face connecting while they are
     // still talking, and it is there by the time she replies.
-    if (MODE === "avatar" && !resting && (people === null || people <= 2) && Date.now() - warmedAt > 3000) {
+    if (mode === "avatar" && !resting && (people === null || people <= 2) && Date.now() - warmedAt > 3000) {
       warmedAt = Date.now();
       void page.evaluate(() => window.__ava?.warm()).catch(() => {});
     }
@@ -429,6 +448,13 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   await context.exposeBinding("__avaHear", (_src, b64) => {
     if (rt && !alone) rt.appendAudio(b64);
   });
+  // No Anam account can give her a face any more in this meeting: her camera goes off, so
+  // the room sees her profile photo rather than a face whose lips never move. Her voice is
+  // unchanged.
+  await context.exposeBinding("__avaFaceGone", async (_src, why) => {
+    log(`  no face for this meeting: ${why}`);
+    if (platform.cameraOff) await platform.cameraOff(page, log).catch((e) => log(`  could not turn her camera off: ${e.message}`));
+  });
   await context.exposeBinding("__avaIdleClip", (_src, frames) => {
     if (!avatarId || !Array.isArray(frames)) return;
     try {
@@ -439,7 +465,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     }
   });
   await context.addInitScript({
-    content: `window.__AVA_MODE = ${JSON.stringify(MODE)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? FACE.pcmRate : 16000 })};`,
+    content: `window.__AVA_MODE = ${JSON.stringify(mode)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? FACE.pcmRate : 16000 })};`,
   });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 
@@ -449,15 +475,11 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   // 4 — her voice (and face, in avatar mode). Meet is already asking for devices; it
   // waits until these are up.
   let startWith = {};
-  if (MODE === "avatar") {
-    const s = await app.anamSession().catch((e) => {
-      log(`  no face to start with (${e.message}) — she will speak without it`);
-      return null;
-    });
-    if (s) avatarId = s.avatarId;
+  if (mode === "avatar") {
+    if (firstFace) avatarId = firstFace.avatarId;
     // The face connects when somebody else is there: minutes spent on an empty room are
     // minutes billed for nothing.
-    startWith = { token: s?.sessionToken, idleClip: readIdleClip(s?.avatarId), faceLater: true };
+    startWith = { token: firstFace?.sessionToken, idleClip: readIdleClip(firstFace?.avatarId), faceLater: true };
   }
   // Started on whichever page she is on, and again if it navigates: Teams' launcher loads
   // a new page, whose fresh copy of her script would otherwise leave Teams waiting for a
@@ -471,7 +493,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     startWith = { ...startWith, token: undefined };
     if (!announcedVoice) {
       announcedVoice = true;
-      log(MODE === "avatar" ? "  her voice is up, and her face" : "  her voice is up (voice mode, no camera)");
+      log(mode === "avatar" ? "  her voice is up, and her face" : "  her voice is up (voice mode, no camera)");
     }
   };
   // Meet asks for devices on the first page. Teams only on its pre-join page, and starting
@@ -480,7 +502,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
 
   // 5 — walk in.
   try {
-    await platform.join(page, log, MODE, { ready: ensureStarted });
+    await platform.join(page, log, mode, { ready: ensureStarted });
   } catch (e) {
     await page.evaluate(() => window.__ava?.end?.()).catch(() => {});
     await context.close().catch(() => {});
@@ -522,7 +544,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   let snapshotTaken = false;
   let over = false;
   let lastReason = null;
-  let faceState = MODE === "avatar" ? "down" : "voice";
+  let faceState = mode === "avatar" ? "down" : "voice";
   /** Ended from the site, which then writes and sends the notes itself. */
   let endedElsewhere = false;
   /** Why she left, for the meeting's history. */
@@ -565,7 +587,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       rtInTurn = true;
       rtTurn++;
       // Her face, for what she is about to say (it connects in about a second and a half).
-      if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+      if (mode === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
     }
     const turn = `t${rtTurn}`;
     rtChain = rtChain.then(() => page.evaluate(([a, t]) => window.__ava?.feed(a, t), [b64, turn])).catch(() => {});
@@ -790,7 +812,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
         // Not awaited: the loop keeps listening while she talks, which is what lets
         // somebody interrupt her.
         // Avatar mode sends raw audio, which is what her face lip-syncs to.
-        const spoken = speech(say, MODE === "avatar" ? "pcm_16000" : undefined, lang).then((audio) =>
+        const spoken = speech(say, mode === "avatar" ? "pcm_16000" : undefined, lang).then((audio) =>
           page.evaluate((a) => window.__ava.play(a), audio),
         );
         void spoken
@@ -880,7 +902,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       sawOthersAt = Date.now();
       log("  somebody is here");
       if (live && !rt) startLive();
-      if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+      if (mode === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
       if (platform.askForEmails && askForEmails) {
         await platform.askForEmails(
           page,
@@ -918,12 +940,12 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
         resting = true;
         log("  nobody else here — her voice session and face close");
         if (live) stopLive("nobody else here");
-        if (MODE === "avatar") void page.evaluate(() => window.__ava?.rest?.()).catch(() => {});
+        if (mode === "avatar") void page.evaluate(() => window.__ava?.rest?.()).catch(() => {});
       } else if (resting && presentChecks >= ALONE_CHECKS) {
         resting = false;
         log("  somebody is back");
         if (live && !rt && !over && !hushed) startLive(true);
-        if (MODE === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
+        if (mode === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
       }
     }
 

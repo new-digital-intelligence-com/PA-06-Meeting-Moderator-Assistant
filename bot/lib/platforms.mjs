@@ -311,6 +311,23 @@ export const meet = {
     return [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []).map((e) => e.toLowerCase()))];
   },
 
+  /**
+   * Her camera off, in the call: no Anam account can give her a face, and a resting face
+   * that never moves its lips is worse than none. Meet then shows her profile photo, as in
+   * voice mode. Clicked from inside the page: the toolbar hides when nobody moves the mouse.
+   */
+  async cameraOff(page, log) {
+    const done = await page
+      .evaluate(() => {
+        const b = document.querySelector('button[aria-label^="Turn off camera" i]');
+        b?.click();
+        return Boolean(b);
+      })
+      .catch(() => false);
+    log(done ? "  her camera is off — the meeting shows her profile photo" : "  could not find Meet's camera button to turn her camera off");
+    return done;
+  },
+
   async leave(page) {
     await page.getByRole("button", { name: /leave call/i }).first().click({ timeout: 3000 });
   },
@@ -583,6 +600,29 @@ export const teams = {
       document.querySelector('[data-tid="message-pane-body"]');
     const text = pane?.innerText ?? "";
     return [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []).map((e) => e.toLowerCase()))];
+  },
+
+  /**
+   * Her camera off, in the call: no Anam account can give her a face. Teams has named its
+   * camera button several ways; whichever it is, one that is on says so in its label or its
+   * pressed state.
+   */
+  async cameraOff(page, log) {
+    const done = await page
+      .evaluate(() => {
+        const ids = (el) => el.id === "video-button" || el.getAttribute("data-tid") === "toggle-video";
+        const b = [...document.querySelectorAll('#video-button, [data-tid="toggle-video"], button[aria-label]')].find((el) => {
+          const label = el.getAttribute("aria-label") ?? "";
+          if (/turn (the )?camera off|turn off (the )?camera|stop (my )?video/i.test(label)) return true;
+          return ids(el) && (el.getAttribute("aria-pressed") === "true" || el.getAttribute("aria-checked") === "true");
+        });
+        b?.click();
+        return Boolean(b);
+      })
+      .catch(() => false);
+    if (!done) await keepEvidence(page, "teams-camera", log);
+    log(done ? "  her camera is off — the meeting shows her initials" : "  could not find Teams' camera button to turn her camera off (see the saved screenshot)");
+    return done;
   },
 
   async leave(page) {

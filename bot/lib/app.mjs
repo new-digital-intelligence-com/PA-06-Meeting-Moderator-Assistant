@@ -109,10 +109,26 @@ const resting = (account) => (usedUp[account.n] ?? 0) > Date.now();
 /** The account the last face session came from: the one to blame if Anam refuses it. */
 let lastAccount = null;
 
+/** What Anam says when an account has no minutes left (or no plan that gives any). */
+export const OUT_OF_MINUTES = /usage limit|spend cap|upgrade your plan|sign up for a plan|quota|out of minutes|insufficient (credits|balance)/i;
+/** Thrown when no account of hers can give her a face now: she carries on with her voice alone. */
+export const NO_FACE = "Usage limit reached on every Anam account";
+
+/** An account rests for a day: out of minutes. */
+function rest(n) {
+  usedUp[n] = Date.now() + USED_UP_REST_MS;
+  try {
+    fs.writeFileSync(usedUpFile, JSON.stringify(usedUp));
+  } catch {
+    /* kept in memory at least */
+  }
+}
+
 /**
  * A short-lived session for her face: `{ sessionToken, avatarId, account }`, from the first
- * of her Anam accounts with minutes left. The face lip-syncs to her own voice, which is
- * sent to it, so it has no voice of its own.
+ * of her Anam accounts with minutes left — one that refuses for want of minutes rests for a
+ * day and the next is asked at once. The face lip-syncs to her own voice, which is sent to
+ * it, so it has no voice of its own. Every account out of minutes: NO_FACE.
  *
  * With keys in bot/.env she asks Anam herself; otherwise the app asks for her. Her first
  * Teams call showed a black tile because the key on the app's side was wrong — this way
@@ -121,22 +137,37 @@ let lastAccount = null;
 export async function anamSession() {
   const accounts = anamAccounts();
   if (!accounts.length || !accounts[0].avatar) return call("POST", "/api/anam", { passthrough: true });
-  const account = accounts.find((a) => !resting(a));
-  if (!account) throw new Error("Usage limit reached on every Anam account");
-  const avatarId = await avatarFor(account, accounts[0]);
-
-  const res = await fetch("https://api.anam.ai/v1/auth/session-token", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${account.key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ personaConfig: { name: "Ava", avatarId, enableAudioPassthrough: true } }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Anam account ${account.n} refused the session: ${text.slice(0, 200)}`);
-  const { sessionToken } = JSON.parse(text);
-  if (!sessionToken) throw new Error("Anam returned no session token");
-  lastAccount = account.n;
-  return { sessionToken, avatarId, account: account.n };
+  // Any other refusal — a missing avatar, Anam not answering — moves on to the next account
+  // too, and is what is reported if none gives a face.
+  let failed = null;
+  for (const account of accounts.filter((a) => !resting(a))) {
+    try {
+      const avatarId = await avatarFor(account, accounts[0]);
+      const res = await fetch("https://api.anam.ai/v1/auth/session-token", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${account.key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ personaConfig: { name: "Ava", avatarId, enableAudioPassthrough: true } }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        if (OUT_OF_MINUTES.test(text)) {
+          rest(account.n);
+          console.log(`  Anam account ${account.n} is out of minutes — it rests for a day`);
+          continue;
+        }
+        throw new Error(`Anam account ${account.n} refused the session: ${text.slice(0, 200)}`);
+      }
+      const { sessionToken } = JSON.parse(text);
+      if (!sessionToken) throw new Error(`Anam account ${account.n} returned no session token`);
+      lastAccount = account.n;
+      return { sessionToken, avatarId, account: account.n };
+    } catch (e) {
+      failed = e;
+      console.log(`  ${e.message}`);
+    }
+  }
+  throw failed ?? new Error(NO_FACE);
 }
 
 /**
@@ -145,12 +176,7 @@ export async function anamSession() {
  */
 export function anamUsedUp() {
   if (lastAccount === null) return null;
-  usedUp[lastAccount] = Date.now() + USED_UP_REST_MS;
-  try {
-    fs.writeFileSync(usedUpFile, JSON.stringify(usedUp));
-  } catch {
-    /* kept in memory at least */
-  }
+  rest(lastAccount);
   return anamAccounts().find((a) => !resting(a))?.n ?? null;
 }
 

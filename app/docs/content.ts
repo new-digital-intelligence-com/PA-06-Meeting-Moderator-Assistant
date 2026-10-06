@@ -6,12 +6,12 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-06";
+export const UPDATED = "2026-10-07";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "Two accounts, each with its own Elena: the second takes over when the first runs out of minutes (checked from her server)", tone: "emerald" },
+  { label: "Anam", value: "Three accounts, each with its own Elena: the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
@@ -28,6 +28,18 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-07",
+    title: "A third Anam account; voice only when no account can give her a face",
+    points: [
+      "A third Anam account on her server (ANAM_API_KEY_3), with its own copy of Elena — checked from her server: its key, its avatar, and a session Anam issued.",
+      "No account can give her a face before a meeting — every one out of minutes: she joins it as in voice mode, camera off, the meeting showing her profile photo, and her voice works as always.",
+      "Lost during a meeting — every account out, or three tries in a row that fail: her camera is turned off in the call (Meet or Teams), instead of showing a resting face whose lips never move. Her voice carries on; the next meeting tries Anam again.",
+      "An account that refuses for want of minutes when a session is asked for rests a day and the next is asked at once; one that fails for another reason is passed over too.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-10-06",
     title: "Two clients' meetings at once",
