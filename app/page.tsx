@@ -1,8 +1,8 @@
 import ControlRoom, { type Now } from "@/components/ControlRoom";
 import TopBar from "@/components/TopBar";
 import { requireAdminPage } from "@/lib/auth";
-import { getMeeting, inMeeting, minutesIn } from "@/lib/meeting";
-import { avaEmail } from "@/lib/ava";
+import { inMeeting, minutesIn, seatList, seatMeetings } from "@/lib/meeting";
+import { avaEmail, seatCount } from "@/lib/ava";
 import { storeKind } from "@/lib/store";
 
 // Read on every visit: what she is doing right now is part of the page.
@@ -19,20 +19,27 @@ export default async function Home({
 }) {
   // NDI only: clients have their own page.
   const user = await requireAdminPage();
-  const [meeting, params, avaAccount] = await Promise.all([getMeeting(), searchParams, avaEmail()]);
+  const [count, params, avaAccount] = await Promise.all([seatCount(), searchParams, avaEmail()]);
   const publicUrl = process.env.PUBLIC_URL || process.env.APP_URL || "";
 
   const google = typeof params.google === "string" ? params.google : null;
   const oauthError = google?.startsWith("error:") ? google.slice("error:".length) : null;
 
-  const busy = inMeeting(meeting);
-  const now: Now = {
-    busy,
-    phase: !busy ? null : meeting.status === "joining" ? (meeting.dispatch?.takenAt ? "joining" : "sent") : "live",
-    title: busy ? meeting.title : "",
-    client: busy && meeting.client ? { id: meeting.client.id, name: meeting.client.name } : null,
-    minutes: busy ? minutesIn(meeting) : 0,
-  };
+  // Each of her seats: the meeting she is in there, if any.
+  const seats = seatList(count);
+  const held = await seatMeetings(seats);
+  const now: Now[] = seats.map((seat) => {
+    const meeting = held.find((h) => h.seat === seat)?.meeting;
+    const busy = meeting ? inMeeting(meeting) : false;
+    return {
+      seat,
+      busy,
+      phase: !meeting || !busy ? null : meeting.status === "joining" ? (meeting.dispatch?.takenAt ? "joining" : "sent") : "live",
+      title: meeting && busy ? meeting.title : "",
+      client: meeting && busy && meeting.client ? { id: meeting.client.id, name: meeting.client.name } : null,
+      minutes: meeting && busy ? minutesIn(meeting) : 0,
+    };
+  });
 
   return (
     <>

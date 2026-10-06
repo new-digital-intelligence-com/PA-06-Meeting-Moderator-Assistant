@@ -26,8 +26,9 @@ type Config = {
   runnerKey: boolean;
 };
 
-/** What she is doing now, worked out on the server (lib/meeting.ts, inMeeting). */
+/** What she is doing now in one of her seats, worked out on the server (lib/meeting.ts, inMeeting). */
 export type Now = {
+  seat: string;
   busy: boolean;
   phase: "sent" | "joining" | "live" | null;
   title: string;
@@ -79,7 +80,38 @@ function Card({
   );
 }
 
-export default function ControlRoom({ config, now, oauthError }: { config: Config; now: Now; oauthError: string | null }) {
+/** One seat: the meeting she is in there, or free. */
+function SeatLine({ s, named }: { s: Now; named: boolean }) {
+  const label = named ? <span className="font-semibold text-slate-500">Seat {s.seat} · </span> : null;
+  if (!s.busy) {
+    return (
+      <p className="flex items-center gap-2">
+        <span className="size-2 shrink-0 rounded-full bg-slate-300" />
+        <span>
+          {label}
+          Free
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p className="flex min-w-0 items-start gap-2">
+      <span className="relative mt-1.5 flex size-2 shrink-0">
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+      </span>
+      <span className="min-w-0">
+        {label}
+        {s.phase === "live" ? "In a meeting" : "On her way to a meeting"}
+        {s.client ? ` for ${s.client.name}` : ""}
+        {s.phase === "live" && s.minutes > 0 ? ` · ${s.minutes} min` : ""}
+        {s.title ? <span className="block truncate text-slate-400">{s.title}</span> : null}
+      </span>
+    </p>
+  );
+}
+
+export default function ControlRoom({ config, now, oauthError }: { config: Config; now: Now[]; oauthError: string | null }) {
   const router = useRouter();
   const name = config.botName.split("—")[0].trim();
 
@@ -91,6 +123,8 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
 
   const storeOk = config.store !== "file" || !config.publicUrl.includes("vercel.app");
   const link = "inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700";
+  const busy = now.filter((s) => s.busy);
+  const followable = busy.filter((s): s is Now & { client: { id: string; name: string } } => Boolean(s.client));
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-24 pt-6 sm:px-6">
@@ -130,30 +164,32 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
           detail={
             !config.runnerKey ? (
               "AVA_RUNNER_KEY is not set on this site."
-            ) : now.busy ? (
-              <span className="flex min-w-0 items-start gap-2">
-                <span className="relative mt-1.5 flex size-2 shrink-0">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-                </span>
-                <span className="min-w-0">
-                  {now.phase === "live" ? "In a meeting" : "On her way to a meeting"}
-                  {now.client ? ` for ${now.client.name}` : ""}
-                  {now.phase === "live" && now.minutes > 0 ? ` · ${now.minutes} min` : ""}
-                  {now.title ? <span className="block truncate text-slate-400">{now.title}</span> : null}
-                </span>
-              </span>
-            ) : (
+            ) : now.length === 1 && !busy.length ? (
               "Free — she joins her clients' meetings by herself."
+            ) : (
+              <div className="space-y-2">
+                {now.length > 1 && !busy.length && <p>Free — she joins her clients&apos; meetings by herself, up to {now.length} at once.</p>}
+                {now.map((s) => (
+                  <SeatLine key={s.seat} s={s} named={now.length > 1} />
+                ))}
+              </div>
             )
           }
-          hint="The computer with her Chrome, which joins the calls."
+          hint={
+            now.length > 1
+              ? `The computer with her Chrome, which joins the calls: ${now.length} seats — that many clients' meetings at once, one at a time for each client.`
+              : "The computer with her Chrome, which joins the calls."
+          }
           action={
-            now.busy && now.client ? (
-              <Link href={`/admin/clients/${now.client.id}`} className={link}>
-                Follow the meeting
-                <ArrowRightIcon className="size-4" />
-              </Link>
+            followable.length ? (
+              <div className="flex flex-col gap-2">
+                {followable.map((s) => (
+                  <Link key={s.seat} href={`/admin/clients/${s.client.id}`} className={link}>
+                    {followable.length > 1 ? `Follow ${s.client.name}'s meeting` : "Follow the meeting"}
+                    <ArrowRightIcon className="size-4" />
+                  </Link>
+                ))}
+              </div>
             ) : undefined
           }
         />

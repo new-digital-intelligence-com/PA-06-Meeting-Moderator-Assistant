@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isRunner } from "@/lib/ava";
+import { isRunner, runnerAt } from "@/lib/ava";
 import { getMeeting, updateMeeting, type TranscriptLine } from "@/lib/meeting";
 import { answerForVoice, mergeActions } from "@/lib/moderator";
 import { hasDb } from "@/lib/db";
@@ -24,7 +24,10 @@ export async function POST(request: Request) {
   }
   const { asked = "" } = (await request.json().catch(() => ({}))) as { asked?: string };
 
-  const meeting = await getMeeting();
+  // The meeting in her seat that asked — never another client's in her other seat.
+  const at = runnerAt(request);
+  const meeting = await getMeeting(at);
+  if (at.id && meeting.id !== at.id) return NextResponse.json({ error: "That meeting is over.", gone: true }, { status: 409 });
   const recent: TranscriptLine[] = [];
   let size = 0;
   for (let i = meeting.transcript.length - 1; i >= 0; i--) {
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
       await updateMeeting((m) => {
         if (reply.add_actions?.length) m.actions.push(...mergeActions(m.actions, reply.add_actions));
         if (reply.memory?.trim()) m.memory = reply.memory.trim().slice(0, 1200);
-      });
+      }, at);
     }
     return NextResponse.json({ say: reply.say?.trim() ?? "" });
   } catch (e) {

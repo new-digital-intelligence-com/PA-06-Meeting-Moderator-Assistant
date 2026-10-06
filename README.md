@@ -304,8 +304,8 @@ booked bot costs nothing until it actually joins.
   top of the call; in a two-party-consent jurisdiction you have to.
 - **Latency** from end-of-sentence to her first word is 1.5–3s. Fine for a moderator,
   whose speaking moments are mostly scheduled; it would be poor for banter.
-- `data/` holds the live meeting and is gitignored. One meeting at a time — swap
-  `lib/meeting.ts` for a real table before a second host exists.
+- `data/` holds the live meeting (one file per seat) and is gitignored. One meeting per
+  seat — her runner's AVA_SEATS, two by default — kept by `lib/meeting.ts`.
 - **Delivery is confirmed, not assumed.** A scripted cue is handed to the stage with a
   key and only recorded as spoken once she reports having said it. If her face is down,
   the line comes back round on the next tick instead of vanishing — which is how an

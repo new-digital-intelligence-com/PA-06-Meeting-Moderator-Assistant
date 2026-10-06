@@ -24,6 +24,17 @@ export const PROFILE =
   process.env.AVA_PROFILE_DIR ||
   path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), ".local", "share"), "ava-runner", "chrome-profile");
 
+/**
+ * How many meetings she can be in at once — her seats, each its own Chrome. Two clients'
+ * meetings side by side; one at a time for each client (the app's call). Every seat shares
+ * the server's processors and memory: a second meeting at the same time halves what each
+ * gets, so on a small server set AVA_SEATS=1.
+ */
+export const SEATS = Math.min(4, Math.max(1, Math.floor(Number(process.env.AVA_SEATS || 2)) || 1));
+
+/** A seat's Chrome profile: seat 1's is PROFILE, as it always was; seat 2's sits beside it. */
+export const profileFor = (seat) => (Number(seat) > 1 ? `${PROFILE}-${seat}` : PROFILE);
+
 /** Real Chrome, not bundled Chromium: Google trusts it, and Meet supports it fully. */
 export const CHROME =
   process.env.CHROME_PATH ||

@@ -13,6 +13,7 @@
  */
 
 import { GoogleClient } from "./google";
+import { MAX_SEATS, seatOf, type Where } from "./meeting";
 import { decrypt, encrypt, type GoogleTokens } from "./session";
 import { redisOrMongoKey } from "./store";
 
@@ -82,4 +83,32 @@ export async function noteScreen(request: Request): Promise<void> {
 
 export async function avaScreen(): Promise<string | null> {
   return (await redisOrMongoKey(SCREEN).read().catch(() => null)) || null;
+}
+
+/**
+ * Which of her seats a call from her runner is about (`x-ava-seat`), and the meeting it
+ * was started for there (`x-ava-meeting`) — see lib/meeting.ts, Where. A call without them
+ * is seat 1's, as every call was before she had seats.
+ */
+export function runnerAt(request: Request): Where {
+  if (!isRunner(request)) return { seat: "1" };
+  return { seat: seatOf(request.headers.get("x-ava-seat")), id: request.headers.get("x-ava-meeting")?.trim() || null };
+}
+
+/* How many meetings her server can be in at once, as it says with each call (`x-ava-seats`) —
+   kept for the pages and for her answers to invites. Written only when it changes. */
+const SEATS = "ava:seats";
+let seatsSeen: number | null = null;
+
+export async function noteSeats(request: Request): Promise<void> {
+  const given = Number(request.headers.get("x-ava-seats"));
+  if (!Number.isInteger(given) || given < 1 || given > MAX_SEATS || given === seatsSeen) return;
+  if (Number(await redisOrMongoKey(SEATS).read()) !== given) await redisOrMongoKey(SEATS).write(String(given));
+  seatsSeen = given;
+}
+
+/** Her seats: one until her server says otherwise. */
+export async function seatCount(): Promise<number> {
+  const n = Number(await redisOrMongoKey(SEATS).read().catch(() => null));
+  return Number.isInteger(n) && n >= 1 && n <= MAX_SEATS ? n : 1;
 }

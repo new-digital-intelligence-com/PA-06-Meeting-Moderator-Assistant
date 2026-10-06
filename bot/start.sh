@@ -10,8 +10,11 @@ fi
 
 mkdir -p /data
 # A crashed Chrome leaves its lock behind in the profile, and the next Chrome refuses to
-# open it. Nothing else is running yet, so any lock here is stale.
-rm -f "$AVA_PROFILE_DIR/SingletonLock" "$AVA_PROFILE_DIR/SingletonSocket" "$AVA_PROFILE_DIR/SingletonCookie" 2>/dev/null || true
+# open it. Nothing else is running yet, so any lock here is stale — in every seat's
+# profile (seat 2's is "$AVA_PROFILE_DIR-2").
+for dir in "$AVA_PROFILE_DIR" "$AVA_PROFILE_DIR"-*; do
+  rm -f "$dir/SingletonLock" "$dir/SingletonSocket" "$dir/SingletonCookie" 2>/dev/null || true
+done
 
 # Her screen.
 Xvfb :99 -screen 0 1280x800x24 -nolisten tcp &

@@ -28,7 +28,8 @@ you invite ava@ to a meeting
 ```
 
 Before: the invite's description is her briefing and its guests are who the notes go to.
-Declined meetings and all-day entries are ignored. One meeting at a time.
+Declined meetings and all-day entries are ignored. Up to `AVA_SEATS` meetings at once (two by
+default), each in its own Chrome — different clients' only; the app answers the invites accordingly.
 
 **Microsoft Teams** is sent from the control room instead: paste the Teams link and press
 Send. The container checks every 10 seconds, opens it as a guest named Ava, and waits in

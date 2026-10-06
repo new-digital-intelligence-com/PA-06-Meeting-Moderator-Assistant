@@ -10,6 +10,7 @@ import {
   type TranscriptLine,
 } from "@/lib/meeting";
 import { answerAddressed, botName, groupTurn, isAddressed, mergeActions, type ModeratorReply } from "@/lib/moderator";
+import { runnerAt } from "@/lib/ava";
 import { dueCue } from "@/lib/script";
 
 export const runtime = "nodejs";
@@ -297,8 +298,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // Which of her seats, and which meeting there: one she has since been moved on from is
+  // over for her — her runner leaves it.
+  const at = runnerAt(request);
   // Needed before the write, to recognise her own words coming back as captions.
-  const meetingBefore = await getMeeting();
+  const meetingBefore = await getMeeting(at);
+  if (at.id && meetingBefore.id !== at.id) return NextResponse.json({ say: null, status: "gone", reason: "that meeting is over" });
 
   const incoming = (body.lines ?? [])
     .filter((l) => l.text?.trim())
@@ -326,7 +331,7 @@ export async function POST(request: Request) {
     }
     // The stage only ticks once she is actually in the call.
     if (m.status === "joining" || m.status === "scheduled") m.status = "live";
-  });
+  }, at);
 
   const view = () => ({
     status: meeting.status,
@@ -342,7 +347,7 @@ export async function POST(request: Request) {
     if (meeting.lastDecision?.reason !== reason) {
       meeting = await updateMeeting((m) => {
         m.lastDecision = { at: Date.now(), reason };
-      });
+      }, at);
     }
     return NextResponse.json({ say: null, reason, ...view() });
   };
@@ -393,7 +398,7 @@ export async function POST(request: Request) {
       if (memory?.trim()) m.memory = memory.trim().slice(0, 1200);
       m.inflight = key ? { key, lines: ids } : m.inflight;
       m.lastDecision = { at: Date.now(), reason };
-    });
+    }, at);
     return NextResponse.json({ say, kind, key, attempt, reason: say ? undefined : reason, ...view() });
   };
 

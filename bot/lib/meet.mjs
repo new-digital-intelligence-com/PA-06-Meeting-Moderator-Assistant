@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { BRAIN, DISPLAY_NAME, FACE, MODE, PROFILE, STATE_DIR, platformArgs, requireChrome, root } from "./config.mjs";
+import { BRAIN, DISPLAY_NAME, FACE, MODE, STATE_DIR, platformArgs, profileFor, requireChrome, root } from "./config.mjs";
 import { DELEGATE, EFFORT, connectLive } from "./live.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
@@ -228,10 +228,13 @@ function readIdleClip(avatarId) {
  * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[], startsAt?: number, client?: { id: string, name: string, meetingId: string } | null }} meeting
  *   `startsAt`: when the meeting is due to start — she may be early, and waits for people from then.
  *   `client`: the client she attends for — their documents become searchable to her.
- * @param {{ log?: (m: string) => void, briefed?: boolean }} options `briefed`: sent from the
+ * @param {{ log?: (m: string) => void, briefed?: boolean, seat?: number }} options `briefed`: sent from the
  *   client's page, whose briefing is already on the server and must not be overwritten.
+ *   `seat`: which of her seats — its own Chrome profile, and its own meeting on the site.
  */
-export async function attend(meeting, { log = console.log, briefed = false } = {}) {
+export async function attend(meeting, { log = console.log, briefed = false, seat = 1 } = {}) {
+  // Everything this meeting tells the site is about this seat, and this meeting in it.
+  const api = app.seat(seat);
   const platform = platformOf(meeting.meetingUrl);
   if (!platform) throw new Error(`Not a Google Meet or Teams link: ${meeting.meetingUrl}`);
   // English, German or Arabic: her captions, her voice, what she types in the chat.
@@ -246,8 +249,10 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   const askForEmails = emailed && !meeting.recipients?.length;
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
-  if (!briefed) {
-    await app.brief({
+  // A calendar meeting is new in this seat; one a page sent her to is already there.
+  if (briefed) api.meetingId = meeting.id ?? null;
+  else {
+    await api.start({
       title: meeting.title || "Meeting",
       meetingUrl: meeting.meetingUrl,
       context: meeting.context || "",
@@ -258,11 +263,11 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       client: meeting.client ?? null,
     });
   }
-  await app.attend(briefed ? "dispatch" : "calendar");
+  await api.attend(briefed ? "dispatch" : "calendar");
   log(`  ${briefed ? "sent from a client's page" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
 
   // 2 — her browser.
-  const context = await chromium.launchPersistentContext(PROFILE, {
+  const context = await chromium.launchPersistentContext(profileFor(seat), {
     executablePath: requireChrome(),
     // Visible, not headless: Meet degrades headless browsers, and Google is far more
     // willing to keep a real-looking Chrome signed in.
@@ -481,7 +486,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     await context.close().catch(() => {});
     // Nobody let her in, or the page was not what we expected: close the meeting so the
     // site does not show her as in it.
-    await app.stop().catch(() => {});
+    await api.stop().catch(() => {});
     throw e;
   }
   await platform.captionsOn(page, log);
@@ -576,7 +581,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     const asked = rtHeard.slice(-1500);
     log(`  she asks her memory: …${asked.slice(-120).trim()}`);
     try {
-      const { say } = await app.ask(asked);
+      const { say } = await api.ask(asked);
       if (!rt) return;
       if (say) rt.say(say, id);
       else rt.think("Nothing in the meeting or the briefing answers this.", id);
@@ -635,15 +640,15 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
               },
             },
       onFunctionCall: async (name, args) => {
-        if (name === "meeting_record") return (await app.record()).record;
+        if (name === "meeting_record") return (await api.record()).record;
         if (name === "note_action") {
-          await app.record(args);
+          await api.record(args);
           log(`  noted: ${args.text}`);
           return "Noted — it will be in the meeting notes.";
         }
         if (name === "search_knowledge") {
           log(`  looking up: ${args.query}`);
-          return app.knowledge(args.query);
+          return api.knowledge(args.query);
         }
         return "Unknown tool.";
       },
@@ -707,7 +712,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
     try {
       const wordsBefore = wordsHeard;
-      const out = await app.tick({
+      const out = await api.tick({
         lines,
         idle: !speaking,
         delivered: delivered?.key,
@@ -764,9 +769,14 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
 
       // Ended from the site: leave the call. Without this her Chrome stayed in
       // the meeting after you had ended it, then sent the notes again when it finally left.
+      // "gone": her seat on the site holds another meeting now — this one is over for her.
       if (out.status && out.status !== "live") {
         endedElsewhere = true;
-        await finish(`the meeting was ended from the site${out.endedBy ? ` by ${out.endedBy}` : ""} (${out.status})`);
+        await finish(
+          out.status === "gone"
+            ? "her seat on the site has moved on to another meeting"
+            : `the meeting was ended from the site${out.endedBy ? ` by ${out.endedBy}` : ""} (${out.status})`,
+        );
         break;
       }
 
@@ -839,7 +849,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
           lang = spoken;
           log(`  they are speaking ${LANGUAGE_NAME[spoken]} — the captions follow`);
           await platform.setLanguage(page, log, spoken).catch((e) => log(`  could not change the caption language: ${e.message}`));
-          await app.brief({ language: spoken }).catch(() => {});
+          await api.update({ language: spoken }).catch(() => {});
         }
       }
     }
@@ -986,13 +996,13 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     return;
   }
 
-  await app.stop(leftBecause).catch((e) => log(`  could not close the meeting: ${e.message}`));
+  await api.stop(leftBecause).catch((e) => log(`  could not close the meeting: ${e.message}`));
   if (nobodyCame) {
     log("  nobody came — no notes to send");
     return;
   }
   try {
-    const r = await app.sendNotes();
+    const r = await api.sendNotes();
     log(
       r.delivered?.sent
         ? `  notes sent to ${r.followUp?.to}`

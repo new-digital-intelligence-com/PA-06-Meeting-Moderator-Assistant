@@ -17,6 +17,9 @@
  * of seconds, over HTTP, with no connection to pool and no cold-start handshake. Mongo
  * is there because a cluster you already have beats a service you have to sign up for,
  * and its findOneAndUpdate is atomic enough to hold the lock.
+ *
+ * One meeting per seat — her server can be in more than one meeting at a time
+ * (lib/meeting.ts) — each under its own key and lock. Seat 1 keeps the key it always had.
  */
 
 import { promises as fs } from "node:fs";
@@ -26,18 +29,21 @@ import crypto from "node:crypto";
 export type StoreKind = "redis" | "mongo" | "file";
 
 export type Store = {
-  read(): Promise<string | null>;
-  write(value: string): Promise<void>;
+  /** A seat's meeting ("1" when not said). */
+  read(seat?: string): Promise<string | null>;
+  write(value: string, seat?: string): Promise<void>;
   /** Any other small value, under its own key — her Google sign-in, for one. */
   readKey(key: string): Promise<string | null>;
   writeKey(key: string, value: string): Promise<void>;
-  /** Read-modify-write, serialised against every other writer. */
-  withLock<T>(fn: () => Promise<T>): Promise<T>;
+  /** Read-modify-write of a seat's meeting, serialised against every other writer of it. */
+  withLock<T>(fn: () => Promise<T>, seat?: string): Promise<T>;
   readonly kind: StoreKind;
 };
 
 const KEY = "meeting:current";
 const LOCK = "meeting:lock";
+const keyOf = (seat = "1") => (seat === "1" ? KEY : `${KEY}:${seat}`);
+const lockOf = (seat = "1") => (seat === "1" ? LOCK : `${LOCK}:${seat}`);
 /** Long enough for a slow write, short enough that a crashed holder frees it fast. */
 const LOCK_MS = 5000;
 
@@ -80,11 +86,11 @@ function redisStore(creds: { url: string; token: string }): Store {
 
   return {
     kind: "redis",
-    async read() {
-      return command<string | null>(["GET", KEY]);
+    async read(seat) {
+      return command<string | null>(["GET", keyOf(seat)]);
     },
-    async write(value) {
-      await command(["SET", KEY, value]);
+    async write(value, seat) {
+      await command(["SET", keyOf(seat), value]);
     },
     async readKey(key) {
       return command<string | null>(["GET", key]);
@@ -92,13 +98,14 @@ function redisStore(creds: { url: string; token: string }): Store {
     async writeKey(key, value) {
       await command(["SET", key, value]);
     },
-    async withLock(fn) {
+    async withLock(fn, seat) {
+      const lock = lockOf(seat);
       const token = crypto.randomBytes(12).toString("hex");
       const deadline = Date.now() + LOCK_MS;
 
       let held = false;
       while (Date.now() < deadline) {
-        const got = await command<string | null>(["SET", LOCK, token, "NX", "PX", String(LOCK_MS)]);
+        const got = await command<string | null>(["SET", lock, token, "NX", "PX", String(LOCK_MS)]);
         if (got === "OK") {
           held = true;
           break;
@@ -110,7 +117,7 @@ function redisStore(creds: { url: string; token: string }): Store {
       try {
         return await fn();
       } finally {
-        if (held) await command(["EVAL", RELEASE, 1, LOCK, token]).catch(() => undefined);
+        if (held) await command(["EVAL", RELEASE, 1, lock, token]).catch(() => undefined);
       }
     },
   };
@@ -147,12 +154,12 @@ function mongoStore(uri: string): Store {
 
   return {
     kind: "mongo",
-    async read() {
-      const doc = await (await collection()).findOne({ _id: KEY });
+    async read(seat) {
+      const doc = await (await collection()).findOne({ _id: keyOf(seat) });
       return doc?.value ?? null;
     },
-    async write(value) {
-      await (await collection()).updateOne({ _id: KEY }, { $set: { value } }, { upsert: true });
+    async write(value, seat) {
+      await (await collection()).updateOne({ _id: keyOf(seat) }, { $set: { value } }, { upsert: true });
     },
     async readKey(key) {
       const doc = await (await collection()).findOne({ _id: key });
@@ -161,8 +168,9 @@ function mongoStore(uri: string): Store {
     async writeKey(key, value) {
       await (await collection()).updateOne({ _id: key }, { $set: { value } }, { upsert: true });
     },
-    async withLock(fn) {
+    async withLock(fn, seat) {
       const col = await collection();
+      const lock = lockOf(seat);
       const token = crypto.randomBytes(12).toString("hex");
       const deadline = Date.now() + LOCK_MS;
       let held = false;
@@ -174,7 +182,7 @@ function mongoStore(uri: string): Store {
           // filter misses, the upsert tries to insert a duplicate _id, and Mongo raises
           // E11000 — which is how we learn we lost the race.
           await col.updateOne(
-            { _id: LOCK, expiresAt: { $lte: now } },
+            { _id: lock, expiresAt: { $lte: now } },
             { $set: { token, expiresAt: new Date(now.getTime() + LOCK_MS) } },
             { upsert: true },
           );
@@ -189,7 +197,7 @@ function mongoStore(uri: string): Store {
       try {
         return await fn();
       } finally {
-        if (held) await col.deleteOne({ _id: LOCK, token }).catch(() => undefined);
+        if (held) await col.deleteOne({ _id: lock, token }).catch(() => undefined);
       }
     },
   };
@@ -198,22 +206,22 @@ function mongoStore(uri: string): Store {
 /* -------------------------------------------------------------------- file */
 
 function fileStore(): Store {
-  const file = path.join(process.cwd(), "data", "meeting.json");
-  // One process, one thread: a promise chain is a sufficient mutex.
-  let queue: Promise<unknown> = Promise.resolve();
+  const fileOf = (seat = "1") => path.join(process.cwd(), "data", seat === "1" ? "meeting.json" : `meeting-${seat}.json`);
+  // One process, one thread: a promise chain per seat is a sufficient mutex.
+  const queues = new Map<string, Promise<unknown>>();
 
   return {
     kind: "file",
-    async read() {
+    async read(seat) {
       try {
-        return await fs.readFile(file, "utf8");
+        return await fs.readFile(fileOf(seat), "utf8");
       } catch {
         return null;
       }
     },
-    async write(value) {
-      await fs.mkdir(path.dirname(file), { recursive: true });
-      await fs.writeFile(file, value, "utf8");
+    async write(value, seat) {
+      await fs.mkdir(path.dirname(fileOf(seat)), { recursive: true });
+      await fs.writeFile(fileOf(seat), value, "utf8");
     },
     async readKey(key) {
       try {
@@ -226,9 +234,12 @@ function fileStore(): Store {
       await fs.mkdir(path.dirname(keyFile(key)), { recursive: true });
       await fs.writeFile(keyFile(key), value, "utf8");
     },
-    async withLock(fn) {
-      const run = queue.then(fn, fn);
-      queue = run.catch(() => undefined);
+    async withLock(fn, seat = "1") {
+      const run = (queues.get(seat) ?? Promise.resolve()).then(fn, fn);
+      queues.set(
+        seat,
+        run.catch(() => undefined),
+      );
       return run;
     },
   };

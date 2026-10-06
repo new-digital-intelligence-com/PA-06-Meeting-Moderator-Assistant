@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
+import { elapsed, getMeeting, seatOf, updateMeeting, type Where } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
-import { isRunner } from "@/lib/ava";
+import { isRunner, runnerAt } from "@/lib/ava";
 import { record } from "@/lib/history";
 import { readSession } from "@/lib/session";
 
@@ -21,13 +21,18 @@ export async function POST(request: Request) {
   let from: "calendar" | "dispatch" | undefined;
   /** stop, from her runner: why she left — everybody had gone, the meeting ended… */
   let reason: string | undefined;
+  /** From a page: which of her seats. Her runner says it in its headers, with the meeting. */
+  let seat: unknown;
   try {
-    ({ command, from, reason } = await request.json());
+    ({ command, from, reason, seat } = await request.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const before = await getMeeting();
+  const at: Where = isRunner(request) ? runnerAt(request) : { seat: seatOf(seat) };
+  const before = await getMeeting(at);
+  // Her runner, about a meeting that seat has since moved on from: nothing to do there.
+  if (at.id && before.id !== at.id) return NextResponse.json({ error: "That meeting is over.", gone: true }, { status: 409 });
 
   /**
    * Her own Chrome has walked into the meeting. A fresh run: whatever was left over from
@@ -64,7 +69,7 @@ export async function POST(request: Request) {
       m.summary = undefined;
       m.followUp = undefined;
       m.endedBy = undefined;
-    });
+    }, at);
     if (meeting.client?.meetingId) {
       await record({ meeting_id: meeting.client.meetingId, kind: "joined", by: "Ava", detail: { from: meeting.attendedFrom ?? "calendar" } });
     }
@@ -79,7 +84,7 @@ export async function POST(request: Request) {
       m.startedAt = undefined;
       m.endedAt = undefined;
       m.spoken = [];
-    });
+    }, at);
     return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
   }
 
@@ -133,7 +138,7 @@ export async function POST(request: Request) {
     m.botId = undefined;
     // Not yet picked up by her runner: now it never will be.
     m.dispatch = undefined;
-  });
+  }, at);
   // Once per meeting: her runner closes it again after leaving, when the site ended it first.
   if (!wasRehearsal && !wasBooking && before.status !== "ended" && before.client?.meetingId) {
     await record({

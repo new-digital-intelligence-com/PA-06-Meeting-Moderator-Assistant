@@ -6,6 +6,7 @@
  * is given to a client by its organiser (lib/clients.ts). An invite from nobody's company
  * is "skipped": she does not go, and admins see it listed.
  */
+import { seatCount } from "./ava";
 import { asMeeting, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
 import { allClients, clientPeople, matchClient } from "./clients";
 import type { GoogleClient } from "./google";
@@ -27,9 +28,10 @@ const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000)
  * "pa-06".sync_meetings() (db/schema.sql), which adds and updates in one go, keeps a
  * finished meeting finished, and marks what has gone from her calendar as cancelled.
  *
- * Plans her answer to every client invite on the way — one meeting at a time
- * (lib/rsvp.ts): one that clashes is "declined", and she does not go. Only her runner's
- * read (`answer`) sends the answers: one sender, once a minute.
+ * Plans her answer to every client invite on the way — one meeting at a time for each
+ * client, and as many at once as she has seats (lib/rsvp.ts): one that clashes is
+ * "declined", and she does not go. Only her runner's read (`answer`) sends the answers:
+ * one sender, once a minute.
  */
 export async function syncCalendar(
   google: GoogleClient,
@@ -49,10 +51,10 @@ export async function syncCalendar(
       .not("event_id", "like", "now-%"),
   ).catch(() => null);
 
-  // Her answers: one meeting at a time.
-  const given = await readGiven();
+  // Her answers: one meeting at a time for each client, and no more at once than her seats.
+  const [given, seats] = await Promise.all([readGiven(), seatCount()]);
   const candidates = await goingTo(invites, owners, known);
-  const planned = plan(candidates, given);
+  const planned = plan(candidates, given, seats);
 
   const found = invites.map((i, n) => {
     const client = owners[n];
@@ -112,9 +114,10 @@ async function goingTo(invites: CalendarInvite[], owners: (Client | null)[], kno
   for (const m of moves) moved.set(m.meeting_id, Math.max(moved.get(m.meeting_id) ?? 0, time(m.at)));
   return going.map((i) => {
     const k = before.get(i.id);
+    const client = owners[invites.indexOf(i)]?.id ?? null;
     const movedNow = Boolean(k) && (time(k!.starts_at) !== i.start || time(k!.ends_at) !== i.end);
     const since = !k || movedNow ? now : Math.max(time(k.created_at), moved.get(String(k.id)) ?? 0);
-    return { id: i.id, series: i.series, start: i.start, end: i.end, response: i.response, since, self: i.self };
+    return { id: i.id, series: i.series, start: i.start, end: i.end, response: i.response, since, self: i.self, client };
   });
 }
 

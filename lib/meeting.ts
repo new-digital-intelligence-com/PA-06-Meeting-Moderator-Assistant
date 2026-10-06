@@ -1,5 +1,7 @@
 /**
- * The meeting — one shared object, read and written by two very different clients:
+ * The meeting — one per seat: her server can be in more than one meeting at a time, each
+ * in its own Chrome, and each is one of these, kept apart (see `seatOf`). Seat 1 is the one
+ * there always was. Each is one shared object, read and written by two very different clients:
  *
  *   the control room   (/)      runs in your browser: you write the context, send her
  *                               in, watch what she hears, and see what went out.
@@ -201,6 +203,25 @@ export type Meeting = {
 
 export const newId = () => crypto.randomBytes(8).toString("hex");
 
+/** The most meetings she is ever in at once. How many she has is her server's to say (lib/ava.ts, seatCount). */
+export const MAX_SEATS = 4;
+
+/** A seat as a request or her runner names it: "1" to MAX_SEATS — anything else is seat 1. */
+export function seatOf(v: unknown): string {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_SEATS ? String(n) : "1";
+}
+
+/** Her seats, "1" up to `count`. */
+export const seatList = (count: number) => Array.from({ length: Math.max(1, Math.min(MAX_SEATS, Math.floor(count) || 1)) }, (_, i) => String(i + 1));
+
+/**
+ * Which meeting a read or a write is about: the seat — and, for a call from her runner,
+ * the meeting it was started for. A seat that has moved on to another meeting since is
+ * not written: a late call from a meeting she has left must not land in the next one.
+ */
+export type Where = { seat?: string; id?: string | null };
+
 export function blank(): Meeting {
   return {
     id: newId(),
@@ -305,10 +326,16 @@ function parse(raw: string | null): Meeting | null {
  * the control room can be served by different instances, and a cached copy means she
  * carries on moderating a meeting that ended five minutes ago.
  */
-export async function getMeeting(): Promise<Meeting> {
-  const existing = parse(await store().read());
+export async function getMeeting(where: Where = {}): Promise<Meeting> {
+  const existing = parse(await store().read(where.seat));
   if (existing) return existing;
-  return updateMeeting(() => undefined);
+  return updateMeeting(() => undefined, { seat: where.seat });
+}
+
+/** The meetings in these seats, those that have one. */
+export async function seatMeetings(seats: string[]): Promise<{ seat: string; meeting: Meeting }[]> {
+  const found = await Promise.all(seats.map(async (seat) => ({ seat, meeting: parse(await store().read(seat)) })));
+  return found.filter((f): f is { seat: string; meeting: Meeting } => f.meeting !== null);
 }
 
 /**
@@ -316,45 +343,66 @@ export async function getMeeting(): Promise<Meeting> {
  *
  * The whole cycle happens inside the lock: the stage appends transcript lines every two
  * seconds while the note-taker appends actions every twenty, and a read that straddles
- * the other's write silently loses one of them.
+ * the other's write silently loses one of them. With `where.id`, a seat now holding
+ * another meeting is returned as it is, unwritten.
  */
-export async function updateMeeting(mutate: (m: Meeting) => void): Promise<Meeting> {
+export async function updateMeeting(mutate: (m: Meeting) => void, where: Where = {}): Promise<Meeting> {
   return store().withLock(async () => {
-    const meeting = parse(await store().read()) ?? blank();
+    const meeting = parse(await store().read(where.seat)) ?? blank();
+    if (where.id && meeting.id !== where.id) return meeting;
     mutate(meeting);
-    await store().write(JSON.stringify(meeting));
+    await store().write(JSON.stringify(meeting), where.seat);
     return meeting;
-  });
+  }, where.seat);
 }
 
-export async function resetMeeting(): Promise<Meeting> {
+export async function resetMeeting(seat = "1"): Promise<Meeting> {
   return store().withLock(async () => {
     const fresh = blank();
-    await store().write(JSON.stringify(fresh));
+    await store().write(JSON.stringify(fresh), seat);
     return fresh;
-  });
+  }, seat);
 }
 
 /**
- * A new meeting in place of the last one — only if she is free, decided inside the lock,
- * so a calendar meeting starting at the same instant cannot be overwritten. Null if busy.
+ * A new meeting in the first of these seats that is free — decided inside that seat's
+ * lock, so a meeting starting there at the same instant cannot be overwritten. Null if
+ * every one of them is taken. What counts as free can be said (`free`): her runner knows
+ * which of its seats are, and only needs one kept that a page has just sent her to.
  */
-export async function startMeeting(fields: Partial<Meeting>): Promise<Meeting | null> {
-  return store().withLock(async () => {
-    const current = parse(await store().read());
-    if (current && inMeeting(current)) return null;
-    const fresh: Meeting = { ...blank(), ...fields };
-    await store().write(JSON.stringify(fresh));
-    return fresh;
-  });
+export async function startMeeting(
+  fields: Partial<Meeting>,
+  seats: string[] = ["1"],
+  free: (current: Meeting) => boolean = (current) => !inMeeting(current),
+): Promise<{ meeting: Meeting; seat: string } | null> {
+  for (const seat of seats) {
+    const started = await store().withLock(async () => {
+      const current = parse(await store().read(seat));
+      if (current && !free(current)) return null;
+      const fresh: Meeting = { ...blank(), ...fields };
+      await store().write(JSON.stringify(fresh), seat);
+      return fresh;
+    }, seat);
+    if (started) return { meeting: started, seat };
+  }
+  return null;
 }
 
 /** Her server stopped reporting on a meeting this long ago: it is over, whatever it says. */
 const QUIET_MS = 15 * 60_000;
 
+/** Sent from a page and not yet taken by her server — for this long, after which her server was off. */
+export const DISPATCH_STALE_MS = 30 * 60_000;
+
+/** A page has sent her to this meeting and her server has not taken it yet. */
+export function waitingToBeTaken(m: Meeting, now = Date.now()): boolean {
+  return m.status === "joining" && Boolean(m.dispatch) && !m.dispatch!.takenAt && now - m.dispatch!.at < DISPATCH_STALE_MS;
+}
+
 /**
- * She is taken: sent somewhere and not yet there, or in a meeting her server still reports
- * on. One meeting at a time — this is what keeps a second one from being started over it.
+ * A seat is taken: she was sent somewhere and is not yet there, or is in a meeting her
+ * server still reports on. One meeting per seat — this is what keeps a second one from
+ * being started over it.
  */
 export function inMeeting(m: Meeting, now = Date.now()): boolean {
   if (m.status === "joining") return Boolean(m.dispatch) && now - (m.dispatch!.takenAt ?? m.dispatch!.at) < QUIET_MS;

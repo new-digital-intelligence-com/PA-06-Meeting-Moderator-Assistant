@@ -578,12 +578,21 @@ export default function Docs() {
               />
 
               <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <Card tone="rose" title="One meeting at a time">
-                  She is one person on one server, whichever client a meeting is for. Every invite from an active client gets an
-                  answer within a minute, which Google emails to the host: yes — or no when it overlaps a meeting she already has,
-                  with the reason in the reply (“already booked for another meeting at that time … if it moves to a time I’m
-                  free, I’ll accept”). She keeps the meeting she already said yes to, then the one that has been at that time
-                  longest — so somebody moving their meeting onto hers does not take her. Back to back is fine. A recurring
+                <Card tone="emerald" title="Two clients at once">
+                  She has seats — <C>AVA_SEATS</C> on her server, two by default — each its own Chrome, signed in as her: that
+                  many meetings at the same time, for different clients. One at a time for each client: never two of one
+                  client’s at once. On the site each seat keeps its own meeting, and every call from her server names its seat
+                  and the meeting in it — what she hears, her searches through documents, the notes — so nothing of one client’s
+                  meeting reaches another’s, and a late call from a meeting she has left is refused rather than landing in the
+                  next one. Seat 2’s Chrome is a copy of seat 1’s profile, made when her server starts: she is signed in once.
+                  The seats share the server’s processors and memory — two meetings at once halve what each gets.
+                </Card>
+                <Card tone="rose" title="Her answers to invites">
+                  One meeting at a time for each client, and no more at once than she has seats. Every invite from an active
+                  client gets an answer within a minute, which Google emails to the host: yes — or no when it would break either,
+                  with the reason in the reply (“already booked at that time … if it moves to a time I’m free, I’ll accept” —
+                  never what she is booked for). She keeps the meeting she already said yes to, then the one that has been at
+                  that time longest — so somebody moving their meeting onto hers does not take her. Back to back is fine. A recurring
                   meeting gets one answer for the series, and a clashing occurrence its own no. She does not go to a meeting she
                   declined; it shows on the client’s page as declined, with why, and is accepted again by itself if it moves to a
                   free time or the other meeting goes. A no somebody else gave on her calendar stands. Invites she does not go to
@@ -678,7 +687,7 @@ export default function Docs() {
                 <FileRow path="lib/meeting.ts">
                   The meeting: briefing, status, transcript, actions, pacing, cooldowns. Old stored shapes are migrated on read.
                 </FileRow>
-                <FileRow path="lib/store.ts">Where it is kept: Redis, MongoDB, or a local file in development.</FileRow>
+                <FileRow path="lib/store.ts">Where it is kept — one meeting per seat, each under its own key and lock: Redis, MongoDB, or a local file in development.</FileRow>
                 <FileRow path="lib/ava.ts">Her own Google access, stored encrypted on the server; the runner-key check.</FileRow>
                 <FileRow path="lib/workspace.ts">Calendar (her invites), Gmail (drafts and sending), Drive (search and sharing).</FileRow>
                 <FileRow path="lib/email.ts">The designed notes email — the client’s name in a client’s meeting, NDI’s otherwise — built from the plain-text notes.</FileRow>
@@ -686,17 +695,18 @@ export default function Docs() {
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
                 <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams.</FileRow>
                 <FileRow path="app/api/ava/dispatch">
-                  Where her runner asks “have I been sent anywhere?” — each meeting sent from a client’s page is taken once, with
-                  its client.
+                  Where her runner asks “have I been sent anywhere?”, saying which of its seats are free — each meeting sent from a
+                  client’s page is taken once, with its client, its seat and its id.
                 </FileRow>
                 <FileRow path="app/api/portal/live · components/portal/Live.tsx">
                   Her meeting on the client’s page, only when it is theirs: sending her now (“Need Ava now?” — a link and a line,
-                  for that client, refused while she is in any meeting), what she hears and the actions as they come, telling her
+                  for that client, into a free seat; refused while she is in one of theirs, or every seat is taken), what she
+                  hears and the actions as they come, telling her
                   something mid-meeting, ending it — after which the site writes the notes as her runner would.
                 </FileRow>
                 <FileRow path="components/ControlRoom.tsx">
                   The page at <C>/</C>: the three things she depends on, each said in words — her Google account, her server (and
-                  what she is doing now, with the client’s page to follow it on), the meeting storage.
+                  what she is doing now in each seat, with each client’s page to follow it on), the meeting storage.
                 </FileRow>
                 <FileRow path="proxy.ts · lib/auth.ts · lib/seal.ts" tag={<Chip tone="emerald">the door</Chip>}>
                   Nothing opens without signing in — or the runner’s key — except signing in and these docs. Who is an admin, who
@@ -718,8 +728,9 @@ export default function Docs() {
                   meetings.
                 </FileRow>
                 <FileRow path="lib/rsvp.ts">
-                  Her answers to invites: one meeting at a time — which she keeps, what she says yes and no to, and the reply
-                  Google emails the host. Planned on every read of her calendar, sent only from her runner’s.
+                  Her answers to invites: one meeting at a time for each client, as many at once as she has seats — which she
+                  keeps, what she says yes and no to, and the reply Google emails the host. Planned on every read of her
+                  calendar, sent only from her runner’s.
                 </FileRow>
                 <FileRow path="lib/history.ts · components/portal/MeetingRecord.tsx">
                   Each meeting’s history, append-only — kept by whatever did it (the calendar read, the page, her runner), never
@@ -759,11 +770,17 @@ export default function Docs() {
             <Section id="runner" eyebrow="Modules" title="The runner — bot/" intro="One Docker container: Node, Google Chrome, a virtual screen, and a web view of that screen.">
               <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-5">
                 <FileRow path="watch.mjs" tag={<Chip tone="sky">entry point</Chip>}>
-                  On duty: checks she is signed in, reads her calendar every minute and asks every 10 seconds whether a client’s page sent her somewhere, attends
-                  each meeting — with the app’s briefing for its client — and remembers which ones she already did.
+                  On duty: checks she is signed in — in every seat — reads her calendar every minute and asks every 10 seconds
+                  whether a client’s page sent her somewhere, attends each meeting in a free seat, side by side with the others —
+                  with the app’s briefing for its client — and remembers which ones she already did. Each seat’s log lines are
+                  marked with it ([1], [2]); <C>/data/.seats.json</C> says which seats are in a meeting now.
+                </FileRow>
+                <FileRow path="lib/account.mjs">
+                  Her Google sign-in, per seat: checked by opening her account page; signed in by hand through the screen for seat
+                  1, and the other seats’ profiles copied from it — again if Google signs one out.
                 </FileRow>
                 <FileRow path="lib/meet.mjs">
-                  One meeting, on either platform: brief the app, open Chrome, join, turn captions on, open GPT-Live when somebody
+                  One meeting in one seat, on either platform: start it on the app, open that seat’s Chrome, join, turn captions on, open GPT-Live when somebody
                   is there and close it when nobody is, follow the spoken language, notice the end, leave, send the notes. For a
                   client’s meeting her backend also gets <C>search_knowledge</C>.
                 </FileRow>
@@ -874,6 +891,7 @@ export default function Docs() {
                       [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],
                       [<C key="v">ELEVENLABS_API_KEY · _VOICE_ID</C>, "Her voice"],
                       [<C key="v">AVA_JOIN_EARLY_SECONDS</C>, "How early she opens a meeting (60)"],
+                      [<C key="v">AVA_SEATS</C>, "How many meetings at once — different clients’ (2). They share the server: 1 on a small one"],
                       [<C key="v">AVA_HUSH_SECONDS · AVA_SILENT_LEAVE_MINUTES</C>, "Silence: GPT-Live closes after (180 s), she leaves after (10 min)"],
                       [<C key="v">ANAM_SESSION_SECONDS</C>, "Your Anam plan’s session limit (180)"],
                       [<C key="v">AVA_FACE_IDLE_SECONDS</C>, "Quiet seconds before the face rests (45)"],
@@ -956,7 +974,7 @@ notify pgrst, 'reload schema';
                   ["OpenAI GPT-Live", "Only while somebody else is there; needs a paid OpenAI account (not the free tier)", "$0.05 a minute, billed by the second, plus its backend model by the token for what it hands over"],
                   ["Meet captions", "As good as Google’s captions; one language at a time, following what is spoken", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
-                  ["Runner", "One meeting at a time", "A small VPS, about €5–25 a month"],
+                  ["Runner", "One meeting per seat (AVA_SEATS, two by default); the seats share its processors and memory", "A small VPS, about €5–25 a month; bigger for two meetings at once"],
                   ["Clients’ documents", "4 MB per upload (Vercel’s limit; bigger through Google Drive), 400,000 characters each, 300 per client", "Embeddings $0.02 per million tokens — a 100-page document is about a tenth of a cent; its summary a cent or two"],
                   ["Supabase", "The team’s shared “pocs” project: its plan’s limits, shared with the other projects", "On the team’s plan"],
                 ]}

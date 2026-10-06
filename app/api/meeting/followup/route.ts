@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { GoogleClient } from "@/lib/google";
-import { getMeeting, speakers, updateMeeting, type Meeting } from "@/lib/meeting";
+import { getMeeting, seatOf, speakers, updateMeeting, type Meeting, type Where } from "@/lib/meeting";
 import { renderNotesEmail } from "@/lib/email";
 import { botName, composeFollowUp, extractNotes, mergeActions } from "@/lib/moderator";
 import { readSession, sessionCookie, type Session } from "@/lib/session";
-import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
+import { avaEmail, avaGoogle, isRunner, runnerAt } from "@/lib/ava";
 import { createDraft, sendEmail } from "@/lib/workspace";
 import { hasDb } from "@/lib/db";
 import { record } from "@/lib/history";
@@ -24,15 +24,25 @@ export const maxDuration = 60;
  */
 export async function POST(request: Request) {
   let mode: "compose" | "draft" | "send" = "compose";
+  /** From a page: which of her seats. Her runner says it in its headers, with the meeting. */
+  let seat: unknown;
   try {
-    ({ mode = "compose" } = await request.json());
+    ({ mode = "compose", seat } = await request.json());
   } catch {
     /* body is optional */
   }
 
   const session = await readSession();
   const runner = isRunner(request);
-  let meeting = await getMeeting();
+  const at: Where = runner ? runnerAt(request) : { seat: seatOf(seat) };
+  let meeting = await getMeeting(at);
+  if (at.id && meeting.id !== at.id) return NextResponse.json({ error: "That meeting is over.", gone: true }, { status: 409 });
+  // Every write below is to this meeting: if its seat moves on to another while the notes
+  // are being written, they stay this one's — written up, filed and sent as this one.
+  const same: Where = { seat: at.seat, id: meeting.id };
+  const keep = (updated: Meeting) => {
+    if (updated.id === meeting.id) meeting = updated;
+  };
 
   /**
    * Once per meeting.
@@ -67,10 +77,12 @@ export async function POST(request: Request) {
   if (tail.length) {
     try {
       const { actions } = await extractNotes(meeting, tail);
-      meeting = await updateMeeting((m) => {
-        m.actions.push(...mergeActions(m.actions, actions));
-        m.notedUpTo = m.transcript.length;
-      });
+      keep(
+        await updateMeeting((m) => {
+          m.actions.push(...mergeActions(m.actions, actions));
+          m.notedUpTo = m.transcript.length;
+        }, same),
+      );
     } catch {
       /* the write-up still has the full transcript to work from */
     }
@@ -87,10 +99,13 @@ export async function POST(request: Request) {
   }
 
   const to = meeting.recipients.join(", ");
-  meeting = await updateMeeting((m) => {
-    m.summary = written.summary;
-    m.followUp = { to, subject: written.subject, body: written.body };
-  });
+  keep(
+    await updateMeeting((m) => {
+      m.summary = written.summary;
+      m.followUp = { to, subject: written.subject, body: written.body };
+    }, same),
+  );
+  meeting = { ...meeting, summary: written.summary, followUp: { to, subject: written.subject, body: written.body } };
   // A client's meeting: the notes are filed with it, for the client to read back.
   const filed = meeting.client?.meetingId && hasDb() ? meeting.client.meetingId : null;
   if (filed) {
@@ -128,7 +143,7 @@ export async function POST(request: Request) {
       const sentAt = Date.now();
       await updateMeeting((m) => {
         if (m.followUp) m.followUp.sentAt = sentAt;
-      });
+      }, same);
       if (filed) {
         await saveNotes(filed, { sentAt }).catch(() => undefined);
         await record({ meeting_id: filed, kind: "notes", by: "Ava", detail: { subject: written.subject, to, sent: true } });
@@ -148,7 +163,7 @@ export async function POST(request: Request) {
 
 /** Re-send after you have edited the text by hand. */
 export async function PUT(request: Request) {
-  let body: { mode?: "draft" | "send"; to?: string; subject?: string; body?: string };
+  let body: { mode?: "draft" | "send"; to?: string; subject?: string; body?: string; seat?: string };
   try {
     body = await request.json();
   } catch {
@@ -156,7 +171,7 @@ export async function PUT(request: Request) {
   }
 
   const session = await readSession();
-  const meeting = await getMeeting();
+  const meeting = await getMeeting({ seat: seatOf(body.seat) });
   const { google } = await mailbox(session, isRunner(request), meeting.attendedBy === "self");
   if (!google) return NextResponse.json({ error: "Google is not connected." }, { status: 401 });
 
@@ -173,9 +188,12 @@ export async function PUT(request: Request) {
         ? { sent: true, ...(await sendEmail(google, to, subject, text, designed(meeting, subject, text))) }
         : { sent: false, ...(await createDraft(google, to, subject, text, designed(meeting, subject, text))) };
 
-    await updateMeeting((m) => {
-      m.followUp = { to, subject, body: text, sentAt: body.mode === "send" ? Date.now() : m.followUp?.sentAt };
-    });
+    await updateMeeting(
+      (m) => {
+        m.followUp = { to, subject, body: text, sentAt: body.mode === "send" ? Date.now() : m.followUp?.sentAt };
+      },
+      { seat: seatOf(body.seat), id: meeting.id },
+    );
 
     const response = NextResponse.json(result);
     if (google.dirty && google.current.email === session.google?.email) response.cookies.set(sessionCookie({ ...session, google: google.current }));

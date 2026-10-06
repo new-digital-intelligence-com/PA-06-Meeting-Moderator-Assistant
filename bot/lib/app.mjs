@@ -3,12 +3,18 @@
 // was the body. Swapping one body for another did not require a second brain.
 import fs from "node:fs";
 import path from "node:path";
-import { STATE_DIR, requireApp } from "./config.mjs";
+import { SEATS, STATE_DIR, requireApp } from "./config.mjs";
 
 /** Her screen's address when it is online: the app links each client's log there (logs.mjs). */
 const SCREEN = process.env.AVA_SCREEN_HOST?.trim();
 
-async function call(method, path, body) {
+/** How many of her seats are ready — said with every call; set once each is signed in (watch.mjs). */
+let seatsReady = 1;
+export const setSeatsReady = (n) => {
+  seatsReady = Math.max(1, Math.min(SEATS, n));
+};
+
+async function call(method, path, body, extra = {}) {
   const res = await fetch(`${requireApp()}${path}`, {
     method,
     // Her key: the server only lets the runner read her calendar, send mail as her or
@@ -16,7 +22,9 @@ async function call(method, path, body) {
     headers: {
       "Content-Type": "application/json",
       "x-ava-key": process.env.AVA_RUNNER_KEY || "",
+      "x-ava-seats": String(seatsReady),
       ...(SCREEN ? { "x-ava-screen": `https://${SCREEN}` } : {}),
+      ...extra,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     // A request that never comes back would freeze her mid-meeting.
@@ -33,11 +41,42 @@ async function call(method, path, body) {
   return data;
 }
 
-/** Brief her: what the meeting is about, who is in it, where it is. */
-export const brief = (meeting) => call("PUT", "/api/meeting", meeting);
-
-/** Tell the server she is in the room, as herself — not a rehearsal, not a Recall bot. */
-export const attend = (from) => call("POST", "/api/meeting/control", { command: "attend", from });
+/**
+ * The site, for one of her seats: every call names the seat, and — once known — the
+ * meeting there (`meetingId`), so a call from a meeting she has left never lands in the
+ * next one that seat holds. The meeting is known when a calendar meeting is started
+ * (`start`) or a page's is taken (`claimDispatch`).
+ */
+export function seat(n) {
+  const api = {
+    seat: String(n),
+    meetingId: null,
+    headers: () => ({ "x-ava-seat": String(n), ...(api.meetingId ? { "x-ava-meeting": api.meetingId } : {}) }),
+    /** A calendar meeting, new in this seat: what it is about, who is in it, where it is. */
+    start: async (meeting) => {
+      const { meeting: started } = await call("PUT", "/api/meeting", { ...meeting, start: true }, { "x-ava-seat": String(n) });
+      api.meetingId = started.id;
+      return started;
+    },
+    /** A change to the meeting she is in — the language they turned out to speak. */
+    update: (patch) => call("PUT", "/api/meeting", patch, api.headers()),
+    /** Tell the server she is in the room, as herself — not a rehearsal, not a Recall bot. */
+    attend: (from) => call("POST", "/api/meeting/control", { command: "attend", from }, api.headers()),
+    /** Hand over what was heard; get back what to say, if anything. */
+    tick: (body) => call("POST", "/api/moderator/tick", body, api.headers()),
+    /** GPT-Live handed something over that needs her memory of the meeting: Claude answers. */
+    ask: (asked) => call("POST", "/api/moderator/ask", { asked }, api.headers()),
+    /** The meeting so far — transcript, actions, notes — for GPT-Live's OpenAI backend; `note` adds an action first. */
+    record: (note) => call("POST", "/api/moderator/record", note ? { note } : {}, api.headers()),
+    /** Passages from the client's documents about `query` — for the meeting she is in, decided by the app. */
+    knowledge: async (query) => (await call("POST", "/api/moderator/knowledge", { query }, api.headers())).results,
+    /** She has left the call — and why, for the meeting's history. */
+    stop: (reason) => call("POST", "/api/meeting/control", { command: "stop", ...(reason ? { reason } : {}) }, api.headers()),
+    /** Write the notes and send them to the guests. */
+    sendNotes: () => call("POST", "/api/meeting/followup", { mode: "send" }, api.headers()),
+  };
+  return api;
+}
 
 /**
  * Her Anam accounts, in order: ANAM_API_KEY, then ANAM_API_KEY_2 … _5. Free plans run out
@@ -162,29 +201,12 @@ async function avatarFor(account, first) {
 }
 
 /**
- * Has a client's page sent her somewhere? Takes it if so — once — and returns the
- * meeting `{ meetingUrl, title, context, recipients, platform }`, or null.
+ * Has a client's page sent her somewhere, in one of the seats she has `free`? Takes it if
+ * so — once — and returns the meeting `{ id, seat, meetingUrl, title, context, recipients,
+ * platform, client }`, or null.
  */
-export const claimDispatch = async (earlySeconds) =>
-  (await call("POST", "/api/ava/dispatch", { earlySeconds })).meeting ?? null;
-
-/** Hand over what was heard; get back what to say, if anything. */
-export const tick = (body) => call("POST", "/api/moderator/tick", body);
-
-/** GPT-Live handed something over that needs her memory of the meeting: Claude answers. */
-export const ask = (asked) => call("POST", "/api/moderator/ask", { asked });
-
-/** The meeting so far — transcript, actions, notes — for GPT-Live's OpenAI backend; `note` adds an action first. */
-export const record = (note) => call("POST", "/api/moderator/record", note ? { note } : {});
-
-/** Passages from the client's documents about `query` — for the meeting she is in, decided by the app. */
-export const knowledge = async (query) => (await call("POST", "/api/moderator/knowledge", { query })).results;
-
-/** She has left the call — and why, for the meeting's history. */
-export const stop = (reason) => call("POST", "/api/meeting/control", { command: "stop", ...(reason ? { reason } : {}) });
-
-/** Write the notes and send them to the guests. */
-export const sendNotes = () => call("POST", "/api/meeting/followup", { mode: "send" });
+export const claimDispatch = async (earlySeconds, free = ["1"]) =>
+  (await call("POST", "/api/ava/dispatch", { earlySeconds, free })).meeting ?? null;
 
 /** Whether the server is set up to send mail on her behalf with nobody's browser open. */
 export const session = () => call("GET", "/api/session");

@@ -13,7 +13,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
   { label: "Anam", value: "Two accounts, each with its own Elena: the second takes over when the first runs out of minutes (checked from her server)", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
-  { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on", tone: "emerald" },
+  { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
 ];
@@ -28,6 +28,20 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-06",
+    title: "Two clients' meetings at once",
+    points: [
+      "She has seats: two meetings at the same time, each in its own Chrome on her server (AVA_SEATS, two by default) — one client's and another's side by side. Still one at a time for each client: never two of one client's.",
+      "On the site each seat keeps its own meeting. Every call from her server names its seat and the meeting in it — what she hears, her searches through documents, the notes — so nothing of one client's meeting reaches another's, and a late call from a meeting she has left is refused instead of landing in the next one.",
+      "“Need Ava now?” puts her in a free seat; it is refused while she is in one of that client's meetings, or every seat is taken. A calendar meeting takes a free seat too, and waits for one when both are taken.",
+      "Her answers to invites follow the seats: two clients' meetings at the same time get a yes each; a third at once, or a second of the same client, gets a no — the note says only that she is booked then.",
+      "Seat 2's Chrome is a copy of seat 1's, made when her server starts: she is signed in once. The control room shows each seat, with each client's meeting to follow.",
+      "Both seats share the server's processors and memory: until it is bigger, two meetings at once halve what each gets.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-10-06",
     title: "She answers every invite: one meeting at a time",
