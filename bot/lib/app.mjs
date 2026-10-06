@@ -180,8 +180,8 @@ export const record = (note) => call("POST", "/api/moderator/record", note ? { n
 /** Passages from the client's documents about `query` — for the meeting she is in, decided by the app. */
 export const knowledge = async (query) => (await call("POST", "/api/moderator/knowledge", { query })).results;
 
-/** She has left the call. */
-export const stop = () => call("POST", "/api/meeting/control", { command: "stop" });
+/** She has left the call — and why, for the meeting's history. */
+export const stop = (reason) => call("POST", "/api/meeting/control", { command: "stop", ...(reason ? { reason } : {}) });
 
 /** Write the notes and send them to the guests. */
 export const sendNotes = () => call("POST", "/api/meeting/followup", { mode: "send" });

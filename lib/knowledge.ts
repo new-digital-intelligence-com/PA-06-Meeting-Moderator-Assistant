@@ -11,6 +11,7 @@ import { avaGoogle } from "./ava";
 import { asKnowledge, count, db, rows, type Client, type Knowledge, type MeetingRow } from "./db";
 import { OFFICE, clientFolder, googleText, meetingFolder, ocr, remove, upload } from "./drive";
 import { embed, vectorLiteral } from "./embed";
+import { record } from "./history";
 import { MAX_CHARS, extension, isImage, isPdf, isText, linkText, pdfText, plainText } from "./extract";
 import { summarise } from "./prepare";
 
@@ -60,6 +61,20 @@ export async function addDocument(input: {
   source: Source;
   by: string;
 }): Promise<Knowledge> {
+  const added = await addAndRead(input);
+  // A meeting's own document goes in that meeting's history.
+  if (input.meeting) {
+    await record({
+      meeting_id: input.meeting.id,
+      kind: "document_added",
+      by: input.by,
+      detail: { title: added.title, kind: added.kind, read: added.status === "ready", error: added.error },
+    });
+  }
+  return added;
+}
+
+async function addAndRead(input: { client: Client; meeting?: MeetingRow | null; source: Source; by: string }): Promise<Knowledge> {
   const { client, meeting, source, by } = input;
   const n = await count(db().from("knowledge").select("id", { count: "exact", head: true }).eq("client_id", client.id));
   if (n >= MAX_DOCUMENTS) throw new Error(`${client.name} already has ${MAX_DOCUMENTS} documents. Remove some first.`);

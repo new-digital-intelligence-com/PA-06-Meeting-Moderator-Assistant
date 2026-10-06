@@ -30,6 +30,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "Every meeting has a history; past meetings show all of it",
+    points: [
+      "Each meeting keeps what happened to it, and who did it, in a new table (meeting_history): from her calendar, what the host changed — invited, moved, renamed, description, guests, link, called off, back on; from the page, each saved preparation (the version itself and which parts changed), documents added or removed, “Need Ava now?”, ending it; from her, her brief, joining, leaving and why, the notes written and emailed.",
+      "A past meeting opens on three parts: Notes — the summary, the actions, the email as it went out, to whom and when; Preparation — what she was given, her brief, the meeting's documents; History — the timeline. Meetings that were called off are listed apart, struck through, with their history. An upcoming meeting's preparation shows its history so far.",
+      "Meetings from before the table only have what their row says (on her calendar, prepared, briefed, ended, emailed), and say so.",
+      "The ended-meeting panel no longer promises notes that will not come: nothing heard says so; notes that failed say so after three minutes.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-06",
     title: "A meeting is ended only on purpose, and it says by whom",
     points: [
       "Since the control room lost “Send”, the meeting route took any command it did not know for “stop” — so a page left open from before (its Send button sends “dispatch”) could end the meeting she was in. Grand Automative's 20:30 meeting was ended 45 seconds after she joined, from the site. Now only “stop” stops; anything else is refused and she stays.",

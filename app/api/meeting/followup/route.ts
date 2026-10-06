@@ -7,6 +7,7 @@ import { readSession, sessionCookie, type Session } from "@/lib/session";
 import { avaEmail, avaGoogle, isRunner } from "@/lib/ava";
 import { createDraft, sendEmail } from "@/lib/workspace";
 import { hasDb } from "@/lib/db";
+import { record } from "@/lib/history";
 import { saveNotes } from "@/lib/schedule";
 
 export const runtime = "nodejs";
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
     await saveNotes(filed, { to, subject: written.subject, body: written.body, summary: written.summary, actions: meeting.actions }).catch((e) =>
       console.warn("[followup] notes not filed:", e instanceof Error ? e.message : e),
     );
+    await record({ meeting_id: filed, kind: "notes", by: "Ava", detail: { subject: written.subject, actions: meeting.actions.length, sent: false } });
   }
 
   if (mode === "compose") {
@@ -127,7 +129,10 @@ export async function POST(request: Request) {
       await updateMeeting((m) => {
         if (m.followUp) m.followUp.sentAt = sentAt;
       });
-      if (filed) await saveNotes(filed, { sentAt }).catch(() => undefined);
+      if (filed) {
+        await saveNotes(filed, { sentAt }).catch(() => undefined);
+        await record({ meeting_id: filed, kind: "notes", by: "Ava", detail: { subject: written.subject, to, sent: true } });
+      }
     }
 
     const response = NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: result });

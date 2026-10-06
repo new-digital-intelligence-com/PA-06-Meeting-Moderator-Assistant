@@ -27,6 +27,9 @@ export type Live = {
   summary: string | null;
   /** Ended from the site before she left by herself: who pressed it. */
   endedBy: string | null;
+  endedAt: number | null;
+  /** Lines heard: none means no notes are coming. */
+  heard: number;
 };
 
 /** Her meeting for this client, if any, and whether she is free to be sent. */
@@ -81,12 +84,13 @@ export function LivePanel({ live, at, q, onChanged }: { live: Live; at: number; 
   const heard = useRef<HTMLDivElement>(null);
   const lastLine = live.transcript.at(-1)?.id;
 
-  // The clock runs between looks at the server.
+  // The clock runs between looks at the server — in the meeting, and while the notes are awaited.
+  const ticking = live.phase === "live" || (live.phase === "ended" && !live.summary);
   useEffect(() => {
-    if (live.phase !== "live") return;
+    if (!ticking) return;
     const id = window.setInterval(() => setTick(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [live.phase]);
+  }, [ticking]);
 
   // New lines scroll into view — unless you scrolled up to read.
   useEffect(() => {
@@ -186,6 +190,10 @@ export function LivePanel({ live, at, q, onChanged }: { live: Live; at: number; 
                   </p>
                   <p className="leading-relaxed">{live.summary}</p>
                 </>
+              ) : live.heard === 0 ? (
+                <p>Nothing was said while she was there, so there are no notes. Its history is under Past meetings.</p>
+              ) : live.endedAt && tick - live.endedAt > 3 * 60_000 ? (
+                <p>The notes could not be written. What she heard is kept — ask NDI to write them up.</p>
               ) : (
                 <p>She is writing the notes — they appear under Past meetings in a minute.</p>
               )}

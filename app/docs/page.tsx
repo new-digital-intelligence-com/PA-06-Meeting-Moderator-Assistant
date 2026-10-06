@@ -585,6 +585,13 @@ export default function Docs() {
                   admins see it under “Invites she skipped”, with one click to make that company a client. NDI is a client too,
                   so NDI’s own meetings go on as before.
                 </Card>
+                <Card tone="amber" title="Every meeting’s history">
+                  Kept per meeting, in <C>meeting_history</C>, and shown on the client’s page: the host’s changes read from her
+                  calendar — invited, moved, renamed, description, guests, link, called off, back — each saved preparation (the
+                  version itself, and what changed), documents added or removed, her brief, her joining and leaving (and why),
+                  who ended it from the site, and the notes written and emailed. A past meeting opens on its notes — the email as
+                  it went out — its preparation and its history; called-off meetings are listed apart.
+                </Card>
                 <Card tone="emerald" title="Who sees what">
                   Admins — every address on <C>ADMIN_DOMAIN</C> — see every client, the control room and these docs. A client’s
                   people see their own page and nothing else; every request is checked against who may sign in for whom, at
@@ -677,7 +684,11 @@ export default function Docs() {
                 <FileRow path="lib/clients.ts">Clients, who can use her for them, matching an organiser to a client, the invitation email.</FileRow>
                 <FileRow path="lib/schedule.ts">
                   Her calendar copied into Postgres, each meeting given to a client by its organiser — or skipped. Preparation and
-                  notes are kept on those rows.
+                  notes are kept on those rows; what the host changed since the last read goes into the meeting’s history.
+                </FileRow>
+                <FileRow path="lib/history.ts · components/portal/MeetingRecord.tsx">
+                  Each meeting’s history, append-only — kept by whatever did it (the calendar read, the page, her runner), never
+                  in its way — and the record a meeting opens on: notes, preparation, history.
                 </FileRow>
                 <FileRow path="lib/knowledge.ts · extract.ts · drive.ts · embed.ts">
                   Adding a document: keep it in Drive, read its text, cut it into overlapping passages, embed them, store them;
@@ -773,7 +784,7 @@ export default function Docs() {
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],
-                  [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting; save its preparation and write her brief"],
+                  [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting with its documents and history; save its preparation (kept as a version) and write her brief"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
                   [<C key="r">POST /api/meeting/start</C>, "Admins", "Send the Recall bot (older path, nothing calls it)"],
                 ]}
@@ -878,6 +889,9 @@ Project Settings → Data API → Exposed schemas → add pa-06
 # a schema made before logos needs only its logo line:
 alter table "pa-06".clients add column if not exists logo_url text;
 notify pgrst, 'reload schema';
+
+# and, made before meetings had a history, its table — the
+# meeting_history lines of db/schema.sql, then the same notify
 
 # then, signed in as anybody @new-digital-intelligence.com:
 /admin                         # set up a client, invite their people

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner } from "@/lib/ava";
+import { record } from "@/lib/history";
 import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -18,8 +19,10 @@ export async function POST(request: Request) {
   let command: Command;
   /** attend: where she came from — her calendar, or sent from a client's page. */
   let from: "calendar" | "dispatch" | undefined;
+  /** stop, from her runner: why she left — everybody had gone, the meeting ended… */
+  let reason: string | undefined;
   try {
-    ({ command, from } = await request.json());
+    ({ command, from, reason } = await request.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
@@ -62,6 +65,9 @@ export async function POST(request: Request) {
       m.followUp = undefined;
       m.endedBy = undefined;
     });
+    if (meeting.client?.meetingId) {
+      await record({ meeting_id: meeting.client.meetingId, kind: "joined", by: "Ava", detail: { from: meeting.attendedFrom ?? "calendar" } });
+    }
     return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
   }
 
@@ -118,7 +124,8 @@ export async function POST(request: Request) {
       m.transcript = [];
       m.actions = [];
       m.notedUpTo = 0;
-    } else {
+    } else if (m.status !== "ended") {
+      // Ended once: a second stop does not move when, or by whom.
       m.status = "ended";
       m.endedAt = Date.now();
       m.endedBy = endedBy;
@@ -127,6 +134,15 @@ export async function POST(request: Request) {
     // Not yet picked up by her runner: now it never will be.
     m.dispatch = undefined;
   });
+  // Once per meeting: her runner closes it again after leaving, when the site ended it first.
+  if (!wasRehearsal && !wasBooking && before.status !== "ended" && before.client?.meetingId) {
+    await record({
+      meeting_id: before.client.meetingId,
+      kind: "ended",
+      by: endedBy,
+      detail: reason ? { reason: String(reason).slice(0, 300) } : {},
+    });
+  }
 
   return NextResponse.json({
     meeting,

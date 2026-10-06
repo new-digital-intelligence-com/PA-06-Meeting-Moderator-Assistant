@@ -13,6 +13,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { asMeeting, count, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
 import { getClient } from "./clients";
+import { record } from "./history";
 import { FAST, WRITER } from "./moderator";
 
 const anthropic = () => new Anthropic();
@@ -195,11 +196,13 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
     1500,
   );
   const now = isoNow();
-  return asMeeting(
+  const written = asMeeting(
     await rows<Record<string, unknown>>(
       db().from("meetings").update({ brief, brief_at: now, updated_at: now }).eq("id", meetingId).select("*").single(),
     ),
   );
+  await record({ meeting_id: meetingId, kind: "brief", by: "Ava", detail: { words: brief.split(/\s+/).filter(Boolean).length } });
+  return written;
 }
 
 /**

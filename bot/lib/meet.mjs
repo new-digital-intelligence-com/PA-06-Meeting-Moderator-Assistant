@@ -509,10 +509,13 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
   let faceState = MODE === "avatar" ? "down" : "voice";
   /** Ended from the site, which then writes and sends the notes itself. */
   let endedElsewhere = false;
+  /** Why she left, for the meeting's history. */
+  let leftBecause = null;
 
   const finish = async (why) => {
     if (over) return;
     over = true;
+    leftBecause = why;
     log(`  leaving: ${why}`);
     rt?.close();
     rt = null;
@@ -972,7 +975,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
     return;
   }
 
-  await app.stop().catch((e) => log(`  could not close the meeting: ${e.message}`));
+  await app.stop(leftBecause).catch((e) => log(`  could not close the meeting: ${e.message}`));
   if (nobodyCame) {
     log("  nobody came — no notes to send");
     return;

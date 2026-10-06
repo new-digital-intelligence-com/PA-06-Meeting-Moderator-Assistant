@@ -9,6 +9,7 @@
 import { asMeeting, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
 import { allClients, clientPeople, matchClient } from "./clients";
 import type { GoogleClient } from "./google";
+import { changeKey, record, type HistoryEntry, type HistoryKind } from "./history";
 import { redisOrMongoKey } from "./store";
 import { avaInvites, type Invite } from "./workspace";
 
@@ -44,19 +45,84 @@ export async function syncCalendar(google: GoogleClient): Promise<{ invites: Inv
     };
   });
 
+  // What the table says about the same stretch of time, to tell what the host changed.
+  const known = await rows<Raw[]>(
+    db()
+      .from("meetings")
+      .select("id, event_id, title, starts_at, ends_at, meeting_url, guests, description, status, organizer")
+      .gte("starts_at", new Date(Date.now() - 3 * 60 * 60_000).toISOString())
+      .lte("starts_at", new Date(Date.now() + (DAYS_AHEAD + 1) * 24 * 60 * 60_000).toISOString())
+      .not("event_id", "like", "now-%"),
+  ).catch(() => null);
+
+  const complete = invites.length < PAGE;
   const synced = await rows<Raw[]>(
     db().rpc("sync_meetings", {
       p_rows: found,
       p_seen: invites.map((i) => i.id),
       // Gone from her calendar — cancelled, or she was taken off the invite. Only when the
       // whole window was read: a cut-off list would cancel what it did not reach.
-      p_complete: invites.length < PAGE,
+      p_complete: complete,
       p_days: DAYS_AHEAD,
     }),
   );
   const meetings = synced.map(asMeeting).sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime());
+  if (known) await record(calendarChanges(known, found, meetings, complete));
   await redisOrMongoKey(SYNCED).write(String(Date.now()));
   return { invites, meetings, clients };
+}
+
+type Found = { event_id: string; title: string; starts_at: string; ends_at: string; meeting_url: string; organizer: string | null; guests: { email: string; name?: string }[]; description: string; status: string };
+
+/**
+ * What changed on her calendar since it was last read, meeting by meeting — the host's
+ * doing: new invites, moved, renamed, a new description, guests or link, called off, back.
+ */
+function calendarChanges(known: Raw[], found: Found[], synced: MeetingRow[], complete: boolean): HistoryEntry[] {
+  const before = new Map(known.map((k) => [String(k.event_id), k]));
+  const ids = new Map(synced.map((m) => [m.event_id, m.id]));
+  const seen = new Set(found.map((f) => f.event_id));
+  const time = (v: unknown) => (v ? new Date(String(v)).getTime() : 0);
+  const emails = (g: unknown) => new Set(((g as { email: string }[] | null) ?? []).map((x) => x.email.toLowerCase()));
+  const out: HistoryEntry[] = [];
+  const add = (eventId: string, meetingId: string | undefined, kind: HistoryKind, by: string | null, detail: Record<string, unknown>) => {
+    if (meetingId) out.push({ meeting_id: meetingId, kind, by, detail, key: changeKey(eventId, kind, detail) });
+  };
+
+  for (const f of found) {
+    const old = before.get(f.event_id);
+    const id = ids.get(f.event_id) ?? (old?.id as string | undefined);
+    const by = f.organizer;
+    if (!old) {
+      add(f.event_id, id, "invited", by, { title: f.title, starts_at: f.starts_at, ends_at: f.ends_at, guests: f.guests.length });
+      continue;
+    }
+    if (old.status === "cancelled" && f.status !== "cancelled") add(f.event_id, id, "restored", by, { starts_at: f.starts_at });
+    if (time(old.starts_at) !== time(f.starts_at) || time(old.ends_at) !== time(f.ends_at)) {
+      add(f.event_id, id, "moved", by, { from: { starts_at: old.starts_at, ends_at: old.ends_at }, to: { starts_at: f.starts_at, ends_at: f.ends_at } });
+    }
+    if (String(old.title ?? "") !== f.title) add(f.event_id, id, "renamed", by, { from: old.title, to: f.title });
+    if (String(old.description ?? "") !== f.description) {
+      add(f.event_id, id, "described", by, { from: String(old.description ?? "").slice(0, 4000), to: f.description.slice(0, 4000) });
+    }
+    if (String(old.meeting_url ?? "") !== (f.meeting_url ?? "")) add(f.event_id, id, "link", by, { from: old.meeting_url, to: f.meeting_url });
+    const was = emails(old.guests);
+    const now = emails(f.guests);
+    const added = [...now].filter((e) => !was.has(e));
+    const removed = [...was].filter((e) => !now.has(e));
+    if (added.length || removed.length) add(f.event_id, id, "guests", by, { added, removed });
+  }
+
+  // Called off: gone from a calendar read in full — deleted by the host, or she was taken off it.
+  if (complete) {
+    for (const old of known) {
+      const eventId = String(old.event_id);
+      if (seen.has(eventId) || !["upcoming", "skipped", "paused"].includes(String(old.status))) continue;
+      if (time(old.starts_at) <= Date.now()) continue;
+      add(eventId, old.id as string, "cancelled", (old.organizer as string | null) ?? null, { title: old.title, starts_at: old.starts_at });
+    }
+  }
+  return out;
 }
 
 /** The same, unless it was done in the last `maxAgeMs` — pages call this; her runner syncs every minute anyway. */
@@ -68,14 +134,16 @@ export async function syncIfStale(google: GoogleClient, maxAgeMs = 60_000): Prom
 
 /* ---------------------------------------------------------------- queries */
 
-/** A client's meetings: the next two weeks, and the last thirty days. */
+/**
+ * A client's meetings: the next two weeks, and the last thirty days — the called-off ones
+ * too, which the page lists apart, with their history.
+ */
 export async function clientMeetings(clientId: string): Promise<MeetingRow[]> {
   const found = await rows<Raw[]>(
     db()
       .from("meetings")
       .select("*")
       .eq("client_id", clientId)
-      .neq("status", "cancelled")
       .gt("starts_at", daysAgo(30))
       .order("starts_at"),
   );

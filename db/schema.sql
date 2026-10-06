@@ -80,6 +80,21 @@ create table if not exists "pa-06".meetings (
 );
 create index if not exists meetings_client_starts on "pa-06".meetings (client_id, starts_at);
 
+-- Everything that happened to a meeting, and who did it: the host's changes on the
+-- calendar (moved, renamed, guests, description, link, cancelled), each version of the
+-- preparation, the documents, her brief, her walking in and out, the notes. Append-only.
+create table if not exists "pa-06".meeting_history (
+  id bigserial primary key,
+  meeting_id uuid not null references "pa-06".meetings(id) on delete cascade,
+  at timestamptz not null default now(),
+  kind text not null,
+  by text,
+  detail jsonb not null default '{}',
+  -- The same calendar change read twice at once is kept once.
+  key text unique
+);
+create index if not exists meeting_history_meeting on "pa-06".meeting_history (meeting_id, at);
+
 -- A document, a link or a Drive file a client gave Ava. meeting_id set: only for that
 -- meeting's preparation.
 create table if not exists "pa-06".knowledge (
@@ -208,6 +223,7 @@ alter table "pa-06".meetings enable row level security;
 alter table "pa-06".knowledge enable row level security;
 alter table "pa-06".chunks enable row level security;
 alter table "pa-06".login_tokens enable row level security;
+alter table "pa-06".meeting_history enable row level security;
 
 revoke all on schema "pa-06" from public;
 revoke execute on all functions in schema "pa-06" from public;

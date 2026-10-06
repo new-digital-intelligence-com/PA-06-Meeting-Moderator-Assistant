@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { appOrigin, handle, HttpError, portalClient } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
 import { count, db } from "@/lib/db";
+import { record } from "@/lib/history";
 import { detectLang } from "@/lib/languages";
 import { elapsed, getMeeting, inMeeting, newId, startMeeting, updateMeeting, type Meeting } from "@/lib/meeting";
 import { platformOf } from "@/lib/platform";
@@ -43,6 +44,9 @@ function view(m: Meeting, now: number) {
     notes: m.followUp ? { subject: m.followUp.subject, to: m.followUp.to, sentAt: m.followUp.sentAt ?? null } : null,
     summary: m.summary ?? null,
     endedBy: m.status === "ended" ? (m.endedBy ?? null) : null,
+    endedAt: m.endedAt ?? null,
+    // Whether there is anything to write up: nothing heard, no notes coming.
+    heard: m.transcript.length,
   };
 }
 
@@ -102,6 +106,7 @@ export async function POST(request: Request) {
         await dropNowMeeting(clientId, row.id).catch(() => undefined);
         throw new HttpError(409, "Ava is in another meeting right now. Try again when it ends.");
       }
+      await record({ meeting_id: row.id, kind: "sent_now", by: user.email, detail: { url, note } });
       return NextResponse.json({ live: view(started, now) });
     }
 
@@ -128,6 +133,7 @@ export async function POST(request: Request) {
       // Set inside the update; typed wide, or the compiler takes them for null forever.
       let outcome = null as "ended" | "cancelled" | null;
       let nowMeetingId = null as string | null;
+      let endedMeetingId = null as string | null;
       await updateMeeting((m) => {
         if (!theirs(m, clientId, now) || m.status === "ended") return;
         if (m.status === "joining" && !m.dispatch?.takenAt) {
@@ -139,6 +145,7 @@ export async function POST(request: Request) {
           return;
         }
         outcome = "ended";
+        endedMeetingId = m.client?.meetingId ?? null;
         m.status = "ended";
         m.endedAt = now;
         m.endedBy = user.email;
@@ -149,6 +156,7 @@ export async function POST(request: Request) {
         if (nowMeetingId) await dropNowMeeting(clientId, nowMeetingId).catch(() => undefined);
         return NextResponse.json({ cancelled: true });
       }
+      if (endedMeetingId) await record({ meeting_id: endedMeetingId, kind: "ended", by: user.email, detail: { from: "page" } });
       // Her server sees the meeting ended and leaves without writing the notes: the site does,
       // through the same route her server uses — after answering, so the page is not kept waiting.
       const origin = appOrigin(request);

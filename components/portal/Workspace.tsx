@@ -11,6 +11,7 @@ import { pickFromDrive, type PickerConfig } from "./drivePicker";
 import { BoltIcon, BookIcon, CalendarIcon, DriveIcon, FileIcon, LinkIcon, SettingsIcon, SparkIcon, TextIcon, UploadIcon } from "./icons";
 import { LivePanel, SendNow, useLive } from "./Live";
 import Markdown from "./Markdown";
+import MeetingRecord from "./MeetingRecord";
 import Setup from "./Setup";
 import { Chip, CompanyLogo, IconTile, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
@@ -136,8 +137,11 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   }
 
   const { client } = data;
-  const upcoming = data.meetings.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() > now);
-  const past = data.meetings.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() <= now).reverse();
+  // Called off — deleted by the host, or she was taken off the invite — kept apart, with their history.
+  const cancelled = data.meetings.filter((m) => m.status === "cancelled").reverse();
+  const held = data.meetings.filter((m) => m.status !== "cancelled");
+  const upcoming = held.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() > now);
+  const past = held.filter((m) => new Date(m.ends_at ?? m.starts_at).getTime() <= now).reverse();
   const ava = data.ava ?? "Ava";
   const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
   const paused = client.status !== "active";
@@ -272,7 +276,17 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
             <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Past 30 days</h3>
             <ul className="space-y-2">
               {past.map((m) => (
-                <PastMeeting key={m.id} meeting={m} />
+                <PastMeeting key={m.id} meeting={m} q={q} />
+              ))}
+            </ul>
+          </div>
+        )}
+        {cancelled.length > 0 && (
+          <div className="mt-6 space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Called off — deleted or taken off her calendar</h3>
+            <ul className="space-y-2">
+              {cancelled.map((m) => (
+                <PastMeeting key={m.id} meeting={m} q={q} />
               ))}
             </ul>
           </div>
@@ -1077,31 +1091,48 @@ function PrepPanel({
           <Markdown>{brief.text}</Markdown>
         </div>
       )}
+
+      {/* What happened to it so far: the host's changes, each saved preparation, documents. */}
+      <details className="group rounded-xl border border-slate-200 bg-white">
+        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-700">
+          History of this meeting
+          <span className="text-xs text-slate-400 transition group-open:rotate-180" aria-hidden="true">
+            ▾
+          </span>
+        </summary>
+        <MeetingRecord meetingId={meeting.id} q={q} views={["history"]} />
+      </details>
     </div>
   );
 }
 
-function PastMeeting({ meeting }: { meeting: Meeting }) {
+/**
+ * A meeting that is over — or was called off: open it for its notes (the email as it
+ * went out), the preparation she had, and its whole history.
+ */
+function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
   const [open, setOpen] = useState(false);
   const notes = meeting.notes;
+  const cancelled = meeting.status === "cancelled";
   return (
-    <li className={`rounded-xl border bg-slate-50/70 transition ${open ? "border-slate-300 bg-white" : "border-slate-200/70 hover:border-slate-300 hover:bg-white"}`}>
-      <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left disabled:cursor-default" onClick={() => setOpen((v) => !v)} disabled={!notes}>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{meeting.title}</span>
+    <li className={`overflow-hidden rounded-xl border transition ${open ? "border-slate-300 bg-slate-50/40 shadow-sm" : "border-slate-200/70 bg-slate-50/70 hover:border-slate-300 hover:bg-white"}`}>
+      <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={`min-w-0 flex-1 truncate text-sm font-medium ${cancelled ? "text-slate-400 line-through decoration-slate-300" : "text-slate-700"}`}>{meeting.title}</span>
         <span className="text-xs text-slate-400">{when(meeting.starts_at)}</span>
-        {notes ? <Chip tone="good">Notes</Chip> : <Chip>No notes</Chip>}
+        {cancelled ? (
+          <Chip tone="bad">Called off</Chip>
+        ) : notes?.sentAt ? (
+          <Chip tone="good">Notes emailed</Chip>
+        ) : notes ? (
+          <Chip tone="info">Notes</Chip>
+        ) : (
+          <Chip>No notes</Chip>
+        )}
+        <span className={`text-xs text-slate-400 transition ${open ? "rotate-180" : ""}`} aria-hidden="true">
+          ▾
+        </span>
       </button>
-      {open && notes && (
-        <div className="space-y-3 border-t border-slate-100 p-4 text-sm text-slate-600">
-          {notes.summary && <p className="whitespace-pre-wrap leading-relaxed">{notes.summary}</p>}
-          {notes.body && (
-            <details>
-              <summary className="cursor-pointer text-slate-500 hover:text-slate-600">The email she sent{notes.to ? ` to ${notes.to}` : ""}</summary>
-              <p className="mt-2 whitespace-pre-wrap">{notes.body}</p>
-            </details>
-          )}
-        </div>
-      )}
+      {open && <MeetingRecord meetingId={meeting.id} q={q} views={cancelled ? ["history", "prep"] : ["notes", "prep", "history"]} />}
     </li>
   );
 }
