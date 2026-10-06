@@ -28,7 +28,8 @@ type Skipped = { id: string; title: string; starts_at: string; organizer: string
 
 const EMPTY = { name: "", domains: "", addresses: "", contacts: "", invite: true };
 
-export default function Clients({ ava }: { ava: string | null }) {
+/** `screen`: her server's address, where each client's log is (bot/logs.mjs) — null until her runner has said it. */
+export default function Clients({ ava, screen = null }: { ava: string | null; screen?: string | null }) {
   const [data, setData] = useState<{ clients: ClientSummary[]; skipped: Skipped[] } | null>(null);
   const [version, setVersion] = useState(0);
   const [form, setForm] = useState(EMPTY);
@@ -72,7 +73,7 @@ export default function Clients({ ava }: { ava: string | null }) {
       if (logo) {
         const upload = new FormData();
         upload.set("file", logo.file);
-        await api(`/api/admin/clients/${r.client.id}/logo`, { method: "POST", body: upload }).catch((e) => {
+        await api(`/api/portal/logo?client=${r.client.id}`, { method: "POST", body: upload }).catch((e) => {
           logoError = e instanceof Error ? e.message : "not saved";
         });
       }
@@ -248,22 +249,33 @@ export default function Clients({ ava }: { ava: string | null }) {
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
             {data.clients.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/admin/clients/${c.id}`}
-                  className="block h-full rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300 hover:bg-slate-50"
-                >
-                  <div className="mb-2 flex items-center gap-3">
-                    <CompanyLogo name={c.name} url={c.logo_url} size={40} decorative />
-                    <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
-                    <Chip tone={c.status === "active" ? "good" : "warn"}>{c.status === "active" ? "Active" : "Paused"}</Chip>
-                  </div>
-                  <p className="truncate text-xs text-slate-500">{[...c.domains.map((d) => `@${d}`), ...c.addresses].join(", ") || "No domain yet"}</p>
-                  <p className="mt-3 text-xs text-slate-500">
-                    {c.members} can use her · {c.documents} documents · {c.upcoming} upcoming
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">Last meeting: {c.last_meeting ? ago(c.last_meeting) : "none yet"}</p>
-                </Link>
+              // The whole card opens the client (its name's link is stretched over it); her log is a link of its own on top.
+              <li key={c.id} className="relative h-full rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300">
+                <div className="mb-2 flex items-center gap-3">
+                  <CompanyLogo name={c.name} url={c.logo_url} size={40} decorative />
+                  <Link href={`/admin/clients/${c.id}`} className="min-w-0 flex-1 truncate font-medium after:absolute after:inset-0 after:rounded-xl">
+                    {c.name}
+                  </Link>
+                  <Chip tone={c.status === "active" ? "good" : "warn"}>{c.status === "active" ? "Active" : "Paused"}</Chip>
+                </div>
+                <p className="truncate text-xs text-slate-500">{[...c.domains.map((d) => `@${d}`), ...c.addresses].join(", ") || "No domain yet"}</p>
+                <p className="mt-3 text-xs text-slate-500">
+                  {c.members} can use her · {c.documents} documents · {c.upcoming} upcoming
+                </p>
+                <div className="mt-1 flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-400">Last meeting: {c.last_meeting ? ago(c.last_meeting) : "none yet"}</p>
+                  {screen && (
+                    <a
+                      href={`${screen}/logs/client/${c.id}?name=${encodeURIComponent(c.name)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Everything she printed in ${c.name}'s meetings, live, on her server`}
+                      className="relative z-10 shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Her log ↗
+                    </a>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

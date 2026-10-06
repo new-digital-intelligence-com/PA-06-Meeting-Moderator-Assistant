@@ -1,40 +1,21 @@
 import { NextResponse } from "next/server";
-import { handle, HttpError, requireAdmin } from "@/lib/auth";
-import { deleteClient, getClient, listMembers, updateClient } from "@/lib/clients";
+import { handle, HttpError, isUuid, requireAdmin } from "@/lib/auth";
+import { deleteClient } from "@/lib/clients";
 
 export const runtime = "nodejs";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  return handle(async () => {
-    await requireAdmin();
-    const { id } = await params;
-    const client = await getClient(id);
-    if (!client) throw new HttpError(404, "No such client.");
-    return NextResponse.json({ client, members: await listMembers(id) });
-  });
-}
-
-/** Name, domains, exact addresses, instructions, or active/paused. */
-export async function PATCH(request: Request, { params }: Params) {
-  return handle(async () => {
-    await requireAdmin();
-    const { id } = await params;
-    const patch = (await request.json().catch(() => ({}))) as Parameters<typeof updateClient>[1];
-    try {
-      return NextResponse.json({ client: await updateClient(id, patch) });
-    } catch (e) {
-      throw new HttpError(400, e instanceof Error ? e.message : "Could not save.");
-    }
-  });
-}
-
-/** Removes the client with its members, documents and meetings. Their files in Drive stay. */
+/**
+ * Removes the client with its people, documents and meetings — NDI only. Their files in
+ * Drive stay. Everything else about a client is set from its Setup (/api/portal/setup,
+ * /people and /logo), where NDI can do more than the client's own people.
+ */
 export async function DELETE(_request: Request, { params }: Params) {
   return handle(async () => {
     await requireAdmin();
     const { id } = await params;
+    if (!isUuid(id)) throw new HttpError(400, "Which client?");
     await deleteClient(id);
     return NextResponse.json({ ok: true });
   });

@@ -550,7 +550,7 @@ export default function Docs() {
                   },
                   {
                     title: "The client signs in (/client)",
-                    body: "With Google, or a link by email that works once for 15 minutes — no passwords. Only the addresses NDI added get in; nobody signs up.",
+                    body: "With Google, or a link by email that works once for 15 minutes — no passwords. Only the addresses added for them get in; nobody signs up. Their Setup tab is theirs to run: their logo and name, and who can use her — adding people (Ava emails them the invitation) or removing them.",
                     tone: "sky",
                   },
                   {
@@ -589,7 +589,10 @@ export default function Docs() {
                   Admins — every address on <C>ADMIN_DOMAIN</C> — see every client, the control room and these docs. A client’s
                   people see their own page and nothing else; every request is checked against who may sign in for whom, at
                   that moment, so removing somebody locks them out at once. A paused client’s meetings are skipped and nobody
-                  signs in for it; its preparation is kept.
+                  signs in for it; its preparation is kept. A client adds and removes its own people (never itself), but which
+                  invites are theirs — domains and addresses — pausing and removing a client are NDI’s: otherwise a client could
+                  claim another company’s domain and see its meetings. For the same reason nobody can be added who is another
+                  client’s — by their people, domain or addresses — nor anyone at NDI.
                 </Card>
                 <Card tone="violet" title="Reading documents">
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
@@ -675,8 +678,10 @@ export default function Docs() {
                 </FileRow>
                 <FileRow path="lib/prepare.ts">Her homework: each document’s summary, the client’s digest, a meeting’s brief, the briefing she is handed.</FileRow>
                 <FileRow path="components/portal · components/admin">
-                  The client’s page, in three tabs — meetings and preparation, what she knows (documents, links and text they write, each with a preview, and her digest shown as a README), how she works for you — and NDI’s (clients, who signs
-                  in, invites she skipped). Admins open any client’s page as the client sees it.
+                  The client’s page, in tabs — meetings and preparation, what she knows (documents, links and text they write, each
+                  with a preview, and her digest shown as a README), how she works for you, and Setup (portal/Setup.tsx: logo, name,
+                  who can use her) — and NDI’s (the clients, each card with her log; invites she skipped). Admins open any client’s
+                  page as the client sees it, under the whole of the same Setup.
                 </FileRow>
                 <FileRow path="lib/cloudinary.ts">
                   Clients’ logos: up to Cloudinary (signed with the secret, on the server), one per client under a fixed name so a
@@ -755,7 +760,8 @@ export default function Docs() {
                   [<C key="r">POST /api/anam</C>, "Runner", "A short-lived token for her face"],
                   [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
-                  [<C key="r">/api/admin/clients · [id] · [id]/members</C>, "Admins", "List, create, edit, pause or delete clients; who can use her; invitations"],
+                  [<C key="r">/api/admin/clients · [id]</C>, "Admins", "List clients and create one (with its invitations); delete one"],
+                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; who can use her — add, invite again, remove; which invites are theirs and pausing, NDI only"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],
@@ -846,7 +852,7 @@ https://<AVA_SCREEN_HOST>                    her screen
 https://<AVA_SCREEN_HOST>/logs               her log, live, as it is written
 https://<AVA_SCREEN_HOST>/logs/clients       the clients she has a log for
 https://<AVA_SCREEN_HOST>/logs/client/<id>   one client's meetings alone
-                                  # linked from the client's page in /admin
+                                  # linked from each client's card in /admin
 
 # no password with AVA_BASIC_AUTH set; otherwise user ava,
 # password AVA_ADMIN_PASSWORD

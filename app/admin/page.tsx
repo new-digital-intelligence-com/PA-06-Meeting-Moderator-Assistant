@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import TopBar from "@/components/TopBar";
 import Clients from "@/components/admin/Clients";
+import { avaScreen } from "@/lib/ava";
 import { requireAdminPage } from "@/lib/auth";
 import { hasDb } from "@/lib/db";
 
@@ -13,7 +14,8 @@ export default async function AdminPage() {
     <>
       <TopBar user={user} active="clients" />
       {hasDb() ? (
-        <Clients ava={process.env.AVA_EMAIL || null} />
+        // Her screen's address, as her runner reports it: each client's card links to their log there.
+        <Clients ava={process.env.AVA_EMAIL || null} screen={await avaScreen()} />
       ) : (
         <main className="mx-auto w-full max-w-3xl p-6">
           <p className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">

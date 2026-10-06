@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { handle, HttpError, isUuid, requireAdmin } from "@/lib/auth";
+import { handle, HttpError, portalClient } from "@/lib/auth";
 import { getClient, setLogo } from "@/lib/clients";
 import { hasCloudinary, removeLogo, uploadLogo } from "@/lib/cloudinary";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
-
-type Params = { params: Promise<{ id: string }> };
 
 /** A logo is small: this leaves room under Vercel's 4.5 MB for a request. */
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -20,11 +18,10 @@ function imageType(data: Buffer): string | null {
   return null;
 }
 
-async function clientOf(params: Params["params"]) {
-  await requireAdmin();
-  const { id } = await params;
-  if (!isUuid(id)) throw new HttpError(400, "Which client?");
-  const client = await getClient(id);
+/** The client this request is for — the member's own, or ?client=<id> for NDI. */
+async function clientOf(request: Request) {
+  const { clientId } = await portalClient(request);
+  const client = await getClient(clientId);
   if (!client) throw new HttpError(404, "No such client.");
   // Before db/schema.sql's logo line has run, the column is not there to keep it in.
   if (!("logo_url" in client)) {
@@ -33,10 +30,10 @@ async function clientOf(params: Params["params"]) {
   return client;
 }
 
-/** Sets a client's logo (a form with `file`), replacing the one before. Admins only. */
-export async function POST(request: Request, { params }: Params) {
+/** Sets the client's logo (a form with `file`), replacing the one before — by their own people or by NDI. */
+export async function POST(request: Request) {
   return handle(async () => {
-    const client = await clientOf(params);
+    const client = await clientOf(request);
     if (!hasCloudinary()) {
       throw new HttpError(503, "Cloudinary is not set up on this site: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET.");
     }
@@ -47,15 +44,17 @@ export async function POST(request: Request, { params }: Params) {
     const type = imageType(data);
     if (!type) throw new HttpError(415, "A logo has to be a PNG, JPG, WebP or GIF image.");
     const url = await uploadLogo(client.id, { data, type });
-    return NextResponse.json({ client: await setLogo(client.id, url) });
+    const saved = await setLogo(client.id, url);
+    return NextResponse.json({ logo_url: saved.logo_url ?? null });
   });
 }
 
-/** Takes a client's logo away: from Cloudinary, then from the client. */
-export async function DELETE(_request: Request, { params }: Params) {
+/** Takes the client's logo away: from Cloudinary, then from the client. */
+export async function DELETE(request: Request) {
   return handle(async () => {
-    const client = await clientOf(params);
+    const client = await clientOf(request);
     if (client.logo_url && hasCloudinary()) await removeLogo(client.id);
-    return NextResponse.json({ client: await setLogo(client.id, null) });
+    await setLogo(client.id, null);
+    return NextResponse.json({ logo_url: null });
   });
 }

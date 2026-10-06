@@ -9,6 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
 import Markdown from "./Markdown";
+import Setup from "./Setup";
 import { Chip, CompanyLogo, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
 type Doc = {
@@ -129,6 +130,8 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
     { id: "meetings", label: "Meetings", count: upcoming.length },
     { id: "knowledge", label: "What she knows", count: data.documents.filter((d) => d.status === "ready").length },
     { id: "instructions", label: "How she works for you" },
+    // Their logo, name and who can use her. NDI has the whole setup above this page instead.
+    ...(clientId ? [] : [{ id: "setup" as const, label: "Setup" }]),
   ];
 
   return (
@@ -258,13 +261,19 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
       <div role="tabpanel" hidden={tab !== "instructions"}>
         <Instructions key={client.id} initial={client.instructions} name={client.name} q={q} onError={setError} />
       </div>
+
+      {!clientId && (
+        <div role="tabpanel" hidden={tab !== "setup"}>
+          <Setup onChanged={reload} />
+        </div>
+      )}
     </div>
     </PickerContext.Provider>
   );
 }
 
-/** The page's three parts, one shown at a time. */
-type Tab = "meetings" | "knowledge" | "instructions";
+/** The page's parts, one shown at a time: three, and Setup for the client's own people. */
+type Tab = "meetings" | "knowledge" | "instructions" | "setup";
 
 /* ------------------------------------------------------------ documents */
 

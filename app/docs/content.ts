@@ -30,6 +30,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "Clients run their own setup",
+    points: [
+      "A client's page has a fourth tab, Setup: their logo, their company name, and who can use her — add someone (Ava emails the invitation), send it again, or remove someone (never yourself). Which meetings are theirs (domains, addresses) shows there to read: NDI changes it.",
+      "NDI's page for a client shows the same Setup, all of it: also the domains and addresses, pausing her, and deleting the client. One set of routes serves both — /api/portal/setup, /people and /logo — checking who asks; the admin-only members and logo routes are gone.",
+      "Nobody can be added who already belongs to another client — by its people, its domain or one of its addresses — since their meetings would move; a client is not told whose. Nor anyone at NDI, who sees every client anyway.",
+      "Her log for each client is now on the client's card in the list (“Her log ↗”), no longer at the top of their setup.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-06",
     title: "“Who can use her”: their invites count too",
     points: [
       "On a client's setup, “Who can open their page” is now “Who can use her”: the people listed sign in to the client's page as before and — new — Ava joins the meetings they invite her to, from whatever address. A founder on Gmail now needs only that one box.",
