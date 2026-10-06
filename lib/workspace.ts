@@ -209,7 +209,8 @@ export async function upcomingMeetings(google: GoogleClient, timezone: string) {
 type InviteEvent = Omit<CalendarEvent, "attendees"> & {
   status?: string;
   end?: { dateTime?: string; date?: string };
-  organizer?: { email?: string; displayName?: string };
+  organizer?: { email?: string; displayName?: string; self?: boolean };
+  recurringEventId?: string;
   attendees?: {
     email: string;
     displayName?: string;
@@ -235,16 +236,27 @@ export type Invite = {
   guests: { email: string; name?: string }[];
 };
 
+/** An invite as her calendar has it, with her own answer to it — see lib/rsvp.ts. */
+export type CalendarInvite = Invite & {
+  /** Her answer on her calendar: needsAction, accepted, tentative or declined. */
+  response: string;
+  /** Her address as the invite has it — what she answers as. Null when she cannot answer (not on its guest list herself). */
+  self: string | null;
+  /** For one occurrence of a recurring meeting: the series, which she answers as a whole. */
+  series: string | null;
+};
+
 /**
  * The meetings she has been invited to, soonest first.
  *
  * Singled out from `upcomingMeetings` because her needs differ: recurring meetings must
  * be expanded into their actual occurrences (singleEvents does this — parsing recurrence
- * rules by hand is how a weekly stand-up gets silently skipped), meetings she declined
- * must be left alone, and the guest list must exclude meeting rooms and herself or the
- * notes get mailed to a conference room.
+ * rules by hand is how a weekly stand-up gets silently skipped), and the guest list must
+ * exclude meeting rooms and herself or the notes get mailed to a conference room. The ones
+ * she declined are listed too, with her answer: she does not go to them, and they are not
+ * called off — whoever reads this leaves them out.
  */
-export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResults = 25): Promise<Invite[]> {
+export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResults = 25): Promise<CalendarInvite[]> {
   const now = Date.now();
   const params = new URLSearchParams({
     // A little into the past, so a meeting that started a few minutes ago — or that
@@ -263,10 +275,14 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResul
     .filter((e) => e.status !== "cancelled")
     // All-day entries are not meetings she can walk into.
     .filter((e) => Boolean(e.start?.dateTime))
-    .filter((e) => (e.attendees ?? []).find((a) => a.self)?.responseStatus !== "declined")
     .map((e) => {
       const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri;
+      const me = (e.attendees ?? []).find((a) => a.self);
       return {
+        // Her own meeting needs no answer; one she is not on the guest list of herself cannot have one.
+        response: e.organizer?.self ? "accepted" : (me?.responseStatus ?? "needsAction"),
+        self: e.organizer?.self ? null : (me?.email ?? null),
+        series: e.recurringEventId ?? null,
         id: e.id,
         title: e.summary ?? "Meeting",
         start: Date.parse(e.start!.dateTime!),

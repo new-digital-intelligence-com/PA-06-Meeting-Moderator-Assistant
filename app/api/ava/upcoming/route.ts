@@ -19,7 +19,8 @@ const BRIEF_AHEAD_MS = 45 * 60_000;
  *
  * With clients set up (Supabase), only her clients' meetings come back, each with
  * the client and the briefing she is to walk in with; invites from anybody else are left
- * for admins to see. Without, every invite, as before.
+ * for admins to see. Without, every invite, as before. Either way not the ones she
+ * declined — and this read is the one that sends her answers to invites (lib/rsvp.ts).
  */
 export async function GET(request: Request) {
   if (!isRunner(request)) {
@@ -36,9 +37,12 @@ export async function GET(request: Request) {
   }
   const hours = Number(new URL(request.url).searchParams.get("hours") || 12);
   try {
-    if (!hasDb()) return NextResponse.json({ account: await avaEmail(), invites: await avaInvites(google, hours) });
+    if (!hasDb()) {
+      const invites = (await avaInvites(google, hours)).filter((i) => i.response !== "declined");
+      return NextResponse.json({ account: await avaEmail(), invites });
+    }
 
-    const { meetings, clients } = await syncCalendar(google);
+    const { meetings, clients } = await syncCalendar(google, { answer: true });
     const byId = new Map(clients.map((c) => [c.id, c]));
     const horizon = Date.now() + hours * 60 * 60_000;
     const due = meetings.filter(

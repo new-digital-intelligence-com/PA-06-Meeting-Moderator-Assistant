@@ -957,6 +957,8 @@ function UpcomingMeeting({
   // From a minute before it starts, her preparation is what she walks in with: read, not edited.
   const locked = now >= prepLocksAt(meeting.starts_at);
   const started = now >= start.getTime();
+  // She said no to the host: it clashes with a meeting she already has (lib/rsvp.ts).
+  const declined = meeting.status === "declined";
   return (
     <li
       className={`rounded-2xl border bg-white transition duration-150 ${
@@ -978,10 +980,16 @@ function UpcomingMeeting({
             {meeting.organizer && <> · organised by {meeting.organizer_name || meeting.organizer}</>}
             {meeting.guests?.length > 0 && <> · {meeting.guests.length} invited</>}
           </p>
+          {declined && (
+            <p className="mt-1 text-xs text-rose-700">
+              She told the host no: she is already booked for another meeting at that time, and she can only be in one meeting at
+              a time. Move it to a time she is free and she accepts.
+            </p>
+          )}
         </div>
         {started ? <Chip tone="info">Happening now</Chip> : locked ? <Chip tone="info">Starting now</Chip> : soon && <Chip tone="info">Starting soon</Chip>}
-        <Chip tone={state.tone}>{state.label}</Chip>
-        <button className={open || locked || state.tone === "good" ? quiet : primary} onClick={() => setOpen((v) => !v)}>
+        {declined ? <Chip tone="bad">Declined — booked then</Chip> : <Chip tone={state.tone}>{state.label}</Chip>}
+        <button className={open || locked || declined || state.tone === "good" ? quiet : primary} onClick={() => setOpen((v) => !v)}>
           {open ? "Close" : locked ? (
             <>
               <LockIcon className="size-4" />
@@ -1315,6 +1323,7 @@ function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
   const [open, setOpen] = useState(false);
   const notes = meeting.notes;
   const cancelled = meeting.status === "cancelled";
+  const declined = meeting.status === "declined";
   return (
     <li className={`overflow-hidden rounded-xl border transition ${open ? "border-slate-300 bg-slate-50/40 shadow-sm" : "border-slate-200/70 bg-slate-50/70 hover:border-slate-300 hover:bg-white"}`}>
       <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
@@ -1322,6 +1331,8 @@ function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
         <span className="text-xs text-slate-400">{when(meeting.starts_at)}</span>
         {cancelled ? (
           <Chip tone="bad">Called off</Chip>
+        ) : declined ? (
+          <Chip tone="bad">Declined — she was booked</Chip>
         ) : notes?.sentAt ? (
           <Chip tone="good">Notes emailed</Chip>
         ) : notes ? (
@@ -1333,7 +1344,7 @@ function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
           ▾
         </span>
       </button>
-      {open && <MeetingRecord meetingId={meeting.id} q={q} views={cancelled ? ["history", "prep"] : ["notes", "prep", "history"]} />}
+      {open && <MeetingRecord meetingId={meeting.id} q={q} views={cancelled || declined ? ["history", "prep"] : ["notes", "prep", "history"]} />}
     </li>
   );
 }

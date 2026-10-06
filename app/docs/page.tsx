@@ -578,6 +578,17 @@ export default function Docs() {
               />
 
               <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Card tone="rose" title="One meeting at a time">
+                  She is one person on one server, whichever client a meeting is for. Every invite from an active client gets an
+                  answer within a minute, which Google emails to the host: yes — or no when it overlaps a meeting she already has,
+                  with the reason in the reply (“already booked for another meeting at that time … if it moves to a time I’m
+                  free, I’ll accept”). She keeps the meeting she already said yes to, then the one that has been at that time
+                  longest — so somebody moving their meeting onto hers does not take her. Back to back is fine. A recurring
+                  meeting gets one answer for the series, and a clashing occurrence its own no. She does not go to a meeting she
+                  declined; it shows on the client’s page as declined, with why, and is accepted again by itself if it moves to a
+                  free time or the other meeting goes. A no somebody else gave on her calendar stands. Invites she does not go to
+                  anyway — nobody’s client, a paused client’s, no Google Meet link — are not answered.
+                </Card>
                 <Card tone="sky" title="Whose meeting is it?">
                   The organiser’s: one of the client’s exact addresses first, then the people who can use her, then the company
                   domain — never a guest, or anybody could put one client’s employee on an invite and have her for free. Someone
@@ -706,6 +717,10 @@ export default function Docs() {
                   meeting’s preparation is locked (with <C>lib/prepLock.ts</C>, which the page shares), and a client’s earlier
                   meetings.
                 </FileRow>
+                <FileRow path="lib/rsvp.ts">
+                  Her answers to invites: one meeting at a time — which she keeps, what she says yes and no to, and the reply
+                  Google emails the host. Planned on every read of her calendar, sent only from her runner’s.
+                </FileRow>
                 <FileRow path="lib/history.ts · components/portal/MeetingRecord.tsx">
                   Each meeting’s history, append-only — kept by whatever did it (the calendar read, the page, her runner), never
                   in its way — and the record a meeting opens on: notes, preparation, history.
@@ -789,7 +804,7 @@ export default function Docs() {
                   [<C key="r">POST /api/moderator/ask</C>, "Runner (key)", "GPT-Live hands over a question; Claude answers from the meeting"],
                   [<C key="r">POST /api/moderator/record</C>, "Runner (key)", "The meeting so far for GPT-Live’s OpenAI backend; note an action"],
                   [<C key="r">POST /api/moderator/knowledge</C>, "Runner (key)", "search_knowledge: passages from the documents of the client whose meeting she is in"],
-                  [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her clients’ invites for the next hours, each with its briefing (every invite when no clients are set up)"],
+                  [<C key="r">GET /api/ava/upcoming</C>, "Runner (key)", "Her clients’ invites for the next hours, each with its briefing (every invite when no clients are set up) — not the ones she declined; this read also sends her answers to invites"],
                   [<C key="r">POST /api/ava/dispatch</C>, "Runner (key)", "Take a meeting sent from a client’s page, with its client"],
                   [<C key="r">GET · PUT · DELETE /api/meeting</C>, "Runner, admins", "Read, brief or clear the meeting"],
                   [<C key="r">POST /api/meeting/control</C>, "Runner, admins", "attend · stop · rehearse"],

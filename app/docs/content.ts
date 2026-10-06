@@ -30,6 +30,19 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "She answers every invite: one meeting at a time",
+    points: [
+      "Every invite from an active client is answered within a minute, and Google emails the answer to the host: yes — or no when it overlaps a meeting she already has, with the reason in the reply: she is already booked at that time, can only be in one meeting at a time, and accepts if it moves to a time she is free.",
+      "Across all clients: she is one person on one server. She keeps the meeting she already said yes to, then the one that has been at that time longest, so a host who moves their meeting onto hers does not take her. Back-to-back meetings are fine.",
+      "A recurring meeting gets one answer for the whole series, not one email per occurrence; an occurrence that clashes gets its own no.",
+      "She does not go to a meeting she declined. The client's page shows it as declined, with why, and its history keeps her answers and the note the host read. If it moves to a free time, or the other meeting goes, she accepts it by herself.",
+      "Invites she does not go to anyway — nobody's client, a paused client's, without a Google Meet link — are not answered.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-06",
     title: "In a client's meeting she is theirs; preparation locks a minute before",
     points: [
       "In a client's meeting she introduces herself as the client's meeting assistant — “Hi, I'm Ava, Grand Automative's meeting assistant” — not NDI's, and never mentions NDI: in her hello, what she types in the Teams chat, her answers, and the notes email, which carries the client's name where NDI's was. NDI's own meetings are unchanged.",

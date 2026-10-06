@@ -101,7 +101,11 @@ function NotesView({ record }: { record: Kept }) {
   if (!notes?.summary && !notes?.body) {
     return (
       <p className="text-sm text-slate-500">
-        {record.meeting.status === "cancelled" ? "It was called off — no notes." : "No notes for this meeting: nothing was written up — usually because nothing was said while she was there."}
+        {record.meeting.status === "cancelled"
+          ? "It was called off — no notes."
+          : record.meeting.status === "declined"
+            ? "She declined it — she was already booked for another meeting at that time — so there are no notes."
+            : "No notes for this meeting: nothing was written up — usually because nothing was said while she was there."}
       </p>
     );
   }
@@ -284,6 +288,14 @@ function describe(item: HistoryItem): { text: string; more?: React.ReactNode; to
       return {
         text: d.sent ? `Notes emailed${d.to ? ` to ${String(d.to)}` : ""}` : "Notes written",
         tone: "bg-emerald-500",
+      };
+    case "accepted":
+      return { text: d.series ? "Ava accepted the invite — the whole series" : "Ava accepted the invite", tone: "bg-emerald-500" };
+    case "declined":
+      return {
+        text: `Ava declined${d.series ? " the series" : " the invite"} — already booked for another meeting at that time`,
+        tone: "bg-rose-500",
+        more: d.note ? <p className="text-xs leading-relaxed text-slate-600">What the host read: “{String(d.note)}”</p> : undefined,
       };
     default:
       return { text: item.kind, tone: "bg-slate-400" };
