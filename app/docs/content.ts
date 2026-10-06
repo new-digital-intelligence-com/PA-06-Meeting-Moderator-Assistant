@@ -30,6 +30,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "Links from sites with an incomplete certificate are read",
+    points: [
+      "Some sites send their security certificate without the intermediate one — actia.com does. Browsers fetch the missing piece themselves, so the page opens; the site's reader refused it (“fetch failed”). It now does what a browser does: it reads where the site's own certificate says its issuer is published, fetches that certificate from a public address, keeps it only if it signed the site's, and reads the page with it — still checked against the usual trusted roots.",
+      "When a link cannot be read, the reason is said in words (“took too long to answer”, “could not be found”, “its certificate has expired”…) instead of “fetch failed”, and shown on the document's row, not behind a click. A link that failed has “Try again”: it is read anew and replaces the failed one.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-06",
     title: "“Need Ava now?”, her meeting on the client's page, and a new look",
     points: [
       "Every client's page has “Need Ava now?”: paste a Google Meet or Teams link, add a line about it if you like, and she goes at once — for that client, with what she knows about them, their documents searchable. No time to pick and no organiser to match: only the client's own people and NDI can press it. Refused while she is in any meeting; another client is told only that she is busy.",

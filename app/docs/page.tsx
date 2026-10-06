@@ -597,7 +597,9 @@ export default function Docs() {
                 <Card tone="violet" title="Reading documents">
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
                   Docs, Sheets and Slides as they are stored, and are read as text (every tab of a sheet). Pages are fetched with
-                  care: only public addresses, redirects checked, 8 MB at most. Up to 400,000 characters per document, 300
+                  care: only public addresses, redirects checked, 8 MB at most; a site that leaves out its intermediate
+                  certificate gets it filled in from where its own certificate says, as browsers do, and is still checked
+                  against the usual roots. A link that could not be read says why on its row, with Try again. Up to 400,000 characters per document, 300
                   documents per client. Text written on their page is taken as it is, and up to 1,500 characters is its own
                   summary. Preview shows the kept copy (Google files as a PDF, up to 4.3 MB) or the text she read, joined
                   back from its passages.

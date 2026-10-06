@@ -307,6 +307,10 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
             setData((prev) => (prev ? { ...prev, documents: prev.documents.filter((d) => d.id !== id) } : prev));
             void rebuildDigest();
           }}
+          onReplaced={(oldId, doc) => {
+            setData((prev) => (prev ? { ...prev, documents: prev.documents.map((d) => (d.id === oldId ? doc : d)) } : prev));
+            if (doc.status === "ready") void rebuildDigest();
+          }}
           onError={setError}
         />
       </Section>
@@ -617,17 +621,39 @@ function DocumentList({
   documents,
   q,
   onRemoved,
+  onReplaced,
   onError,
 }: {
   documents: Doc[];
   q: string;
   onRemoved: (id: string) => void;
+  /** A link that could not be read, read again: the new try in place of the old. */
+  onReplaced: (oldId: string, doc: Doc) => void;
   onError: (message: string) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<Doc | null>(null);
   if (!documents.length) return null;
+
+  /** The same link, read again; the failed try goes once the new one is in. */
+  async function retry(doc: Doc) {
+    setRetrying(doc.id);
+    try {
+      const { document } = await api<{ document: Doc }>(`/api/portal/knowledge${q}`, {
+        method: "POST",
+        body: JSON.stringify({ kind: "link", url: doc.source, meeting: doc.meeting_id ?? undefined }),
+      });
+      await api(`/api/portal/knowledge/${doc.id}${q}`, { method: "DELETE" }).catch(() => undefined);
+      onReplaced(doc.id, document);
+      if (document.status !== "ready") onError(`${document.title}: ${document.error ?? "could not be read"}`);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not read it again.");
+    } finally {
+      setRetrying(null);
+    }
+  }
 
   async function remove(doc: Doc) {
     if (!window.confirm(`Remove “${doc.title}”? She will no longer know what is in it.`)) return;
@@ -680,6 +706,15 @@ function DocumentList({
                 Preview
               </button>
             )}
+            {doc.status === "failed" && doc.kind === "link" && doc.source && (
+              <button
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:opacity-60"
+                onClick={() => void retry(doc)}
+                disabled={retrying !== null}
+              >
+                {retrying === doc.id ? "Reading…" : "Try again"}
+              </button>
+            )}
             <button
               className="rounded-lg px-2 py-1 text-xs text-slate-400 transition hover:bg-rose-50 hover:text-rose-700"
               onClick={() => void remove(doc)}
@@ -688,9 +723,10 @@ function DocumentList({
               {removing === doc.id ? "Removing…" : "Remove"}
             </button>
           </div>
-          {open === doc.id && (
+          {/* Why it failed, said where it failed — not behind a click. */}
+          {doc.status === "failed" && doc.error && <p className="mt-1.5 text-xs leading-5 text-rose-700 sm:ml-11">{doc.error}</p>}
+          {open === doc.id && (doc.summary || doc.source) && (
             <div className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200/70 sm:ml-11">
-              {doc.status === "failed" && <p className="text-rose-700">{doc.error}</p>}
               {doc.summary && <p className="whitespace-pre-wrap leading-relaxed">{doc.summary}</p>}
               {doc.source && /^https?:/.test(doc.source) && (
                 <a href={doc.source} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-600 hover:text-blue-700">
@@ -1009,6 +1045,10 @@ function PrepPanel({
             q={q}
             onRemoved={(id) => {
               setDocs((d) => (d ?? []).filter((x) => x.id !== id));
+              setChanged(true);
+            }}
+            onReplaced={(oldId, doc) => {
+              setDocs((d) => (d ?? []).map((x) => (x.id === oldId ? doc : x)));
               setChanged(true);
             }}
             onError={onError}
