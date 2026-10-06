@@ -752,7 +752,7 @@ export async function attend(meeting, { log = console.log, briefed = false } = {
       // the meeting after you had ended it, then sent the notes again when it finally left.
       if (out.status && out.status !== "live") {
         endedElsewhere = true;
-        await finish(`the meeting was ended from the site (${out.status})`);
+        await finish(`the meeting was ended from the site${out.endedBy ? ` by ${out.endedBy}` : ""} (${out.status})`);
         break;
       }
 

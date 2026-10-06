@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { elapsed, getMeeting, updateMeeting } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner } from "@/lib/ava";
+import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
       m.lastDecision = undefined;
       m.summary = undefined;
       m.followUp = undefined;
+      m.endedBy = undefined;
     });
     return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
   }
@@ -74,6 +76,14 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ meeting, elapsed: elapsed(meeting) });
   }
+
+  // Only "stop" from here on. Anything else — a page still open from before a command was
+  // taken away ("dispatch") — must not end the meeting she is in.
+  if (command !== "stop") {
+    return NextResponse.json({ error: `Unknown command: ${String(command)}.` }, { status: 400 });
+  }
+  // Who ended it, for her log and the client's page: her runner, or whoever is signed in.
+  const endedBy = isRunner(request) ? "her runner" : ((await readSession()).user?.email ?? "someone signed in");
 
   if (before.botId) {
     try {
@@ -111,6 +121,7 @@ export async function POST(request: Request) {
     } else {
       m.status = "ended";
       m.endedAt = Date.now();
+      m.endedBy = endedBy;
     }
     m.botId = undefined;
     // Not yet picked up by her runner: now it never will be.

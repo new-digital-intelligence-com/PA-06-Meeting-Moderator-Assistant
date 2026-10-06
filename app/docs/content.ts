@@ -30,6 +30,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-06",
+    title: "A meeting is ended only on purpose, and it says by whom",
+    points: [
+      "Since the control room lost “Send”, the meeting route took any command it did not know for “stop” — so a page left open from before (its Send button sends “dispatch”) could end the meeting she was in. Grand Automative's 20:30 meeting was ended 45 seconds after she joined, from the site. Now only “stop” stops; anything else is refused and she stays.",
+      "Ending a meeting from the site records who did it — the address signed in, or her runner — on the meeting: her log says “ended from the site by …”, and the client's page shows it under the ended meeting.",
+      "A meeting she was taken out of is not walked into again from her calendar, even if it moves: to have her back, “Need Ava now?” with its link.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-06",
     title: "Links from sites with an incomplete certificate are read",
     points: [
       "Some sites send their security certificate without the intermediate one — actia.com does. Browsers fetch the missing piece themselves, so the page opens; the site's reader refused it (“fetch failed”). It now does what a browser does: it reads where the site's own certificate says its issuer is published, fetches that certificate from a public address, keeps it only if it signed the site's, and reads the page with it — still checked against the usual trusted roots.",

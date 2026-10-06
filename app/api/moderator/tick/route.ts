@@ -330,6 +330,8 @@ export async function POST(request: Request) {
 
   const view = () => ({
     status: meeting.status,
+    // Ended from the site: by whom, for her log.
+    endedBy: meeting.status === "ended" ? (meeting.endedBy ?? null) : null,
     elapsed: elapsed(meeting),
     heard: meeting.transcript.length,
     actions: meeting.actions,

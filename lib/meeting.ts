@@ -142,6 +142,8 @@ export type Meeting = {
   attendedAt?: number;
   startedAt?: number;
   endedAt?: number;
+  /** Who ended it before she left by herself: an address from the site, or "her runner". */
+  endedBy?: string;
   transcript: TranscriptLine[];
   actions: ActionItem[];
   files: SharedFile[];
@@ -253,6 +255,7 @@ function normalise(raw: unknown): Meeting {
     botId: typeof o.botId === "string" ? o.botId : undefined,
     startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined,
     endedAt: typeof o.endedAt === "number" ? o.endedAt : undefined,
+    endedBy: typeof o.endedBy === "string" ? o.endedBy : undefined,
     transcript: arr<TranscriptLine>(o.transcript),
     actions: arr<ActionItem>(o.actions),
     files: arr<SharedFile>(o.files),

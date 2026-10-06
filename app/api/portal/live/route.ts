@@ -42,6 +42,7 @@ function view(m: Meeting, now: number) {
     actions: m.actions.map((a) => ({ id: a.id, text: a.text, owner: a.owner ?? null, due: a.due ?? null })),
     notes: m.followUp ? { subject: m.followUp.subject, to: m.followUp.to, sentAt: m.followUp.sentAt ?? null } : null,
     summary: m.summary ?? null,
+    endedBy: m.status === "ended" ? (m.endedBy ?? null) : null,
   };
 }
 
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
         outcome = "ended";
         m.status = "ended";
         m.endedAt = now;
+        m.endedBy = user.email;
         m.dispatch = undefined;
       });
       if (!outcome) throw new HttpError(409, "She is not in one of your meetings now.");

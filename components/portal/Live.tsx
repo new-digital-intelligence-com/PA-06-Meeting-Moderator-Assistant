@@ -25,6 +25,8 @@ export type Live = {
   actions: { id: string; text: string; owner: string | null; due: string | null }[];
   notes: { subject: string; to: string; sentAt: number | null } | null;
   summary: string | null;
+  /** Ended from the site before she left by herself: who pressed it. */
+  endedBy: string | null;
 };
 
 /** Her meeting for this client, if any, and whether she is free to be sent. */
@@ -176,6 +178,7 @@ export function LivePanel({ live, at, q, onChanged }: { live: Live; at: number; 
           <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
             <CheckIcon className="mt-0.5 size-5 shrink-0 text-emerald-600" />
             <div className="space-y-1">
+              {live.endedBy && <p className="text-xs text-slate-500">Ended by {live.endedBy === "her runner" ? "Ava herself" : live.endedBy}.</p>}
               {live.summary ? (
                 <>
                   <p className="font-medium text-slate-800">
