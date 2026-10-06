@@ -9,7 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
 import Markdown from "./Markdown";
-import { Chip, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
+import { Chip, CompanyLogo, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
 type Doc = {
   id: string;
@@ -57,6 +57,7 @@ type Data = {
     domains: string[];
     addresses: string[];
     status: string;
+    logo_url: string | null;
   };
   documents: Doc[];
   meetings: Meeting[];
@@ -134,14 +135,11 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
     <PickerContext.Provider value={picker}>
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-24 sm:p-6">
       <header className="space-y-2 pt-2">
-        <h1 className="text-2xl font-semibold">
-          Ava for {client.name}
-          {client.status !== "active" && (
-            <span className="ml-3 align-middle">
-              <Chip tone="warn">Paused</Chip>
-            </span>
-          )}
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <CompanyLogo name={client.name} url={client.logo_url} size={44} decorative />
+          <h1 className="text-2xl font-semibold">Ava for {client.name}</h1>
+          {client.status !== "active" && <Chip tone="warn">Paused</Chip>}
+        </div>
         <p className="max-w-3xl text-sm leading-relaxed text-slate-500">
           Invite <span className="text-slate-700">{ava}</span> to a Google Meet from your calendar, like a colleague, and she joins it.
           Here you give her what she should know about {client.name}, and prepare her for each meeting.

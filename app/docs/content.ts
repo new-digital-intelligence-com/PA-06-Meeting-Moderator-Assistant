@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-05";
+export const UPDATED = "2026-10-06";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -28,6 +28,17 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-06",
+    title: "A logo for each client",
+    points: [
+      "A client's setup in /admin has their logo at the top: Add their logo, Change logo, Remove. It is on their page beside “Ava for …” and on their card in the list of clients; a new client can be given one as they are created. Without one, their initials, on a colour of their own.",
+      "Kept on Cloudinary: sent by the server, signed with CLOUDINARY_API_SECRET (with CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY, or the one line CLOUDINARY_URL), under pa-06/clients/<client id> — a new logo replaces the old, and deleting a client takes theirs down. The pages ask Cloudinary for it at the size shown, in the best format for the browser.",
+      "PNG, JPG, WebP or GIF, up to 2 MB, checked by its bytes rather than its name. Admins only. A schema made before this needs one line in Supabase, in db/schema.sql and in “Running her”.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-10-05",
     title: "Each client's log, alone",

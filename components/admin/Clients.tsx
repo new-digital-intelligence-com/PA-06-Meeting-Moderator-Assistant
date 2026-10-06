@@ -6,9 +6,9 @@
  */
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PERSONAL, emailDomain } from "@/lib/mail-domains";
-import { Chip, Notice, Section, ago, api, field, primary, quiet, when } from "../portal/ui";
+import { Chip, CompanyLogo, Notice, Section, ago, api, field, primary, quiet, when } from "../portal/ui";
 
 type ClientSummary = {
   id: string;
@@ -16,6 +16,7 @@ type ClientSummary = {
   domains: string[];
   addresses: string[];
   status: string;
+  logo_url?: string | null;
   members: number;
   documents: number;
   upcoming: number;
@@ -35,6 +36,17 @@ export default function Clients({ ava }: { ava: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The logo picked for the new client, shown before it is sent. */
+  const [logo, setLogo] = useState<{ file: File; preview: string } | null>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
+
+  // Each preview's local address is let go when another is picked, or the page closes.
+  useEffect(
+    () => () => {
+      if (logo) URL.revokeObjectURL(logo.preview);
+    },
+    [logo],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -51,20 +63,31 @@ export default function Clients({ ava }: { ava: string | null }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ client: { name: string }; invited: string[]; failed: { email: string; error: string }[] }>("/api/admin/clients", {
+      const r = await api<{ client: { id: string; name: string }; invited: string[]; failed: { email: string; error: string }[] }>("/api/admin/clients", {
         method: "POST",
         body: JSON.stringify(form),
       });
+      // The client exists now; its logo goes up after it, and failing does not undo the client.
+      let logoError = "";
+      if (logo) {
+        const upload = new FormData();
+        upload.set("file", logo.file);
+        await api(`/api/admin/clients/${r.client.id}/logo`, { method: "POST", body: upload }).catch((e) => {
+          logoError = e instanceof Error ? e.message : "not saved";
+        });
+      }
       setNotice(
         [
           `${r.client.name} is set up.`,
           r.invited.length ? `Invitation sent to ${r.invited.join(", ")}.` : "",
           r.failed.length ? `Not sent to ${r.failed.map((f) => `${f.email} (${f.error})`).join(", ")}.` : "",
+          logoError ? `Their logo was not saved: ${logoError}` : "",
         ]
           .filter(Boolean)
           .join(" "),
       );
       setForm(EMPTY);
+      setLogo(null);
       setAdding(false);
       setVersion((v) => v + 1);
     } catch (err) {
@@ -125,10 +148,39 @@ export default function Clients({ ava }: { ava: string | null }) {
       {adding && (
         <Section title="New client">
           <form onSubmit={create} className="space-y-6">
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-slate-900">Company name</span>
-              <input required className={field} value={form.name} onChange={set("name")} placeholder="Acme GmbH" />
-            </label>
+            <div className="flex items-end gap-4">
+              <label className="block min-w-0 flex-1 space-y-1.5">
+                <span className="text-sm font-medium text-slate-900">Company name</span>
+                <input required className={field} value={form.name} onChange={set("name")} placeholder="Acme GmbH" />
+              </label>
+              <div className="flex shrink-0 items-center gap-2">
+                <input
+                  ref={logoInput}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) setLogo({ file, preview: URL.createObjectURL(file) });
+                  }}
+                />
+                {logo ? (
+                  <>
+                    {/* The picked file itself, from this computer: nothing to optimise. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={logo.preview} alt="Their logo" className="size-10 rounded-xl border border-slate-200 bg-white object-contain p-1" />
+                    <button type="button" className="text-xs text-slate-400 hover:text-rose-700" onClick={() => setLogo(null)}>
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className={quiet} onClick={() => logoInput.current?.click()} title="PNG, JPG, WebP or GIF, up to 2 MB">
+                    Logo (optional)
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* Two different questions, kept visibly apart: whose meetings, and who logs in. */}
             <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -181,6 +233,7 @@ export default function Clients({ ava }: { ava: string | null }) {
                 onClick={() => {
                   setAdding(false);
                   setForm(EMPTY);
+                  setLogo(null);
                 }}
               >
                 Cancel
@@ -201,8 +254,9 @@ export default function Clients({ ava }: { ava: string | null }) {
                   href={`/admin/clients/${c.id}`}
                   className="block h-full rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300 hover:bg-slate-50"
                 >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="truncate font-medium">{c.name}</span>
+                  <div className="mb-2 flex items-center gap-3">
+                    <CompanyLogo name={c.name} url={c.logo_url} size={40} decorative />
+                    <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
                     <Chip tone={c.status === "active" ? "good" : "warn"}>{c.status === "active" ? "Active" : "Paused"}</Chip>
                   </div>
                   <p className="truncate text-xs text-slate-500">{[...c.domains.map((d) => `@${d}`), ...c.addresses].join(", ") || "No domain yet"}</p>

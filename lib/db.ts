@@ -66,6 +66,8 @@ export type Client = {
   digest: string;
   digest_at: Date | null;
   drive_folder_id: string | null;
+  /** Their logo on Cloudinary (lib/cloudinary.ts). Absent until db/schema.sql's logo line has run. */
+  logo_url?: string | null;
   status: string;
   created_at: Date;
   created_by: string | null;

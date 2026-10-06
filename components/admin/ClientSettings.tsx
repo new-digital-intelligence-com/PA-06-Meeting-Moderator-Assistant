@@ -6,10 +6,19 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Chip, Notice, Section, ago, api, danger, field, primary, quiet } from "../portal/ui";
+import { useEffect, useRef, useState } from "react";
+import { Chip, CompanyLogo, Notice, Section, ago, api, danger, field, primary, quiet } from "../portal/ui";
 
-type Client = { id: string; name: string; domains: string[]; addresses: string[]; status: string; created_at: string; created_by: string | null };
+type Client = {
+  id: string;
+  name: string;
+  domains: string[];
+  addresses: string[];
+  status: string;
+  logo_url?: string | null;
+  created_at: string;
+  created_by: string | null;
+};
 type Member = { id: string; email: string; name: string | null; invited_at: string; last_login_at: string | null };
 
 export default function ClientSettings({ id, log = null }: { id: string; log?: string | null }) {
@@ -21,6 +30,7 @@ export default function ClientSettings({ id, log = null }: { id: string; log?: s
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -87,6 +97,21 @@ export default function ClientSettings({ id, log = null }: { id: string; log?: s
     if (r) setMembers(r.members);
   }
 
+  /** Their logo, to Cloudinary at once — not part of Save. Their page below shows it on reload. */
+  async function changeLogo(file: File | undefined) {
+    if (logoInput.current) logoInput.current.value = "";
+    if (!file) return;
+    const form = new FormData();
+    form.set("file", file);
+    const r = await step("logo", () => api<{ client: Client }>(`/api/admin/clients/${id}/logo`, { method: "POST", body: form }));
+    if (r) window.location.reload();
+  }
+
+  async function removeLogo() {
+    const r = await step("logo:remove", () => api<{ client: Client }>(`/api/admin/clients/${id}/logo`, { method: "DELETE" }));
+    if (r) window.location.reload();
+  }
+
   async function removeClient() {
     if (!client) return;
     const typed = window.prompt(
@@ -141,6 +166,29 @@ export default function ClientSettings({ id, log = null }: { id: string; log?: s
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
             <form onSubmit={save} className="space-y-4">
+              <div className="flex items-center gap-4">
+                <CompanyLogo name={client.name} url={client.logo_url} size={64} />
+                <div className="min-w-0 space-y-1.5">
+                  <input
+                    ref={logoInput}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => void changeLogo(e.target.files?.[0])}
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" className={quiet} onClick={() => logoInput.current?.click()} disabled={busy !== null}>
+                      {busy === "logo" ? "Uploading…" : client.logo_url ? "Change logo" : "Add their logo"}
+                    </button>
+                    {client.logo_url && (
+                      <button type="button" className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void removeLogo()} disabled={busy !== null}>
+                        {busy === "logo:remove" ? "Removing…" : "Remove"}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500">PNG, JPG, WebP or GIF, up to 2 MB — on their page and in the list of clients.</p>
+                </div>
+              </div>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-700">Name</span>
                 <input className={field} value={form.name} onChange={set("name")} />

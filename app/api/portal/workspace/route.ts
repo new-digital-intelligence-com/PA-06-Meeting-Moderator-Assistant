@@ -36,6 +36,7 @@ export async function GET(request: Request) {
         domains: client.domains,
         addresses: client.addresses,
         status: client.status,
+        logo_url: client.logo_url ?? null,
       },
       documents,
       meetings: meetings.map((m) => ({ ...m, documents: counts.get(m.id) ?? 0 })),

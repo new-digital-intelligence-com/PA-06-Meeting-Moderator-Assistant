@@ -61,6 +61,55 @@ export function Notice({ tone, children, onClose }: { tone: "error" | "info"; ch
   );
 }
 
+/**
+ * Only Cloudinary's own addresses, asked for at the size they are shown — twice over, for
+ * sharp screens — in the best format the browser takes.
+ */
+export function cloudinarySized(url: string | null | undefined, px: number): string | null {
+  if (!url || !/^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(url)) return null;
+  return url.replace("/image/upload/", `/image/upload/c_limit,w_${px},h_${px},f_auto,q_auto/`);
+}
+
+const INITIALS_TONES = [
+  "bg-blue-50 text-blue-700",
+  "bg-emerald-50 text-emerald-700",
+  "bg-amber-50 text-amber-800",
+  "bg-violet-50 text-violet-700",
+  "bg-rose-50 text-rose-700",
+  "bg-sky-50 text-sky-700",
+];
+
+/**
+ * A client's logo (lib/cloudinary.ts) — or, until they have one, their initials.
+ * `decorative` where their name is written right beside it, so it is not read out twice.
+ */
+export function CompanyLogo({ name, url, size = 40, decorative = false }: { name: string; url?: string | null; size?: number; decorative?: boolean }) {
+  const src = cloudinarySized(url, size * 2);
+  const box = "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200";
+  if (src) {
+    return (
+      // Cloudinary has already resized it and picked the format: nothing for next/image to add.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={decorative ? "" : `${name} logo`}
+        width={size}
+        height={size}
+        className={`${box} bg-white object-contain p-1`}
+        style={{ width: size, height: size }}
+      />
+    );;
+  }
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
+  const tone = INITIALS_TONES[[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % INITIALS_TONES.length];
+  return (
+    <span aria-hidden="true" className={`${box} ${tone} font-semibold`} style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}>
+      {initials}
+    </span>
+  );
+}
+
 /** "Tue 7 Oct, 14:30" in the viewer's own time zone. */
 export function when(iso: string | null | undefined) {
   if (!iso) return "";

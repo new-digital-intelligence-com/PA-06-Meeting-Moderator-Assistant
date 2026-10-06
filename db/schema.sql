@@ -31,10 +31,14 @@ create table if not exists "pa-06".clients (
   digest_at timestamptz,
   -- Their folder in NDI's shared drive, where the original files are kept.
   drive_folder_id text,
+  -- Their company's logo, on Cloudinary.
+  logo_url text,
   status text not null default 'active',
   created_at timestamptz not null default now(),
   created_by text
 );
+-- For a schema made before logos: the only line it needs.
+alter table "pa-06".clients add column if not exists logo_url text;
 
 -- People who can sign in to a client's portal. One client per address.
 create table if not exists "pa-06".members (

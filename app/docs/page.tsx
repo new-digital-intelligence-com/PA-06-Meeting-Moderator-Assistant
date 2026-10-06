@@ -611,7 +611,8 @@ export default function Docs() {
                   The files: NDI’s Drive, one folder per client inside <C>CLIENTS_DRIVE_FOLDER</C>, written by Ava’s account.
                   The passages, their vectors, summaries, briefs and notes: the team’s shared Supabase project, all of it in her
                   own schema, <C>pa-06</C>, reached through its Data API with the project’s secret key — from the server only.
-                  OpenAI only turns passages into vectors — nothing is stored there.
+                  OpenAI only turns passages into vectors — nothing is stored there. Each client’s logo: Cloudinary, under
+                  <C>pa-06/clients/&lt;client id&gt;</C>, sent from the server and shown from its CDN at the size each page needs.
                 </Card>
               </div>
             </Section>
@@ -674,6 +675,11 @@ export default function Docs() {
                 <FileRow path="components/portal · components/admin">
                   The client’s page, in three tabs — meetings and preparation, what she knows (documents, links and text they write, each with a preview, and her digest shown as a README), how she works for you — and NDI’s (clients, who signs
                   in, invites she skipped). Admins open any client’s page as the client sees it.
+                </FileRow>
+                <FileRow path="lib/cloudinary.ts">
+                  Clients’ logos: up to Cloudinary (signed with the secret, on the server), one per client under a fixed name so a
+                  new one replaces the old, and taken down with the client. The pages ask Cloudinary for each at the size shown
+                  (<C>CompanyLogo</C> in components/portal/ui.tsx); without one, the client’s initials.
                 </FileRow>
                 <FileRow path="lib/db.ts · db/schema.sql">
                   Her schema, <C>pa-06</C>, in the team’s shared Supabase project, through its Data API: the tables, and three
@@ -779,6 +785,7 @@ export default function Docs() {
                       [<C key="v">SUPABASE_URL · SUPABASE_SCHEMA · SUPABASE_SERVICE_ROLE_KEY</C>, "Clients, documents, meetings — the team’s Supabase project, her schema (pa-06), and its secret key (server only)"],
                       [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
                       [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
+                      [<C key="v">CLOUDINARY_CLOUD_NAME · CLOUDINARY_API_KEY · CLOUDINARY_API_SECRET</C>, "Clients’ logos, on Cloudinary — or the one line CLOUDINARY_URL instead; the secret stays on the server"],
                       [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],
                       [<C key="v">GOOGLE_API_KEY</C>, "The Drive button's browser key (Google Picker API, this site only); its client and project number come from GOOGLE_CLIENT_ID"],
                       [<C key="v">APP_URL</C>, "The address in invitations and sign-in links"],
@@ -852,6 +859,10 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                                # nothing else; NDI is client number one
 Project Settings → Data API → Exposed schemas → add pa-06
 # and SUPABASE_URL, SUPABASE_SCHEMA, SUPABASE_SERVICE_ROLE_KEY in Vercel
+
+# a schema made before logos needs only its logo line:
+alter table "pa-06".clients add column if not exists logo_url text;
+notify pgrst, 'reload schema';
 
 # then, signed in as anybody @new-digital-intelligence.com:
 /admin                         # set up a client, invite their people

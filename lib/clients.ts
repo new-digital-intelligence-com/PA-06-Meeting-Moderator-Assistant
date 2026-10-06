@@ -7,6 +7,7 @@
  * client employee on an invite and have Ava for free.
  */
 import { avaGoogle } from "./ava";
+import { removeLogo } from "./cloudinary";
 import { asClient, asMember, db, rows, type Client, type Member } from "./db";
 import { PERSONAL, emailDomain } from "./mail-domains";
 import { sendEmail } from "./workspace";
@@ -137,7 +138,14 @@ export async function updateClient(
 }
 
 export async function deleteClient(id: string): Promise<void> {
-  await rows(db().from("clients").delete().eq("id", id));
+  const removed = await rows<{ logo_url?: string | null }[]>(db().from("clients").delete().eq("id", id).select("*"));
+  // Their logo goes with them; a Cloudinary hiccup must not keep the client.
+  if (removed[0]?.logo_url) await removeLogo(id).catch((e) => console.warn("[clients] logo not removed:", e instanceof Error ? e.message : e));
+}
+
+/** A client's logo, as Cloudinary gave its address — or none. */
+export async function setLogo(id: string, url: string | null): Promise<Client> {
+  return asClient(await rows<Record<string, unknown>>(db().from("clients").update({ logo_url: url }).eq("id", id).select("*").single()));
 }
 
 /** Lets an address sign in for this client; again, it only updates the name. */
