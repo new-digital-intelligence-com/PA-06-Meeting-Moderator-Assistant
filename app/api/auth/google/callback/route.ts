@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { exchangeCode, exchangeLoginCode } from "@/lib/google";
 import { readSession, sessionCookie } from "@/lib/session";
 import { saveAvaGoogle } from "@/lib/ava";
-import { roleFor, safeNext } from "@/lib/auth";
+import { appOrigin, roleFor, safeNext } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -30,7 +30,9 @@ function done(response: NextResponse) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const home = new URL("/", url.origin);
+  // Back to this site's own address — behind a proxy the request's is its inside one.
+  const origin = appOrigin(request);
+  const home = new URL("/", origin);
   const as = cookieOf(request, "pa_oauth_as");
 
   /**
@@ -42,7 +44,7 @@ export async function GET(request: Request) {
       home.searchParams.set("google", `error:${reason}`);
       return done(NextResponse.redirect(home));
     }
-    const login = new URL("/login", url.origin);
+    const login = new URL("/login", origin);
     login.searchParams.set("error", reason);
     return done(NextResponse.redirect(login));
   };
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
       const { email, name } = await exchangeLoginCode(code);
       const user = await roleFor(email, name);
       if (!user) return fail(`${email} has no access to Ava yet. Ask NDI to invite it.`);
-      const target = new URL(safeNext(cookieOf(request, "pa_login_next")), url.origin);
+      const target = new URL(safeNext(cookieOf(request, "pa_login_next")), origin);
       const session = await readSession();
       const response = NextResponse.redirect(target);
       response.cookies.set(sessionCookie({ ...session, user }));

@@ -23,19 +23,8 @@ export const adminDomain = () => (process.env.ADMIN_DOMAIN || "new-digital-intel
  */
 export const safeNext = (next: string | null | undefined) => (next && /^\/(?![\/\\])/.test(next) ? next : "/");
 
-const LOCAL = /\/\/(localhost|127\.0\.0\.1)(:|\/|$)/;
-
-/**
- * This site's address for links in emails: APP_URL, not the request's own Host — which a
- * caller could forge to have a sign-in link point at their server. The request's only
- * when APP_URL is a local address and the request is not (a deployment set up from a
- * copy of .env.local).
- */
-export function appOrigin(request: Request): string {
-  const configured = process.env.APP_URL?.trim().replace(/\/+$/, "");
-  const origin = new URL(request.url).origin;
-  return configured && !(LOCAL.test(configured) && !LOCAL.test(origin)) ? configured : origin;
-}
+/** This site's address for links and redirects: see lib/origin.ts. */
+export { appOrigin } from "./origin";
 
 /** Emailed sign-in links are stored by this hash only, so the table cannot sign anybody in. */
 export const tokenHash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");

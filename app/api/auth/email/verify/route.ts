@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { roleFor, safeNext, tokenHash } from "@/lib/auth";
+import { appOrigin, roleFor, safeNext, tokenHash } from "@/lib/auth";
 import { db, hasDb, isoNow, rows } from "@/lib/db";
 import { readSession, sessionCookie } from "@/lib/session";
 
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * before its owner ever clicked.
  */
 export async function POST(request: Request) {
-  const origin = new URL(request.url).origin;
+  const origin = appOrigin(request);
   const form = await request.formData();
   const token = String(form.get("token") ?? "");
   const next = safeNext(String(form.get("next") ?? ""));

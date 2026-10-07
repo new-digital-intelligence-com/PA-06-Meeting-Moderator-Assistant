@@ -30,6 +30,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Redirects go to the site's own address",
+    points: [
+      "After signing in with Google, the Railway copy of the site sent you to https://localhost:8080 — its address inside Railway — though the sign-in had worked. Vercel hands the site its public address with each request; Railway does not. Every redirect (signing in with Google or by email, signing out, being sent to sign in) now uses APP_URL, as emailed links already did.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-07",
     title: "Ready for Railway: a plain Redis connection",
     points: [
       "The meeting state can be kept in any Redis over a normal connection (REDIS_URL), used when there are no Upstash REST credentials — for the site on Railway, with its own Redis beside it in the POCs project, reachable only on Railway's private network. On Vercel nothing changes: Upstash's web API, as before.",

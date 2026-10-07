@@ -7,6 +7,7 @@
  * decided at sign-in can outlive the access it was decided from.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { appOrigin } from "@/lib/origin";
 import { decrypt } from "@/lib/seal";
 
 // Signing in and out. Not /api/auth/google itself: connecting Ava's account is for admins.
@@ -38,14 +39,14 @@ export function proxy(request: NextRequest) {
 
   if (!user) {
     if (api) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
-    const login = new URL("/login", request.url);
+    const login = new URL("/login", appOrigin(request));
     if (pathname !== "/") login.searchParams.set("next", pathname + search);
     return NextResponse.redirect(login);
   }
 
   if (user.role !== "admin") {
     if (api && !pathname.startsWith("/api/portal/")) return NextResponse.json({ error: "Not for clients." }, { status: 403 });
-    if (!api && !pathname.startsWith("/client")) return NextResponse.redirect(new URL("/client", request.url));
+    if (!api && !pathname.startsWith("/client")) return NextResponse.redirect(new URL("/client", appOrigin(request)));
   }
   return NextResponse.next();
 }
