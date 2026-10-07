@@ -671,7 +671,7 @@ export default function Docs() {
             </Section>
 
             {/* ── brain modules ────────────────────────────────────────── */}
-            <Section id="brain" eyebrow="Modules" title="The brain — web app" intro="Next.js on Railway — the [PA-06] group in the POCs project: the site, and its Redis beside it on Railway's private network, where the meeting lives. (It ran on Vercel before; the code still runs there unchanged.)">
+            <Section id="brain" eyebrow="Modules" title="The brain — web app" intro="Next.js on Railway — the [PA-06] group in the POCs project: the site, and its Redis beside it on Railway's private network, where the meeting lives. (It ran on Vercel until 7 October 2026; that project is deleted.)">
               <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-5">
                 <FileRow path="app/api/moderator/tick" tag={<Chip tone="emerald">the heart</Chip>}>
                   Takes what was heard and folds it into the transcript, with her own lines and the state of her voice and face.

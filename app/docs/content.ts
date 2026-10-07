@@ -31,6 +31,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Vercel retired: Railway only",
+    points: [
+      "The Vercel project is deleted: its address (pa-06-meeting-moderator-assistant.vercel.app) no longer answers, and Google's sign-in settings list only the Railway address. The site, its Redis and her server's link are all on Railway.",
+      "Every push to main is deployed to Railway — by Railway itself once its GitHub App can see the repo; until then right after each push, from the machine that pushes.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-07",
     title: "What still said Vercel",
     points: [
       "The privacy page names Railway as where the site runs. The control room warns about a store her server cannot share on any deployed address, not only a vercel.app one. Her server's example address is Railway's.",
