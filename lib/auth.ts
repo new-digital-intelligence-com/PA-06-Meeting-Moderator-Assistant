@@ -2,9 +2,9 @@
  * Who may use the portal, and as whom.
  *
  * Admins are NDI: any verified address on ADMIN_DOMAIN (new-digital-intelligence.com by
- * default). They see every client and the live control room. Clients are the addresses an
- * admin invited (the `members` table): they see only their own company's Ava. Nobody
- * signs up on their own — an address that is neither is turned away at sign-in.
+ * default). They see every client and the live control room. Clients are the addresses on
+ * a client's list (the `members` table) and anybody at a client's company domain: they see
+ * only their own company's Ava. Nobody else signs in.
  *
  * The proxy (proxy.ts) only redirects early; every page and route checks again here,
  * because a session decided at sign-in can outlive the membership it was decided from.
@@ -42,11 +42,19 @@ export async function accessFor(email: string): Promise<PortalUser | null> {
   return m ? { email: e, name: m.name ?? undefined, role: "client", clientId: m.client_id } : null;
 }
 
-/** The client an address signs in for, if that client is active. */
+/**
+ * The client an address signs in for, if that client is active: the one whose list it is on
+ * — a paused one included, which keeps it out — or else the one whose company domain it is at.
+ */
 async function membership(email: string): Promise<{ client_id: string; name: string | null } | null> {
-  return rows(
-    db().from("members").select("client_id, name, clients!inner(status)").eq("email", email).eq("clients.status", "active").maybeSingle(),
+  const listed = await rows<{ client_id: string; name: string | null; clients: { status: string } } | null>(
+    db().from("members").select("client_id, name, clients!inner(status)").eq("email", email).maybeSingle(),
   );
+  if (listed) return listed.clients.status === "active" ? { client_id: listed.client_id, name: listed.name } : null;
+  const domain = email.split("@")[1] ?? "";
+  if (!domain) return null;
+  const atDomain = await rows<{ id: string }[]>(db().from("clients").select("id").contains("domains", [domain]).eq("status", "active").limit(1));
+  return atDomain[0] ? { client_id: atDomain[0].id, name: null } : null;
 }
 
 /** Signs an address in: who it is, and when a client's member was last seen. */

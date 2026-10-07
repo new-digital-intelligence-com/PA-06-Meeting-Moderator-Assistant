@@ -16,6 +16,8 @@ type ClientSummary = {
   name: string;
   /** Their super admin's address. */
   owner: string | null;
+  /** Their company domains: anybody at one is theirs without being added. */
+  domains: string[];
   status: string;
   logo_url?: string | null;
   members: number;
@@ -27,7 +29,7 @@ type ClientSummary = {
 
 type Skipped = { id: string; title: string; starts_at: string; organizer: string | null; organizer_name: string | null };
 
-const EMPTY = { name: "", owner: "", contacts: "", invite: true };
+const EMPTY = { name: "", domains: "", owner: "", contacts: "", invite: true };
 
 /** `screen`: her server's address, where each client's log is (bot/logs.mjs) — null until her runner has said it. */
 export default function Clients({ ava, screen = null }: { ava: string | null; screen?: string | null }) {
@@ -99,7 +101,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     }
   }
 
-  /** A client from an invite she skipped: its organiser becomes their super admin. */
+  /** A client from an invite she skipped: its organiser becomes their super admin, and their company's domain theirs. */
   function fromInvite(m: Skipped) {
     const email = m.organizer ?? "";
     const domain = emailDomain(email);
@@ -107,6 +109,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     const company = domain.split(".").slice(-2, -1)[0] ?? "";
     setForm({
       name: personal ? (m.organizer_name ?? "") : company.charAt(0).toUpperCase() + company.slice(1),
+      domains: personal ? "" : domain,
       owner: email,
       contacts: "",
       invite: true,
@@ -124,8 +127,8 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
           <p className="max-w-2xl text-sm leading-relaxed text-slate-500">
-            One Ava, many clients. She attends a meeting when its organiser is one of a client&apos;s people here, with that
-            client&apos;s knowledge. Invites from anybody else she leaves alone.
+            One Ava, many clients. She attends a meeting when its organiser is at a client&apos;s company domain or one of its
+            people here, with that client&apos;s knowledge. Invites from anybody else she leaves alone.
           </p>
         </div>
         {!adding && (
@@ -193,6 +196,14 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
                 and prepare her. She joins a meeting only when the person who <b>sent the invite</b> is one of them.
               </p>
               <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-700">Company domain (optional)</span>
+                <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
+                <span className="block text-xs leading-5 text-slate-500">
+                  Everybody at it signs in and can invite her without being added — so nobody from there needs to go below but the
+                  super admin. It must receive email; not a shared one like gmail.com, nor another client&apos;s.
+                </span>
+              </label>
+              <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-700">Their super admin</span>
                 <input required type="email" className={field} value={form.owner} onChange={set("owner")} placeholder="anna@acme.com" />
                 <span className="block text-xs leading-5 text-slate-500">
@@ -254,7 +265,9 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
                   </Link>
                   <Chip tone={c.status === "active" ? "good" : "warn"}>{c.status === "active" ? "Active" : "Paused"}</Chip>
                 </div>
-                <p className="truncate text-xs text-slate-500">{c.owner ? `Super admin: ${c.owner}` : "No super admin yet"}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {[...c.domains.map((d) => `@${d}`), c.owner ? `super admin ${c.owner}` : "no super admin yet"].join(" · ")}
+                </p>
                 <p className="mt-3 text-xs text-slate-500">
                   {c.members} can use her · {c.documents} documents · {c.upcoming} upcoming
                 </p>

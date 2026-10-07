@@ -72,6 +72,7 @@ type Data = {
     instructions: string;
     digest: string;
     digest_at: string | null;
+    domains: string[];
     status: string;
     logo_url: string | null;
   };
@@ -216,7 +217,9 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         <p className="relative mt-6 max-w-3xl text-sm leading-relaxed text-blue-50/90">
           Invite <span className="font-semibold text-white">{ava}</span> to your meetings from your calendar, like a colleague — or send
           her to one right now. Here you give her what she should know about {client.name}, and prepare her for each meeting.
-          {" "}She joins the meetings organised by the people who can use her{clientId ? "" : " — see Setup"}.
+          {" "}She joins the meetings organised by{" "}
+          {client.domains.length > 0 && <>anybody at {client.domains.map((d) => `@${d}`).join(", ")} and by </>}
+          the people who can use her{clientId ? "" : " — see Setup"}.
         </p>
       </header>
 

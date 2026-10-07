@@ -18,14 +18,14 @@ export async function GET() {
   });
 }
 
-/** A new client: who they are, their super admin, and anyone else who can use her for them. */
+/** A new client: who they are, their company domains, their super admin, and anyone else who can use her for them. */
 export async function POST(request: Request) {
   return handle(async () => {
     const admin = await requireAdmin();
-    const body = (await request.json().catch(() => ({}))) as { name?: string; owner?: string; contacts?: string; invite?: boolean };
+    const body = (await request.json().catch(() => ({}))) as { name?: string; owner?: string; contacts?: string; domains?: string; invite?: boolean };
     let client;
     try {
-      client = await createClient({ name: body.name ?? "", owner: body.owner, contacts: body.contacts, by: admin.email });
+      client = await createClient({ name: body.name ?? "", owner: body.owner, contacts: body.contacts, domains: body.domains, by: admin.email });
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : "Could not create the client.");
     }

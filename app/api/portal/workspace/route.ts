@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         instructions: client.instructions,
         digest: client.digest,
         digest_at: client.digest_at,
+        domains: client.domains,
         status: client.status,
         logo_url: client.logo_url ?? null,
       },

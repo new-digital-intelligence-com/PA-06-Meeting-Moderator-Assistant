@@ -23,8 +23,8 @@ type Client = {
   logo_url: string | null;
   created_at: string;
   created_by: string | null;
-  /** NDI's own client: everybody at this domain organises its meetings too. */
-  ndi_domain: string | null;
+  /** Their company domains: anybody at one signs in here, and the meetings they organise are theirs. */
+  domains: string[];
 };
 type Person = { id: string; email: string; name: string | null; last_login_at: string | null; owner: boolean };
 type Data = { client: Client; people: Person[]; me: string; admin: boolean };
@@ -34,7 +34,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   const q = clientId ? `?client=${clientId}` : "";
   const amp = q ? "&" : "?";
   const [data, setData] = useState<Data | null>(null);
-  const [form, setForm] = useState({ name: "", status: "active" });
+  const [form, setForm] = useState({ name: "", status: "active", domains: "" });
   const [newPerson, setNewPerson] = useState({ email: "", invite: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
       .then((d) => {
         if (!alive) return;
         setData(d);
-        setForm({ name: d.client.name, status: d.client.status });
+        setForm({ name: d.client.name, status: d.client.status, domains: d.client.domains.join(", ") });
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load."));
     return () => {
@@ -83,11 +83,14 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    // Only NDI sends whether she is paused.
-    const body = admin ? form : { name: form.name };
-    const r = await step("save", () => api<{ client: { name: string } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }));
+    // Their super admin and NDI send the company domain; only NDI whether she is paused.
+    const body = { name: form.name, ...(inCharge ? { domains: form.domains } : {}), ...(admin ? { status: form.status } : {}) };
+    const r = await step("save", () =>
+      api<{ client: { name: string; domains: string[] } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }),
+    );
     if (!r) return;
-    setData((d) => (d ? { ...d, client: { ...d.client, name: r.client.name } } : d));
+    setData((d) => (d ? { ...d, client: { ...d.client, name: r.client.name, domains: r.client.domains } } : d));
+    setForm((f) => ({ ...f, domains: r.client.domains.join(", ") }));
     setNotice("Saved.");
     changed();
   }
@@ -113,14 +116,20 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   async function addPerson(e: React.FormEvent) {
     e.preventDefault();
     const r = await step("person", () =>
-      api<{ people: Person[]; invited: boolean; inviteError: string | null }>(`/api/portal/people${q}`, {
+      api<{ people: Person[]; invited: boolean; inviteError: string | null; atDomain?: string }>(`/api/portal/people${q}`, {
         method: "POST",
         body: JSON.stringify(newPerson),
       }),
     );
     if (!r) return;
     setData((d) => (d ? { ...d, people: r.people } : d));
-    setNotice(r.inviteError ? `Added, but the invitation was not sent: ${r.inviteError}` : r.invited ? `Invitation sent to ${newPerson.email}.` : "Added.");
+    if (r.atDomain) {
+      // Their own company: access already, nothing to add — only the invitation, if asked for.
+      const has = `${newPerson.email} is at @${r.atDomain}, ${admin ? "their" : "your"} company domain: they have access already, without being added.`;
+      setNotice(r.inviteError ? `${has} The invitation was not sent: ${r.inviteError}` : r.invited ? `${has} Invitation sent.` : has);
+    } else {
+      setNotice(r.inviteError ? `Added, but the invitation was not sent: ${r.inviteError}` : r.invited ? `Invitation sent to ${newPerson.email}.` : "Added.");
+    }
     setNewPerson({ email: "", invite: true });
   }
 
@@ -249,12 +258,22 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
               <input className={field} value={form.name} onChange={set("name")} />
             </label>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
               <p className="text-sm font-semibold text-slate-900">Which meetings Ava joins {admin ? "for them" : "for you"}</p>
-              <p className="mt-1">
-                Those whose invite comes from one of the people who can use her
-                {client.ndi_domain && <>, or from anyone with an @{client.ndi_domain} address</>}. Invites from anyone else she leaves
-                alone — add the person first.
+              {inCharge && (
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-slate-700">Company domain</span>
+                  <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
+                  <span className="block text-slate-500">
+                    Everybody with an address there signs in here and can invite her, without being added. It must be a real
+                    company domain that receives email — not a shared one like gmail.com, and not another company&apos;s.
+                  </span>
+                </label>
+              )}
+              <p>
+                Those whose invite comes from{" "}
+                {client.domains.length > 0 && <>anybody at {client.domains.map((d) => `@${d}`).join(", ")}, or from </>}
+                one of the people who can use her. Invites from anyone else she leaves alone.
               </p>
             </div>
 
@@ -296,6 +315,12 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                 </p>
               </div>
             </div>
+            {client.domains.length > 0 && (
+              <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <span className="font-medium text-slate-800">Everybody at {client.domains.map((d) => `@${d}`).join(", ")}</span> has access
+                already, without being added.
+              </p>
+            )}
             {people.length > 0 && !owner && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 No super admin — {admin ? "make one of them the super admin." : "ask NDI to make one of you the super admin."}

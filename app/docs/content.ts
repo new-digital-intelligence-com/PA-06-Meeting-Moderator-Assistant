@@ -31,6 +31,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Company domains, for every client",
+    points: [
+      "A client can have a company domain, as NDI has NDI's: anybody with an address there signs in to the client's page and has their invites accepted for it, without being added. The list comes first — somebody on one client's list stays that client's, whatever their domain.",
+      "Set on the client's Setup tab by its super admin (or by NDI, also when creating the client). It must be real — it receives email, looked up in its DNS: a typo “does not exist”, example.com “receives no email” — and not a shared provider like gmail.com, NDI's, or another client's.",
+      "Adding somebody at the client's own domain says they have access already, and does not add them (Ava still emails them the invitation if asked). Somebody at another client's domain cannot be added, nor be a new client's super admin.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-07",
     title: "Changing addresses; NDI decides everything on a client's list",
     points: [
       "A client's super admin changes the addresses on their list — theirs too, and then signs in again with the new one. The people they added cannot. A changed address keeps its place and role, and the old one is locked out at once.",

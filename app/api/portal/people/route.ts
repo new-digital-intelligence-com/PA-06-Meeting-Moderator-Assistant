@@ -5,7 +5,9 @@ import {
   allClients,
   changeAddress,
   cleanAddresses,
+  clientAtDomain,
   clientPeople,
+  emailDomain,
   getClient,
   listMembers,
   makeOwner,
@@ -20,8 +22,9 @@ export const maxDuration = 30;
 
 /**
  * Why an address cannot be one of this client's people, or null if it can. NDI's own: NDI
- * sees every client — and for NDI's own client they count already. On another client's
- * list: their meetings would move here. Only NDI is told whose.
+ * sees every client — and for NDI's own client they count already. At another client's
+ * company domain, or on another client's list: their meetings would move here. Only NDI is
+ * told whose. (Somebody at this client's own domain can be added: it is not needed.)
  */
 async function refusal(email: string, clientId: string, ndisOwn: boolean, admin: boolean): Promise<string | null> {
   if (isAdminEmail(email)) {
@@ -29,10 +32,16 @@ async function refusal(email: string, clientId: string, ndisOwn: boolean, admin:
       ? `${email} is NDI's already: everybody at @${adminDomain()} signs in as an admin, and the meetings they organise count here. Add personal addresses only.`
       : "NDI's own addresses are not added to a client: NDI already sees every client.";
   }
+  const clients = await allClients();
+  const atDomain = clientAtDomain(
+    clients.filter((c) => c.id !== clientId),
+    email,
+  );
+  if (atDomain) return admin ? `${email} is at @${emailDomain(email)}, ${atDomain.name}'s domain.` : `${email} belongs to another company that uses Ava.`;
   const usesElsewhere = (await clientPeople()).get(email);
   if (usesElsewhere && usesElsewhere !== clientId) {
     if (!admin) return `${email} already uses Ava for another company.`;
-    const other = (await allClients()).find((c) => c.id === usesElsewhere)?.name;
+    const other = clients.find((c) => c.id === usesElsewhere)?.name;
     return `${email} already uses her for ${other ?? "another client"}.`;
   }
   return null;
@@ -41,7 +50,8 @@ async function refusal(email: string, clientId: string, ndisOwn: boolean, admin:
 /**
  * Someone who can use her — they open the client's page, and her invites from them are the
  * client's — added by anyone on the client's list or by NDI; with `invite`, Ava emails them.
- * Again, to somebody already on the list: only their super admin, or NDI.
+ * Again, to somebody already on the list: only their super admin, or NDI. Somebody at the
+ * client's own company domain has access already: they are not added — only invited, if asked.
  */
 export async function POST(request: Request) {
   return handle(async () => {
@@ -62,6 +72,18 @@ export async function POST(request: Request) {
     }
     const refused = await refusal(email, clientId, client.domains.includes(adminDomain()), admin);
     if (refused) throw new HttpError(400, refused);
+
+    if (client.domains.includes(emailDomain(email)) && !(await listMembers(clientId)).some((m) => m.email === email)) {
+      let inviteError: string | null = null;
+      if (body.invite) {
+        try {
+          await sendInvite(client, email, appOrigin(request));
+        } catch (e) {
+          inviteError = e instanceof Error ? e.message : "The invitation was not sent.";
+        }
+      }
+      return NextResponse.json({ people: await peopleOf(clientId), atDomain: emailDomain(email), invited: Boolean(body.invite) && !inviteError, inviteError });
+    }
 
     let member;
     try {

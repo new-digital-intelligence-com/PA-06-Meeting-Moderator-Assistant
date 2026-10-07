@@ -555,12 +555,12 @@ export default function Docs() {
                 items={[
                   {
                     title: "NDI sets the client up (/admin)",
-                    body: "Name, and their super admin — the person who runs Ava for them, any address — with anyone else who can use her. They open the client’s page, and she joins only the meetings one of them invites her to: not by company domain. Ava emails each an invitation from her own Gmail.",
+                    body: "Name; their company domain, if they have one — anybody at it signs in and can invite her without being added; and their super admin — the person who runs Ava for them, any address — with anyone else who can use her. She joins only the meetings one of them organises. Ava emails each an invitation from her own Gmail.",
                     tone: "sky",
                   },
                   {
                     title: "The client signs in (/client)",
-                    body: "With Google, for an address that is a Google account, or else a link by email — Outlook or anything — that works once for 15 minutes; no passwords. Only the people on the client’s list get in; nobody signs up. Their Setup tab: their logo and name, and who can use her — anybody on the list adds people (Ava emails them the invitation); only the super admin changes addresses (theirs too), sends it again or removes them, and nobody of theirs removes the super admin. NDI can do all of it, to the super admin too.",
+                    body: "With Google, for an address that is a Google account, or else a link by email — Outlook or anything — that works once for 15 minutes; no passwords. Only the people on the client’s list, and anybody at its company domain, get in; nobody signs up. Their Setup tab: their logo and name, their company domain (set by the super admin), and who can use her — anybody on the list adds people (Ava emails them the invitation); only the super admin changes addresses (theirs too), sends it again or removes them, and nobody of theirs removes the super admin. NDI can do all of it, to the super admin too.",
                     tone: "sky",
                   },
                   {
@@ -608,12 +608,12 @@ export default function Docs() {
                   anyway — nobody’s client, a paused client’s, no Meet or Teams link — are not answered.
                 </Card>
                 <Card tone="sky" title="Whose meeting is it?">
-                  The organiser’s, and only when they are on a client’s list — its super admin or somebody added. Not the company
-                  domain, and never a guest, or anybody could put one client’s employee on an invite and have her for free.
-                  Someone on a list brings every meeting they organise to that client, so NDI’s own people are on no client’s
-                  list (admins see every client anyway). NDI is a client too: its meetings are those organised by anybody at NDI
-                  (<C>ADMIN_DOMAIN</C>). An invite from anybody else is skipped: she does not go, and admins see it under
-                  “Invites she skipped”, with one click to make its organiser a new client’s super admin.
+                  The organiser’s: somebody on a client’s list — its super admin or somebody added, from any address — or anybody at
+                  its company domain. Never a guest, or anybody could put one client’s employee on an invite and have her for free.
+                  The list comes first: somebody on one client’s list is that client’s, whatever their domain. So NDI’s own people
+                  are on no client’s list (admins see every client anyway); NDI is a client too, with NDI’s domain
+                  (<C>ADMIN_DOMAIN</C>). An invite from anybody else is skipped: she does not go, and admins see it under “Invites
+                  she skipped”, with one click to make its organiser a new client’s super admin and their domain the client’s.
                 </Card>
                 <Card tone="amber" title="Every meeting’s history">
                   Kept per meeting, in <C>meeting_history</C>, and shown on the client’s page: the host’s changes read from her
@@ -648,8 +648,10 @@ export default function Docs() {
                   invites people again or removes them (never themselves), and nobody of theirs removes the super admin. A changed
                   address keeps its place and role; the old one is locked out at once. NDI does all of it, to the super admin too,
                   and makes someone the super admin; a client left without one is told so. Pausing and removing a client are NDI’s.
-                  Nobody can be on two clients’ lists — their meetings would move — nor anyone at NDI: for NDI’s own client,
-                  everybody at NDI counts already.
+                  Nobody can be on two clients’ lists or at another client’s domain — their meetings would move — nor anyone at NDI.
+                  Somebody at a client’s own domain is not added: they have access already (Ava can still email them the
+                  invitation). A company domain is set by the super admin or NDI, and must be real — it receives email, looked up
+                  in its DNS — not a shared provider like gmail.com, not NDI’s, and not another client’s.
                 </Card>
                 <Card tone="violet" title="Reading documents">
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
@@ -845,7 +847,7 @@ export default function Docs() {
                   [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
                   [<C key="r">/api/admin/clients · [id]</C>, "Admins", "List clients and create one (with its invitations); delete one"],
-                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; who can use her — add; change an address, invite again and remove (their super admin, or NDI — the super admin too); make someone super admin (NDI); pausing, NDI only"],
+                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; company domain (their super admin, or NDI); who can use her — add; change an address, invite again and remove (their super admin, or NDI — the super admin too); make someone super admin (NDI); pausing, NDI only"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],

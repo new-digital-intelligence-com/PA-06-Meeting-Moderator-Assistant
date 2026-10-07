@@ -8,19 +8,82 @@
  * theirs removes the super admin. NDI does all of it, the super admin included, and makes
  * someone the super admin.
  *
- * A meeting is a client's when its organiser is on that list: not by company domain, and
- * never by a guest — otherwise anybody could put one client employee on an invite and
- * have Ava for free. NDI's own client also has NDI's addresses (ADMIN_DOMAIN), which are
- * never on a list: NDI sees every client anyway.
+ * And a client can have company domains: anybody at one is theirs without being added —
+ * they sign in to the client's page, and the meetings they organise are the client's.
+ * NDI's own client is the one with NDI's domain (ADMIN_DOMAIN). A domain is real (it
+ * receives email), never a shared mail provider, and one client's only.
+ *
+ * A meeting is a client's when its organiser is on the client's list or at its domain —
+ * never by a guest, or anybody could put one client employee on an invite and have Ava for
+ * free. The list comes first: somebody on one client's list stays that client's.
  */
+import { Resolver } from "node:dns/promises";
 import { adminDomain, isAdminEmail } from "./auth";
 import { avaGoogle } from "./ava";
 import { removeLogo } from "./cloudinary";
 import { asClient, asMember, db, rows, type Client, type Member } from "./db";
-import { emailDomain } from "./mail-domains";
+import { PERSONAL, emailDomain } from "./mail-domains";
 import { sendEmail } from "./workspace";
 
 export { emailDomain };
+
+/** Domains as typed — "https://www.acme.com/about", "@acme.com" — down to "acme.com". */
+export function cleanDomains(input: string[] | string | undefined): string[] {
+  const list = Array.isArray(input) ? input : (input ?? "").split(/[\s,;]+/);
+  const out = list
+    .map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/^@/, "").replace(/[/?#].*$/, ""))
+    .filter(Boolean);
+  const bad = out.find((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d));
+  if (bad) throw new Error(`${bad} is not a domain. It looks like acme.com.`);
+  const personal = out.find((d) => PERSONAL.has(d));
+  if (personal) throw new Error(`${personal} is a shared mail provider — everybody has an address there. Add the person's exact address instead.`);
+  return [...new Set(out)];
+}
+
+/**
+ * Why a domain is not a real company's — or null when it receives email. Everybody at it
+ * signs in and invites her with an address there, so its mail servers are what count, not
+ * a website: some companies' sites live elsewhere.
+ */
+async function notReal(domain: string): Promise<string | null> {
+  const dns = new Resolver({ timeout: 4000, tries: 2 });
+  try {
+    const mx = await dns.resolveMx(domain);
+    // "." or nothing: a domain that says it takes no email (RFC 7505).
+    return mx.some((r) => r.exchange && r.exchange !== ".") ? null : `${domain} receives no email, so nobody can have an address there.`;
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "ENOTFOUND") return `${domain} does not exist — check the spelling.`;
+    if (code === "ENODATA") return `${domain} receives no email, so nobody can have an address there.`;
+    return `${domain} could not be checked just now (${code ?? "no answer"}) — try again in a moment.`;
+  }
+}
+
+/**
+ * A client's company domains, checked: typed as domains, not a shared mail provider, not
+ * NDI's (but for NDI's own client), not another client's, and — those not already theirs —
+ * real. Another client is named to NDI only.
+ */
+export async function domainsFor(clientId: string | null, input: string[] | string | undefined, { admin }: { admin: boolean }): Promise<string[]> {
+  const domains = cleanDomains(input);
+  const clients = await allClients();
+  const current = clients.find((c) => c.id === clientId);
+  for (const d of domains) {
+    if (current?.domains.includes(d)) continue;
+    if (d === adminDomain()) throw new Error(`${d} is NDI's own domain.`);
+    const other = clients.find((c) => c.id !== clientId && c.domains.includes(d));
+    if (other) throw new Error(admin ? `${d} is ${other.name}'s domain already.` : `${d} is another company's domain on Ava.`);
+    const why = await notReal(d);
+    if (why) throw new Error(why);
+  }
+  return domains;
+}
+
+/** The client whose company domain an address is at, of these. */
+export function clientAtDomain(clients: Client[], email: string): Client | null {
+  const d = emailDomain(email);
+  return d ? (clients.find((c) => c.domains.includes(d)) ?? null) : null;
+}
 
 export function cleanAddresses(input: string[] | string | undefined): string[] {
   const list = Array.isArray(input) ? input : (input ?? "").split(/[\s,;]+/);
@@ -30,7 +93,7 @@ export function cleanAddresses(input: string[] | string | undefined): string[] {
 /**
  * The active client an organiser's address belongs to (or a paused one too), from lists
  * loaded once: the clients, and who can use her for each (`people`, address → client id).
- * Only somebody on a client's list — and, for NDI's own client, anybody at NDI.
+ * Somebody on a client's list first, from any address; then anybody at a client's domain.
  */
 export function matchClient(
   clients: Client[],
@@ -43,7 +106,7 @@ export function matchClient(
   const active = includePaused ? clients : clients.filter((c) => c.status === "active");
   const theirs = people.get(e);
   if (theirs) return active.find((c) => c.id === theirs) ?? null;
-  return isAdminEmail(e) ? (active.find((c) => c.domains.includes(adminDomain())) ?? null) : null;
+  return clientAtDomain(active, e);
 }
 
 /** A client's super admin: the first "owner" on its list, as listMembers gives it. */
@@ -123,9 +186,16 @@ async function takenElsewhere(emails: string[], clientId: string | null): Promis
 
 /**
  * A new client and its list: the super admin first ("owner"), then anyone else who can use
- * her ("member"). Nobody already on another client's list, and nobody at NDI.
+ * her ("member"); and its company domains, if any. Nobody already on another client's list
+ * or at another client's domain, and nobody at NDI.
  */
-export async function createClient(input: { name: string; owner?: string; contacts?: string[] | string; by: string }): Promise<Client> {
+export async function createClient(input: {
+  name: string;
+  owner?: string;
+  contacts?: string[] | string;
+  domains?: string[] | string;
+  by: string;
+}): Promise<Client> {
   const name = input.name.trim();
   if (!name) throw new Error("Give the client a name.");
   const [owner] = cleanAddresses([input.owner ?? ""]);
@@ -133,11 +203,20 @@ export async function createClient(input: { name: string; owner?: string; contac
   const people = [owner, ...cleanAddresses(input.contacts).filter((e) => e !== owner)];
   const ndi = people.find((e) => isAdminEmail(e));
   if (ndi) throw new Error(`${ndi} is NDI's: NDI already sees every client, so it is on no client's list.`);
+  const domains = await domainsFor(null, input.domains, { admin: true });
+  // The super admin can be at it; anybody else there needs no place on the list.
+  const atOwn = people.slice(1).find((e) => domains.includes(emailDomain(e)));
+  if (atOwn) throw new Error(`${atOwn} is at @${emailDomain(atOwn)}, their company domain: they have access already — leave them out.`);
+  const clients = await allClients();
+  for (const e of people) {
+    const theirs = clientAtDomain(clients, e);
+    if (theirs) throw new Error(`${e} is at @${emailDomain(e)}, ${theirs.name}'s domain.`);
+  }
   const [taken] = await takenElsewhere(people, null);
   if (taken) throw new Error(`${taken.email} already signs in for ${taken.client}.`);
 
   const client = asClient(
-    await rows<Record<string, unknown>>(db().from("clients").insert({ name, created_by: input.by }).select("*").single()),
+    await rows<Record<string, unknown>>(db().from("clients").insert({ name, domains, created_by: input.by }).select("*").single()),
   );
   const added = await db()
     .from("members")
@@ -150,14 +229,19 @@ export async function createClient(input: { name: string; owner?: string; contac
   return client;
 }
 
-export async function updateClient(id: string, patch: { name?: string; instructions?: string; status?: string }): Promise<Client> {
+/** `domains`: already checked (domainsFor). */
+export async function updateClient(
+  id: string,
+  patch: { name?: string; instructions?: string; status?: string; domains?: string[] },
+): Promise<Client> {
   const current = await getClient(id);
   if (!current) throw new Error("No such client.");
   const name = patch.name !== undefined ? patch.name.trim() || current.name : current.name;
   const instructions = patch.instructions !== undefined ? patch.instructions.slice(0, 20_000) : current.instructions;
   const status = patch.status === "paused" || patch.status === "active" ? patch.status : current.status;
+  const domains = patch.domains ?? current.domains;
   return asClient(
-    await rows<Record<string, unknown>>(db().from("clients").update({ name, instructions, status }).eq("id", id).select("*").single()),
+    await rows<Record<string, unknown>>(db().from("clients").update({ name, instructions, status, domains }).eq("id", id).select("*").single()),
   );
 }
 
