@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { decrypt, encrypt } from "./seal";
+import { SESSION_MS, stillValid } from "./sessionLife";
 
 export { decrypt, encrypt };
 
@@ -28,15 +29,18 @@ export type PortalUser = {
 export type Session = {
   google?: GoogleTokens;
   user?: PortalUser;
+  /** When this sign-in ends (epoch ms): checked here, not only by the browser's cookie. */
+  until?: number;
 };
 
-/** The session in a cookie value, or an empty one when it is missing or tampered with. */
+/** The session in a cookie value, or an empty one when it is missing, tampered with or over. */
 export function sessionFrom(raw: string | undefined): Session {
   if (!raw) return {};
   const plain = decrypt(raw);
   if (!plain) return {};
   try {
-    return JSON.parse(plain) as Session;
+    const session = JSON.parse(plain) as Session;
+    return stillValid(session) ? session : {};
   } catch {
     return {};
   }
@@ -46,16 +50,16 @@ export async function readSession(): Promise<Session> {
   return sessionFrom((await cookies()).get(COOKIE)?.value);
 }
 
-/** Serialised cookie value — set it on a NextResponse. */
+/** Serialised cookie value — set it on a NextResponse. Good for 30 days from now, cookie and session alike. */
 export function sessionCookie(session: Session) {
   return {
     name: COOKIE,
-    value: encrypt(JSON.stringify(session)),
+    value: encrypt(JSON.stringify({ ...session, until: Date.now() + SESSION_MS })),
     httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: SESSION_MS / 1000,
   };
 }
 

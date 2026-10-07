@@ -700,7 +700,7 @@ export default function Docs() {
                 <FileRow path="lib/ava.ts">Her own Google access, stored encrypted on the server; the runner-key check.</FileRow>
                 <FileRow path="lib/workspace.ts">Calendar (her invites), Gmail (drafts and sending), Drive (search and sharing).</FileRow>
                 <FileRow path="lib/email.ts">The designed notes email — the client’s name in a client’s meeting, NDI’s otherwise — built from the plain-text notes.</FileRow>
-                <FileRow path="lib/google.ts · lib/session.ts">Google OAuth — Ava’s own account, and signing in — and the encrypted session cookie.</FileRow>
+                <FileRow path="lib/google.ts · lib/session.ts · lib/sessionLife.ts">Google OAuth — Ava’s own account, and signing in — and the encrypted session cookie, good for 30 days.</FileRow>
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
                 <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams — and the join link written in an invite.</FileRow>
                 <FileRow path="app/api/ava/dispatch">
@@ -719,7 +719,8 @@ export default function Docs() {
                 </FileRow>
                 <FileRow path="proxy.ts · lib/auth.ts · lib/seal.ts" tag={<Chip tone="emerald">the door</Chip>}>
                   Nothing opens without signing in — or the runner’s key — except signing in and these docs. Who is an admin, who
-                  signs in for which client (checked again on every request), and the encryption of the session cookie.
+                  signs in for which client (checked again on every request), and the encryption of the session cookie. A
+                  sign-in lasts 30 days: the date is kept inside the session too, so a copied cookie stops working then as well.
                 </FileRow>
                 <FileRow path="app/privacy">
                   The privacy notice — public, like these docs. Google asks for it before people outside NDI may sign in with

@@ -9,6 +9,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { appOrigin } from "@/lib/origin";
 import { decrypt } from "@/lib/seal";
+import { stillValid } from "@/lib/sessionLife";
 
 // Signing in and out. Not /api/auth/google itself: connecting Ava's account is for admins.
 const OPEN = [/^\/login(\/|$)/, /^\/docs(\/|$)/, /^\/privacy(\/|$)/, /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/];
@@ -20,7 +21,9 @@ function userFrom(raw: string | undefined): User | null {
   const plain = decrypt(raw);
   if (!plain) return null;
   try {
-    return (JSON.parse(plain) as { user?: User }).user ?? null;
+    const session = JSON.parse(plain) as { user?: User; until?: number };
+    // A sign-in lasts 30 days, whatever the cookie it came in says (lib/sessionLife.ts).
+    return stillValid(session) ? (session.user ?? null) : null;
   } catch {
     return null;
   }

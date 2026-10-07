@@ -31,6 +31,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "A sign-in ends after 30 days, for the server too",
+    points: [
+      "The 30 days were kept only by the browser's cookie: a cookie copied off a computer would have gone on working. The end date is now inside the session as well, and the site refuses it after that.",
+      "Nobody had to sign in again: sessions from before keep working until their own 30 days are up — 6 November at the latest.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "Inviting again: the super admin's",
     points: [
       "“Resend invite” is the super admin's — and NDI's — only: the people they added no longer see it, and the site refuses it from them. Adding someone new, with their first invitation, stays open to everyone on the list.",
