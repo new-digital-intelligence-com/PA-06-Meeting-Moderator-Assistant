@@ -111,7 +111,7 @@ export const EARLY_MS = Number(process.env.AVA_JOIN_EARLY_SECONDS || 60) * 1000;
 
 export function requireApp() {
   if (!APP) {
-    throw new Error("AVA_APP_URL is not set in bot/.env — it is the deployed app, e.g. https://pa-06-meeting-moderator-assistant.vercel.app");
+    throw new Error("AVA_APP_URL is not set in bot/.env — it is the deployed app, e.g. https://pa-06-meeting-moderator-assistant-production.up.railway.app");
   }
   return APP;
 }

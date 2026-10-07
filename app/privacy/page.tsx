@@ -82,7 +82,7 @@ export default function Privacy() {
         <h2 className={h2}>Services that process it</h2>
         <ul className="mt-3 list-disc space-y-1 pl-5">
           <li className={li}>Google (sign-in, Drive, Calendar and Gmail for Ava&apos;s own account, Meet).</li>
-          <li className={li}>Supabase, where the database is hosted, and Vercel, where this site runs.</li>
+          <li className={li}>Supabase, where the database is hosted, and Railway, where this site runs.</li>
           <li className={li}>Cloudinary, which keeps and shows your company&apos;s logo.</li>
           <li className={li}>Anthropic (Claude), which writes summaries, briefs and meeting notes.</li>
           <li className={li}>

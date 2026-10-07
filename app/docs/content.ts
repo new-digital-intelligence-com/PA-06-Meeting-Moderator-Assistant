@@ -31,6 +31,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "What still said Vercel",
+    points: [
+      "The privacy page names Railway as where the site runs. The control room warns about a store her server cannot share on any deployed address, not only a vercel.app one. Her server's example address is Railway's.",
+      "Checked from outside: Google accepts the Drive picker's sign-in from the Railway address (and refuses an unlisted one, the control).",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "The site moves to Railway",
     points: [
       "The site runs on Railway, in the POCs project's [PA-06] group: the site (https://pa-06-meeting-moderator-assistant-production.up.railway.app) and its own Redis beside it, reachable only on Railway's private network. Same settings as on Vercel; her Google account connected again there.",

@@ -121,7 +121,9 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
     return () => window.clearInterval(id);
   }, [router]);
 
-  const storeOk = config.store !== "file" || !config.publicUrl.includes("vercel.app");
+  // A file is only fine on this computer: on a deployed site her server and the pages would not share it.
+  const deployed = Boolean(config.publicUrl) && !/\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(config.publicUrl);
+  const storeOk = config.store !== "file" || !deployed;
   const link = "inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700";
   const busy = now.filter((s) => s.busy);
   const followable = busy.filter((s): s is Now & { client: { id: string; name: string } } => Boolean(s.client));
@@ -200,7 +202,7 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
           title="Meeting storage"
           detail={
             config.store === "file"
-              ? config.publicUrl.includes("vercel.app")
+              ? deployed
                 ? "A local file: set up Redis for the live site."
                 : "A local file (this computer)."
               : `${config.store === "redis" ? "Redis" : "MongoDB"}: shared by her and this site.`
