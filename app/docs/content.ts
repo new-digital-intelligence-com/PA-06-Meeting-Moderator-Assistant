@@ -31,6 +31,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "The company domain, locked on the client's side",
+    points: [
+      "On a client's Setup the company domain shows in a greyed-out field that cannot be changed there — set by NDI; their super admin asks for a change below it.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "The company domain is NDI's to set",
     points: [
       "Only NDI changes a client's company domain — anybody at it signs in to the client's page. Their super admin asks for a change on their Setup tab: the domain asked for is checked as NDI's would be (real, not a shared provider, nobody else's), then the request is emailed to Ava's inbox with a link to the client's page. One request every 10 minutes at most.",

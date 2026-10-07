@@ -274,21 +274,30 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
               <p className="text-sm font-semibold text-slate-900">Which meetings Ava joins {admin ? "for them" : "for you"}</p>
-              {admin && (
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-slate-700">Company domain</span>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-700">Company domain</span>
+                {admin ? (
                   <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
-                  <span className="block text-slate-500">
-                    Everybody with an address there signs in here and can invite her, without being added. It must be a real
-                    company domain that receives email — not a shared one like gmail.com, and not another company&apos;s.
-                  </span>
-                </label>
-              )}
+                ) : (
+                  // Theirs to see, NDI's to change: locked on the client's side.
+                  <input
+                    className={`${field} disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none`}
+                    value={client.domains.join(", ")}
+                    placeholder="None yet"
+                    disabled
+                    readOnly
+                  />
+                )}
+                <span className="block text-slate-500">
+                  {admin
+                    ? "Everybody with an address there signs in here and can invite her, without being added. It must be a real company domain that receives email — not a shared one like gmail.com, and not another company's."
+                    : "Set by NDI. Everybody with an address there signs in here and can invite her, without being added."}
+                </span>
+              </label>
               <p>
                 Those whose invite comes from{" "}
                 {client.domains.length > 0 && <>anybody at {client.domains.map((d) => `@${d}`).join(", ")}, or from </>}
                 one of the people who can use her. Invites from anyone else she leaves alone.
-                {!admin && <> Your company domain is set by NDI.</>}
               </p>
               {superAdmin &&
                 (requesting ? (
