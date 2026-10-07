@@ -528,6 +528,8 @@ export const teams = {
     const bot = new RegExp(who.bots, "i");
     const me = new RegExp(who.self, "i");
     const text = document.body?.innerText?.slice(0, 6000) ?? "";
+    // The stage's own words too: the captions under it can push them past the first 6000.
+    const stage = document.querySelector('[data-tid="modern-stage-wrapper"]')?.innerText?.slice(0, 2000) ?? "";
     // The People button's number counts everybody, bots too. Read by its id first: its
     // "People" label is not on the button itself, and a real call showed "3 People"
     // while she counted two.
@@ -548,20 +550,27 @@ export const teams = {
       ),
     ];
     const bots = names.filter((n) => bot.test(n) && !me.test(n));
+    const others = names.filter((n) => !me.test(n) && !bots.includes(n));
     const humans = names.length - bots.length;
-    // More people than tiles on screen: some are off it, and she is plainly not alone.
-    const people = names.length ? (roster > names.length ? roster - bots.length : humans) : roster;
-    return {
-      inCall: Boolean(
-        document.querySelector(
-          '#hangup-button, [data-tid="hangup-main-btn"], [data-tid="call-hangup"], button[aria-label^="Leave" i], button[aria-label^="Hang up" i]',
-        ),
+    const inCall = Boolean(
+      document.querySelector(
+        '#hangup-button, [data-tid="hangup-main-btn"], [data-tid="call-hangup"], button[aria-label^="Leave" i], button[aria-label^="Hang up" i]',
       ),
+    );
+    // More people than tiles on screen: some are off it, and she is plainly not alone.
+    let people = names.length ? (roster > names.length ? roster - bots.length : humans) : roster;
+    // Nobody else's tile, and the People button counts nobody but her (and notetakers): she
+    // is the only one left. Teams can take her own tile off the stage then and hide the
+    // number, which left nothing to count — and a count it cannot make is never "alone":
+    // she stayed on in a call everybody had left, until it was ended from the site.
+    if (inCall && !others.length && roster <= 1 + bots.length) people = 1;
+    return {
+      inCall,
       ended: /you left the meeting|the meeting has ended|this meeting has ended|you've been removed|you have been removed|call ended/i.test(text),
-      alone: /waiting for others to join|you're the only one here|no one else is here/i.test(text),
+      alone: /waiting for others to join|you're the only one here|no one else is here/i.test(`${stage}\n${text}`),
       people: people || null,
       bots,
-      others: names.filter((n) => !me.test(n) && !bots.includes(n)).map((n) => [n]),
+      others: others.map((n) => [n]),
       tiles: names.length,
       badge: roster,
       face: window.__ava?.face?.() ?? null,

@@ -1,5 +1,7 @@
 /** Small pieces shared by the client and admin pages. */
 
+import { PLATFORM_NAME, platformOf } from "@/lib/platform";
+
 export const field =
   "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 export const button =
@@ -71,6 +73,24 @@ export function Chip({ tone = "neutral", children }: { tone?: "good" | "warn" | 
   };
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${tones[tone]}`}>{children}</span>
+  );
+}
+
+/** Which product a meeting is on, from its link — Google Meet or Microsoft Teams — or nothing. */
+export function PlatformChip({ url }: { url: string | null | undefined }) {
+  const platform = platformOf(url);
+  if (!platform) return null;
+  const teams = platform === "teams";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+        teams ? "bg-indigo-50 text-indigo-700 ring-indigo-600/20" : "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+      }`}
+      title={teams ? "She joins as a guest named Ava; somebody admits her from the lobby" : "She joins as herself"}
+    >
+      <span aria-hidden="true" className={`size-1.5 rounded-full ${teams ? "bg-indigo-500" : "bg-emerald-500"}`} />
+      {PLATFORM_NAME[platform]}
+    </span>
   );
 }
 

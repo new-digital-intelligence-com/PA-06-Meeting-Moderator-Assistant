@@ -156,7 +156,7 @@ export default function Docs() {
                   },
                   {
                     title: "She leaves",
-                    body: "When the meeting ends, when she is removed, one minute after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the client's page. She knows she is alone from the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people, and the chat button's unread count is never taken for a head count — and from its “you're the only one here”. A bot she does not know by name cannot keep her either (one kept her in an empty meeting for over an hour): once everybody who has spoken has gone and whoever is left — two at most — has not said a word for a minute, she leaves; and after ten minutes in which nobody has said anything, she leaves whoever is on screen. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
+                    body: "When the meeting ends, when she is removed, one minute after everybody else has left, five minutes after the start time if nobody turned up, or when it is ended from the client's page. She knows she is alone from the meeting's own participant tiles — other notetaker bots (Fireflies, Otter, Read.ai…) do not count as people, and the chat button's unread count is never taken for a head count — and from its “you're the only one here”. In Teams, from its People button and its tiles: nobody else on screen and no count above one is alone (Teams can hide both when she is), and when the button goes on counting somebody who has left, a minute with nobody else on screen and not a word is too. A bot she does not know by name cannot keep her either (one kept her in an empty meeting for over an hour): once everybody who has spoken has gone and whoever is left — two at most — has not said a word for a minute, she leaves; and after ten minutes in which nobody has said anything, she leaves whoever is on screen. While she waits alone, nothing is open: her GPT-Live session and her face close within seconds of the room emptying.",
                     tone: "violet",
                   },
                   {
@@ -466,6 +466,11 @@ export default function Docs() {
                     body: "More → Language and speech → Turn on live captions. From here it is the same brain as Meet.",
                     tone: "emerald",
                   },
+                  {
+                    title: "Everybody leaves, and so does she",
+                    body: "A minute after the last person has gone, as in Meet — counted from the People button and the tiles on screen, which Teams can hide once she is alone.",
+                    tone: "violet",
+                  },
                 ]}
               />
               <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -474,7 +479,8 @@ export default function Docs() {
                 </Callout>
                 <Callout tone="sky" title="What she saw">
                   She saves a screenshot and the page to her disk (<C>/data/debug-teams-*.png</C>) when a step fails, 20 seconds
-                  into each call, and when she decides the call is over — Teams changes its pages without notice.
+                  into each call, when nobody else is left on screen, and when she decides the call is over — Teams changes its
+                  pages without notice.
                 </Callout>
               </div>
             </Section>
@@ -549,12 +555,12 @@ export default function Docs() {
                 items={[
                   {
                     title: "NDI sets the client up (/admin)",
-                    body: "Name, who can use her — they open the client’s page and she joins the meetings they invite her to, from any address — and, for anyone else whose invites count, the company domain or exact addresses (gmail.com is everybody). Ava emails each person who can use her an invitation from her own Gmail.",
+                    body: "Name, and their super admin — the person who runs Ava for them, any address — with anyone else who can use her. They open the client’s page, and she joins only the meetings one of them invites her to: not by company domain. Ava emails each an invitation from her own Gmail.",
                     tone: "sky",
                   },
                   {
                     title: "The client signs in (/client)",
-                    body: "With Google, or a link by email that works once for 15 minutes — no passwords. Only the addresses added for them get in; nobody signs up. Their Setup tab is theirs to run: their logo and name, and who can use her — adding people (Ava emails them the invitation) or removing them.",
+                    body: "With Google, for an address that is a Google account, or else a link by email — Outlook or anything — that works once for 15 minutes; no passwords. Only the people on the client’s list get in; nobody signs up. Their Setup tab: their logo and name, and who can use her — anybody on the list adds people (Ava emails them the invitation); only the super admin removes them, and nobody of theirs removes the super admin.",
                     tone: "sky",
                   },
                   {
@@ -564,7 +570,7 @@ export default function Docs() {
                   },
                   {
                     title: "They invite her to a meeting",
-                    body: "From their calendar, like a colleague. Within a minute it is on their page, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only — with their earlier meetings to look back on. Saving writes her brief, which they read back. A minute before it starts, the preparation locks.",
+                    body: "From their calendar, like a colleague. Within a minute it is on their page, marked Google Meet or Microsoft Teams, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only — with their earlier meetings to look back on. Saving writes her brief, which they read back. A minute before it starts, the preparation locks.",
                     tone: "emerald",
                   },
                   {
@@ -602,12 +608,12 @@ export default function Docs() {
                   anyway — nobody’s client, a paused client’s, no Meet or Teams link — are not answered.
                 </Card>
                 <Card tone="sky" title="Whose meeting is it?">
-                  The organiser’s: one of the client’s exact addresses first, then the people who can use her, then the company
-                  domain — never a guest, or anybody could put one client’s employee on an invite and have her for free. Someone
-                  who can use her brings every meeting they organise to that client, so NDI’s own people are not added to
-                  clients (admins see every client anyway). An invite from nobody’s client is skipped: she does not go, and
-                  admins see it under “Invites she skipped”, with one click to make that company a client. NDI is a client too,
-                  so NDI’s own meetings go on as before.
+                  The organiser’s, and only when they are on a client’s list — its super admin or somebody added. Not the company
+                  domain, and never a guest, or anybody could put one client’s employee on an invite and have her for free.
+                  Someone on a list brings every meeting they organise to that client, so NDI’s own people are on no client’s
+                  list (admins see every client anyway). NDI is a client too: its meetings are those organised by anybody at NDI
+                  (<C>ADMIN_DOMAIN</C>). An invite from anybody else is skipped: she does not go, and admins see it under
+                  “Invites she skipped”, with one click to make its organiser a new client’s super admin.
                 </Card>
                 <Card tone="amber" title="Every meeting’s history">
                   Kept per meeting, in <C>meeting_history</C>, and shown on the client’s page: the host’s changes read from her
@@ -637,10 +643,10 @@ export default function Docs() {
                   Admins — every address on <C>ADMIN_DOMAIN</C> — see every client, the control room and these docs. A client’s
                   people see their own page and nothing else; every request is checked against who may sign in for whom, at
                   that moment, so removing somebody locks them out at once. A paused client’s meetings are skipped and nobody
-                  signs in for it; its preparation is kept. A client adds and removes its own people (never itself), but which
-                  invites are theirs — domains and addresses — pausing and removing a client are NDI’s: otherwise a client could
-                  claim another company’s domain and see its meetings. For the same reason nobody can be added who is another
-                  client’s — by their people, domain or addresses — nor anyone at NDI.
+                  signs in for it; its preparation is kept. Its super admin is the address NDI set it up with: anybody on the list
+                  adds people, only the super admin removes them (never themselves), and nobody of theirs removes the super admin —
+                  NDI can make someone else it. Pausing and removing a client are NDI’s. Nobody can be added who is on another
+                  client’s list — their meetings would move — nor anyone at NDI.
                 </Card>
                 <Card tone="violet" title="Reading documents">
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
@@ -723,7 +729,7 @@ export default function Docs() {
                   Signing in with Google (who you are, nothing more) or with a link by email: 15 minutes, once, stored only as a
                   hash, and used by a button — mail scanners open links, and would spend it.
                 </FileRow>
-                <FileRow path="lib/clients.ts">Clients, who can use her for them, matching an organiser to a client, the invitation email.</FileRow>
+                <FileRow path="lib/clients.ts">Clients, who can use her for them — the super admin and the people added — matching an organiser to a client, the invitation email.</FileRow>
                 <FileRow path="lib/schedule.ts">
                   Her calendar copied into Postgres, each meeting given to a client by its organiser — or skipped. Preparation and
                   notes are kept on those rows; what the host changed since the last read goes into the meeting’s history. When a
@@ -835,7 +841,7 @@ export default function Docs() {
                   [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
                   [<C key="r">/api/admin/clients · [id]</C>, "Admins", "List clients and create one (with its invitations); delete one"],
-                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; who can use her — add, invite again, remove; which invites are theirs and pausing, NDI only"],
+                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; who can use her — add, invite again, remove (their super admin, or NDI), make someone super admin (NDI); pausing, NDI only"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],

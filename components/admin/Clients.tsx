@@ -14,8 +14,8 @@ import { Chip, CompanyLogo, Notice, Section, ago, api, field, primary, quiet, wh
 type ClientSummary = {
   id: string;
   name: string;
-  domains: string[];
-  addresses: string[];
+  /** Their super admin's address. */
+  owner: string | null;
   status: string;
   logo_url?: string | null;
   members: number;
@@ -27,7 +27,7 @@ type ClientSummary = {
 
 type Skipped = { id: string; title: string; starts_at: string; organizer: string | null; organizer_name: string | null };
 
-const EMPTY = { name: "", domains: "", addresses: "", contacts: "", invite: true };
+const EMPTY = { name: "", owner: "", contacts: "", invite: true };
 
 /** `screen`: her server's address, where each client's log is (bot/logs.mjs) — null until her runner has said it. */
 export default function Clients({ ava, screen = null }: { ava: string | null; screen?: string | null }) {
@@ -99,7 +99,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     }
   }
 
-  /** A client from an invite she skipped: its organiser's company domain, or the address itself. */
+  /** A client from an invite she skipped: its organiser becomes their super admin. */
   function fromInvite(m: Skipped) {
     const email = m.organizer ?? "";
     const domain = emailDomain(email);
@@ -107,9 +107,8 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     const company = domain.split(".").slice(-2, -1)[0] ?? "";
     setForm({
       name: personal ? (m.organizer_name ?? "") : company.charAt(0).toUpperCase() + company.slice(1),
-      domains: personal ? "" : domain,
-      addresses: personal ? email : "",
-      contacts: email,
+      owner: email,
+      contacts: "",
       invite: true,
     });
     setAdding(true);
@@ -125,8 +124,8 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
           <p className="max-w-2xl text-sm leading-relaxed text-slate-500">
-            One Ava, many clients. She attends a meeting when its organiser belongs to a client here, with that client&apos;s knowledge.
-            Invites from anybody else she leaves alone.
+            One Ava, many clients. She attends a meeting when its organiser is one of a client&apos;s people here, with that
+            client&apos;s knowledge. Invites from anybody else she leaves alone.
           </p>
         </div>
         {!adding && (
@@ -149,7 +148,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
       )}
 
       {adding && (
-        <Section title="New client" icon={<span className="text-lg font-semibold leading-none">+</span>} description="Set them up in a minute: who they are, whose invites count, who can use her.">
+        <Section title="New client" icon={<span className="text-lg font-semibold leading-none">+</span>} description="Set them up in a minute: who they are, and who can use her.">
 
           <form onSubmit={create} className="space-y-6">
             <div className="flex items-end gap-4">
@@ -186,39 +185,25 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
               </div>
             </div>
 
-            {/* Whose invites she takes, and who uses her: the people in 2 count for both. */}
+            {/* Who uses her is whose invites she takes: nobody else's, not even from the same company. */}
             <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <legend className="px-1 text-sm font-semibold text-slate-900">1 · Which meetings Ava joins for them</legend>
+              <legend className="px-1 text-sm font-semibold text-slate-900">Who can use her</legend>
               <p className="-mt-1 text-xs leading-5 text-slate-500">
-                Ava joins a meeting when the person who <b>sent the invite</b> is one of the people in 2, or matches one of these.
-                Leave both empty if the people in 2 are enough.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-1.5">
-                  <span className="text-xs font-medium text-slate-700">Company domain</span>
-                  <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
-                  <span className="block text-xs leading-5 text-slate-500">Everyone with an @acme.com address can invite her.</span>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-xs font-medium text-slate-700">Personal email addresses</span>
-                  <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="assistant@gmail.com" />
-                  <span className="block text-xs leading-5 text-slate-500">
-                    One person each, who can invite her without opening their page — for Gmail or another personal address.
-                  </span>
-                </label>
-              </div>
-            </fieldset>
-
-            <fieldset className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <legend className="px-1 text-sm font-semibold text-slate-900">2 · Who can use her</legend>
-              <p className="-mt-1 text-xs leading-5 text-slate-500">
-                They sign in to this site (with Google or an emailed link) to give Ava their documents and prepare her — and she
-                joins the meetings they invite her to.
+                They sign in to this site — with Google, or a link emailed to any address (Outlook too) — to give Ava their documents
+                and prepare her. She joins a meeting only when the person who <b>sent the invite</b> is one of them.
               </p>
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-slate-700">Their email addresses</span>
-                <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="anna@acme.com, founder@gmail.com" />
-                <span className="block text-xs leading-5 text-slate-500">Any address, company or personal: a founder on Gmail needs only this box.</span>
+                <span className="text-xs font-medium text-slate-700">Their super admin</span>
+                <input required type="email" className={field} value={form.owner} onChange={set("owner")} placeholder="anna@acme.com" />
+                <span className="block text-xs leading-5 text-slate-500">
+                  The person who runs Ava for them, company or personal address. They add their own people and are the only one of
+                  theirs who removes them; nobody of theirs can remove the super admin.
+                </span>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-700">Anyone else, now (optional)</span>
+                <input className={field} value={form.contacts} onChange={set("contacts")} placeholder="ben@acme.com, founder@gmail.com" />
+                <span className="block text-xs leading-5 text-slate-500">The same page as the super admin. They can be added later too.</span>
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.invite} onChange={set("invite")} className="accent-blue-600" />
@@ -227,7 +212,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
             </fieldset>
 
             <div className="flex gap-2">
-              <button className={primary} disabled={busy || !form.name.trim()}>
+              <button className={primary} disabled={busy || !form.name.trim() || !form.owner.includes("@")}>
                 {busy ? "Setting up…" : "Create"}
               </button>
               <button
@@ -269,7 +254,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
                   </Link>
                   <Chip tone={c.status === "active" ? "good" : "warn"}>{c.status === "active" ? "Active" : "Paused"}</Chip>
                 </div>
-                <p className="truncate text-xs text-slate-500">{[...c.domains.map((d) => `@${d}`), ...c.addresses].join(", ") || "No domain yet"}</p>
+                <p className="truncate text-xs text-slate-500">{c.owner ? `Super admin: ${c.owner}` : "No super admin yet"}</p>
                 <p className="mt-3 text-xs text-slate-500">
                   {c.members} can use her · {c.documents} documents · {c.upcoming} upcoming
                 </p>
@@ -296,7 +281,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
       {data && data.skipped.length > 0 && (
         <Section title="Invites she skipped">
           <p className="mb-3 text-sm text-slate-500">
-            From organisers who are nobody&apos;s client, so she did not go. Make them a client and she will.
+            From organisers on no client&apos;s list, so she did not go. Make one a client&apos;s super admin — a new client — and she will.
           </p>
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
             {data.skipped.map((m) => (

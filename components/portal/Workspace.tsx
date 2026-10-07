@@ -27,7 +27,7 @@ import { LivePanel, SendNow, useLive } from "./Live";
 import Markdown from "./Markdown";
 import MeetingRecord from "./MeetingRecord";
 import Setup from "./Setup";
-import { Chip, CompanyLogo, IconTile, Notice, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
+import { Chip, CompanyLogo, IconTile, Notice, PlatformChip, Section, ago, api, danger, field, primary, quiet, when } from "./ui";
 
 type Doc = {
   id: string;
@@ -72,8 +72,6 @@ type Data = {
     instructions: string;
     digest: string;
     digest_at: string | null;
-    domains: string[];
-    addresses: string[];
     status: string;
     logo_url: string | null;
   };
@@ -167,7 +165,6 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   const upcoming = held.filter((m) => !over(m));
   const past = held.filter(over).reverse();
   const ava = data.ava ?? "Ava";
-  const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
   const paused = client.status !== "active";
   const tabs: { id: Tab; label: string; icon: (p: { className?: string }) => React.ReactNode; count?: number }[] = [
     { id: "meetings", label: "Meetings", icon: CalendarIcon, count: upcoming.length },
@@ -219,7 +216,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         <p className="relative mt-6 max-w-3xl text-sm leading-relaxed text-blue-50/90">
           Invite <span className="font-semibold text-white">{ava}</span> to your meetings from your calendar, like a colleague — or send
           her to one right now. Here you give her what she should know about {client.name}, and prepare her for each meeting.
-          {routes.length > 0 && <> Meetings organised by {routes.join(", ")} are yours too.</>}
+          {" "}She joins the meetings organised by the people who can use her{clientId ? "" : " — see Setup"}.
         </p>
       </header>
 
@@ -974,7 +971,10 @@ function UpcomingMeeting({
           <span className="py-1 text-lg font-semibold leading-none text-slate-900">{start.getDate()}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-slate-900">{meeting.title}</p>
+          <p className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium text-slate-900">{meeting.title}</span>
+            <PlatformChip url={meeting.meeting_url} />
+          </p>
           <p className="mt-0.5 text-xs text-slate-500">
             {when(meeting.starts_at)}
             {meeting.organizer && <> · organised by {meeting.organizer_name || meeting.organizer}</>}
@@ -1328,6 +1328,7 @@ function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
     <li className={`overflow-hidden rounded-xl border transition ${open ? "border-slate-300 bg-slate-50/40 shadow-sm" : "border-slate-200/70 bg-slate-50/70 hover:border-slate-300 hover:bg-white"}`}>
       <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span className={`min-w-0 flex-1 truncate text-sm font-medium ${cancelled ? "text-slate-400 line-through decoration-slate-300" : "text-slate-700"}`}>{meeting.title}</span>
+        <PlatformChip url={meeting.meeting_url} />
         <span className="text-xs text-slate-400">{when(meeting.starts_at)}</span>
         {cancelled ? (
           <Chip tone="bad">Called off</Chip>

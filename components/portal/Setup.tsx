@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * A client's setup: their logo and name, which invites are theirs, and who can use her.
+ * A client's setup: their logo and name, and who can use her — whose invites are theirs.
  *
  * The same box for both sides. NDI sees it at the top of a client's page in /admin and
  * changes everything; the client's own people see it in their Setup tab and change their
- * logo, their name and who can use her. Which invites are theirs, pausing her and removing
- * the client stay NDI's: a client could otherwise claim another company's domain.
+ * logo and name, and add people. Only their super admin — the address NDI set them up with —
+ * removes people, and nobody of theirs removes the super admin. Who the super admin is,
+ * pausing her and removing the client stay NDI's.
  */
 
 import { useRouter } from "next/navigation";
@@ -17,14 +18,14 @@ import { Chip, CompanyLogo, IconTile, Notice, Section, ago, api, danger, field, 
 type Client = {
   id: string;
   name: string;
-  domains: string[];
-  addresses: string[];
   status: string;
   logo_url: string | null;
   created_at: string;
   created_by: string | null;
+  /** NDI's own client: everybody at this domain organises its meetings too. */
+  ndi_domain: string | null;
 };
-type Person = { id: string; email: string; name: string | null; last_login_at: string | null };
+type Person = { id: string; email: string; name: string | null; last_login_at: string | null; owner: boolean };
 type Data = { client: Client; people: Person[]; me: string; admin: boolean };
 
 export default function Setup({ clientId, onChanged }: { clientId?: string; onChanged?: () => void }) {
@@ -32,7 +33,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   const q = clientId ? `?client=${clientId}` : "";
   const amp = q ? "&" : "?";
   const [data, setData] = useState<Data | null>(null);
-  const [form, setForm] = useState({ name: "", domains: "", addresses: "", status: "active" });
+  const [form, setForm] = useState({ name: "", status: "active" });
   const [newPerson, setNewPerson] = useState({ email: "", invite: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
       .then((d) => {
         if (!alive) return;
         setData(d);
-        setForm({ name: d.client.name, domains: d.client.domains.join(", "), addresses: d.client.addresses.join(", "), status: d.client.status });
+        setForm({ name: d.client.name, status: d.client.status });
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load."));
     return () => {
@@ -72,10 +73,13 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     return error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-slate-500">Loading…</p>;
   }
   const { client, people, me, admin } = data;
+  // Their super admin removes people; NDI does too. Everybody on the list adds them.
+  const canRemove = admin || people.some((p) => p.owner && p.email === me);
+  const owner = people.find((p) => p.owner);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    // Only NDI sends which invites are theirs and whether she is paused.
+    // Only NDI sends whether she is paused.
     const body = admin ? form : { name: form.name };
     const r = await step("save", () => api<{ client: { name: string } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }));
     if (!r) return;
@@ -132,6 +136,15 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     if (r) setData((d) => (d ? { ...d, people: r.people } : d));
   }
 
+  /** NDI only: the client's super admin becomes someone else on the list. */
+  async function makeSuperAdmin(p: Person) {
+    if (!window.confirm(`Make ${p.email} ${client.name}'s super admin? ${owner ? `${owner.email} stays on the list, as one of their people.` : ""}`)) return;
+    const r = await step(`owner:${p.id}`, () => api<{ people: Person[] }>(`/api/portal/people${q}${amp}person=${p.id}`, { method: "PATCH" }));
+    if (!r) return;
+    setData((d) => (d ? { ...d, people: r.people } : d));
+    setNotice(`${p.email} is ${client.name}'s super admin now.`);
+  }
+
   async function removeClient() {
     const typed = window.prompt(
       `This removes ${client.name}: who can use her, their documents, meetings and notes. Their files in NDI's Drive stay.\n\nType the name to confirm:`,
@@ -142,7 +155,6 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   }
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const routes = [...client.domains.map((d) => `anyone @${d}`), ...client.addresses];
 
   return (
     <div className="space-y-4">
@@ -202,29 +214,14 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
               <input className={field} value={form.name} onChange={set("name")} />
             </label>
 
-            {admin ? (
-              <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <legend className="px-1 text-sm font-semibold text-slate-900">Which meetings Ava joins for them</legend>
-                <p className="-mt-1 text-xs leading-5 text-slate-500">
-                  When the person who sent the invite is one of the people who can use her, or matches one of these. NDI only.
-                </p>
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-slate-700">Company domain</span>
-                  <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-slate-700">Personal email addresses</span>
-                  <input className={field} value={form.addresses} onChange={set("addresses")} placeholder="assistant@gmail.com" />
-                </label>
-              </fieldset>
-            ) : (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
-                <p className="text-sm font-semibold text-slate-900">Which meetings Ava joins for you</p>
-                <p className="mt-1">
-                  Those sent by the people who can use her{routes.length > 0 && <>, and by {routes.join(", ")}</>}. To change this, ask NDI.
-                </p>
-              </div>
-            )}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
+              <p className="text-sm font-semibold text-slate-900">Which meetings Ava joins {admin ? "for them" : "for you"}</p>
+              <p className="mt-1">
+                Those whose invite comes from one of the people who can use her
+                {client.ndi_domain && <>, or from anyone with an @{client.ndi_domain} address</>}. Invites from anyone else she leaves
+                alone — add the person first.
+              </p>
+            </div>
 
             {admin && (
               <label className="block space-y-1.5">
@@ -257,7 +254,9 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                 <h3 className="text-sm font-semibold text-slate-900">Who can use her</h3>
                 <p className="mt-0.5 text-xs leading-5 text-slate-500">
                   They sign in to give Ava documents and prepare her, and she joins the meetings they invite her to — from any
-                  address, company or personal.
+                  address, company or personal. Everyone here can add people; only the super admin
+                  {admin ? " — the address the client was set up with — and NDI remove them" : " removes them"}, and nobody
+                  {admin ? " of theirs" : ""} can remove the super admin.
                 </p>
               </div>
             </div>
@@ -269,19 +268,27 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                   const you = !admin && p.email === me;
                   return (
                     <li key={p.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
-                      <span className="min-w-0 flex-1 truncate text-slate-700" title={p.email}>
+                      <span className="min-w-40 flex-1 truncate text-slate-700" title={p.email}>
                         {p.name ? `${p.name} · ` : ""}
                         {p.email}
                       </span>
+                      {p.owner && <Chip tone="warn">Super admin</Chip>}
                       {you ? <Chip tone="info">You</Chip> : p.last_login_at ? <Chip tone="good">Signed in {ago(p.last_login_at)}</Chip> : <Chip>Not yet</Chip>}
                       {!you && (
                         <>
                           <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => void resend(p)} disabled={busy !== null}>
                             {busy === `resend:${p.id}` ? "Sending…" : "Resend invite"}
                           </button>
-                          <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void removePerson(p)} disabled={busy !== null}>
-                            Remove
-                          </button>
+                          {admin && !p.owner && (
+                            <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => void makeSuperAdmin(p)} disabled={busy !== null}>
+                              {busy === `owner:${p.id}` ? "Saving…" : "Make super admin"}
+                            </button>
+                          )}
+                          {canRemove && !p.owner && (
+                            <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void removePerson(p)} disabled={busy !== null}>
+                              Remove
+                            </button>
+                          )}
                         </>
                       )}
                     </li>

@@ -1,30 +1,24 @@
 /**
  * Ava's clients: who they are, who can use her for them, and which meetings are theirs.
  *
- * A meeting belongs to the client of whoever organised it — one of its exact addresses
- * first (a personal account, which cannot be matched by its domain: gmail.com is
- * everybody), then the people who can use her (members: they open the client's page, and
- * their invites are the client's from whatever address), then the company domain. The
- * organiser, never a guest: otherwise a stranger could put one client employee on an
- * invite and have Ava for free.
+ * Who can use her is one list per client (the members table): its super admin — the
+ * address NDI set the client up with (role "owner") — and the people added since
+ * ("member"). They all have the same page and can add people; only the super admin (and
+ * NDI) removes anyone, and nobody removes the super admin — NDI can make someone else it.
+ *
+ * A meeting is a client's when its organiser is on that list: not by company domain, and
+ * never by a guest — otherwise anybody could put one client employee on an invite and
+ * have Ava for free. NDI's own client also has NDI's addresses (ADMIN_DOMAIN), which are
+ * never on a list: NDI sees every client anyway.
  */
+import { adminDomain, isAdminEmail } from "./auth";
 import { avaGoogle } from "./ava";
 import { removeLogo } from "./cloudinary";
 import { asClient, asMember, db, rows, type Client, type Member } from "./db";
-import { PERSONAL, emailDomain } from "./mail-domains";
+import { emailDomain } from "./mail-domains";
 import { sendEmail } from "./workspace";
 
 export { emailDomain };
-
-export function cleanDomains(input: string[] | string | undefined): string[] {
-  const list = Array.isArray(input) ? input : (input ?? "").split(/[\s,;]+/);
-  const out = list
-    .map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/^@/, "").replace(/\/.*$/, ""))
-    .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
-  const personal = out.find((d) => PERSONAL.has(d));
-  if (personal) throw new Error(`${personal} is a shared mail provider — add the person's exact address instead of the domain.`);
-  return [...new Set(out)];
-}
 
 export function cleanAddresses(input: string[] | string | undefined): string[] {
   const list = Array.isArray(input) ? input : (input ?? "").split(/[\s,;]+/);
@@ -34,6 +28,7 @@ export function cleanAddresses(input: string[] | string | undefined): string[] {
 /**
  * The active client an organiser's address belongs to (or a paused one too), from lists
  * loaded once: the clients, and who can use her for each (`people`, address → client id).
+ * Only somebody on a client's list — and, for NDI's own client, anybody at NDI.
  */
 export function matchClient(
   clients: Client[],
@@ -45,12 +40,22 @@ export function matchClient(
   if (!e.includes("@")) return null;
   const active = includePaused ? clients : clients.filter((c) => c.status === "active");
   const theirs = people.get(e);
-  return (
-    active.find((c) => c.addresses.includes(e)) ??
-    active.find((c) => c.id === theirs) ??
-    active.find((c) => c.domains.includes(emailDomain(e))) ??
-    null
-  );
+  if (theirs) return active.find((c) => c.id === theirs) ?? null;
+  return isAdminEmail(e) ? (active.find((c) => c.domains.includes(adminDomain())) ?? null) : null;
+}
+
+/** A client's super admin: the first "owner" on its list, as listMembers gives it. */
+export function ownerOf(members: Member[]): Member | null {
+  return members.find((m) => m.role === "owner") ?? null;
+}
+
+/** Who can use her for a client, as its Setup shows them: the super admin marked, and first. */
+export async function peopleOf(clientId: string) {
+  const members = await listMembers(clientId);
+  const owner = ownerOf(members);
+  return members
+    .map((m) => ({ id: m.id, email: m.email, name: m.name, last_login_at: m.last_login_at, owner: m.id === owner?.id }))
+    .sort((a, b) => Number(b.owner) - Number(a.owner));
 }
 
 export async function allClients(): Promise<Client[]> {
@@ -69,6 +74,8 @@ export async function getClient(id: string): Promise<Client | null> {
 }
 
 export type ClientSummary = Client & {
+  /** Their super admin's address. */
+  owner: string | null;
   members: number;
   documents: number;
   upcoming: number;
@@ -77,15 +84,20 @@ export type ClientSummary = Client & {
 
 /** Every client with its numbers — counted by "pa-06".client_summaries() (db/schema.sql). */
 export async function listClients(): Promise<ClientSummary[]> {
-  const [clients, numbers] = await Promise.all([
+  const [clients, numbers, owners] = await Promise.all([
     allClients(),
     rows<{ id: string; members: number; documents: number; upcoming: number; last_meeting: string | null }[]>(db().rpc("client_summaries")),
+    rows<{ client_id: string; email: string }[]>(db().from("members").select("client_id, email").eq("role", "owner").order("invited_at")),
   ]);
   const byId = new Map(numbers.map((n) => [n.id, n]));
+  // Each client's first owner, as ownerOf() reads its list.
+  const ownerFor = new Map<string, string>();
+  for (const o of owners) if (!ownerFor.has(o.client_id)) ownerFor.set(o.client_id, o.email);
   return clients.map((c) => {
     const n = byId.get(c.id);
     return {
       ...c,
+      owner: ownerFor.get(c.id) ?? null,
       members: n?.members ?? 0,
       documents: n?.documents ?? 0,
       upcoming: n?.upcoming ?? 0,
@@ -107,57 +119,43 @@ async function takenElsewhere(emails: string[], clientId: string | null): Promis
   return found.map((m) => ({ email: m.email, client: m.clients.name }));
 }
 
-export async function createClient(input: {
-  name: string;
-  domains?: string[] | string;
-  addresses?: string[] | string;
-  contacts?: string[] | string;
-  by: string;
-}): Promise<Client> {
+/**
+ * A new client and its list: the super admin first ("owner"), then anyone else who can use
+ * her ("member"). Nobody already on another client's list, and nobody at NDI.
+ */
+export async function createClient(input: { name: string; owner?: string; contacts?: string[] | string; by: string }): Promise<Client> {
   const name = input.name.trim();
   if (!name) throw new Error("Give the client a name.");
-  const domains = cleanDomains(input.domains);
-  const addresses = cleanAddresses(input.addresses);
-  const contacts = cleanAddresses(input.contacts);
-  if (!domains.length && !addresses.length && !contacts.length) {
-    throw new Error("Add someone who can use her, the company's domain or an exact address, so Ava knows which invites are theirs.");
-  }
-  const [taken] = await takenElsewhere(contacts, null);
+  const [owner] = cleanAddresses([input.owner ?? ""]);
+  if (!owner) throw new Error("Add their super admin's email address: the person who runs Ava for them.");
+  const people = [owner, ...cleanAddresses(input.contacts).filter((e) => e !== owner)];
+  const ndi = people.find((e) => isAdminEmail(e));
+  if (ndi) throw new Error(`${ndi} is NDI's: NDI already sees every client, so it is on no client's list.`);
+  const [taken] = await takenElsewhere(people, null);
   if (taken) throw new Error(`${taken.email} already signs in for ${taken.client}.`);
 
   const client = asClient(
-    await rows<Record<string, unknown>>(
-      db().from("clients").insert({ name, domains, addresses, created_by: input.by }).select("*").single(),
-    ),
+    await rows<Record<string, unknown>>(db().from("clients").insert({ name, created_by: input.by }).select("*").single()),
   );
-  if (contacts.length) {
-    const added = await db()
-      .from("members")
-      .insert(contacts.map((email) => ({ client_id: client.id, email })));
-    // Not half a client: without its people it goes again.
-    if (added.error) {
-      await db().from("clients").delete().eq("id", client.id);
-      throw new Error(added.error.message);
-    }
+  const added = await db()
+    .from("members")
+    .insert(people.map((email, i) => ({ client_id: client.id, email, role: i === 0 ? "owner" : "member" })));
+  // Not half a client: without its people it goes again.
+  if (added.error) {
+    await db().from("clients").delete().eq("id", client.id);
+    throw new Error(added.error.message);
   }
   return client;
 }
 
-export async function updateClient(
-  id: string,
-  patch: { name?: string; domains?: string[] | string; addresses?: string[] | string; instructions?: string; status?: string },
-): Promise<Client> {
+export async function updateClient(id: string, patch: { name?: string; instructions?: string; status?: string }): Promise<Client> {
   const current = await getClient(id);
   if (!current) throw new Error("No such client.");
   const name = patch.name !== undefined ? patch.name.trim() || current.name : current.name;
-  const domains = patch.domains !== undefined ? cleanDomains(patch.domains) : current.domains;
-  const addresses = patch.addresses !== undefined ? cleanAddresses(patch.addresses) : current.addresses;
   const instructions = patch.instructions !== undefined ? patch.instructions.slice(0, 20_000) : current.instructions;
   const status = patch.status === "paused" || patch.status === "active" ? patch.status : current.status;
   return asClient(
-    await rows<Record<string, unknown>>(
-      db().from("clients").update({ name, domains, addresses, instructions, status }).eq("id", id).select("*").single(),
-    ),
+    await rows<Record<string, unknown>>(db().from("clients").update({ name, instructions, status }).eq("id", id).select("*").single()),
   );
 }
 
@@ -172,25 +170,38 @@ export async function setLogo(id: string, url: string | null): Promise<Client> {
   return asClient(await rows<Record<string, unknown>>(db().from("clients").update({ logo_url: url }).eq("id", id).select("*").single()));
 }
 
-/** Lets an address sign in for this client; again, it only updates the name. */
+/**
+ * Puts an address on a client's list, as one of the people added ("member"). Already on
+ * it: only its name is updated — added again, the super admin stays the super admin.
+ */
 export async function addMember(clientId: string, email: string, name?: string): Promise<Member> {
   const [e] = cleanAddresses([email]);
   if (!e) throw new Error("That is not an email address.");
   const [taken] = await takenElsewhere([e], clientId);
   if (taken) throw new Error(`${e} already signs in for ${taken.client}.`);
+  const members = () => db().from("members");
+  const there = await rows<Record<string, unknown> | null>(members().select("*").eq("client_id", clientId).eq("email", e).maybeSingle());
+  if (there) {
+    if (!name) return asMember(there);
+    return asMember(await rows<Record<string, unknown>>(members().update({ name }).eq("id", String(there.id)).select("*").single()));
+  }
   return asMember(
     await rows<Record<string, unknown>>(
-      db()
-        .from("members")
-        .upsert({ client_id: clientId, email: e, ...(name ? { name } : {}) }, { onConflict: "email" })
-        .select("*")
-        .single(),
+      members().insert({ client_id: clientId, email: e, role: "member", ...(name ? { name } : {}) }).select("*").single(),
     ),
   );
 }
 
 export async function removeMember(clientId: string, memberId: string): Promise<void> {
   await rows(db().from("members").delete().eq("id", memberId).eq("client_id", clientId));
+}
+
+/** NDI makes someone on a client's list its super admin; the one before stays on the list. */
+export async function makeOwner(clientId: string, memberId: string): Promise<void> {
+  const members = () => db().from("members");
+  const made = await rows<{ id: string }[]>(members().update({ role: "owner" }).eq("id", memberId).eq("client_id", clientId).select("id"));
+  if (!made.length) throw new Error("They are not on this client's list.");
+  await rows(members().update({ role: "member" }).eq("client_id", clientId).eq("role", "owner").neq("id", memberId));
 }
 
 /**

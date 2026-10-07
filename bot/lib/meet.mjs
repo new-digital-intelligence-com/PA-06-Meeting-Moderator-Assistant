@@ -542,6 +542,9 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   let outOfCall = 0;
   const inCallAt = Date.now();
   let snapshotTaken = false;
+  /** Teams: since when nobody but her has been on screen, and whether the page was kept then. */
+  let emptySince = null;
+  let emptySnapshot = false;
   let over = false;
   let lastReason = null;
   let faceState = mode === "avatar" ? "down" : "voice";
@@ -852,6 +855,8 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
         state.bots?.length ? `${state.bots.length} notetaker${state.bots.length > 1 ? "s" : ""} not counted` : "",
       ].filter(Boolean);
       log(`  ${state.people} in the call (${how.join(", ")})`);
+    } else if (people && !state.people && state.inCall) {
+      log(`  cannot tell how many are in the call (${state.tiles ?? 0} on screen, people button ${state.badge || "—"})`);
     }
     people = state.people;
     tellRoom();
@@ -978,6 +983,29 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       }
       if (quietFor > SILENT_LEAVE_MS) {
         await finish(`nobody has said anything for ${Math.round(quietFor / 60_000)} minutes`);
+        break;
+      }
+    }
+
+    // Teams can go on counting somebody who has left on its People button. Nobody else on
+    // screen — her own tile still there — and not a word from anybody for a minute: she is
+    // alone, whatever the button says. The page is kept the first time, to see what it shows.
+    if (platform.id === "teams" && sawOthers && state.inCall) {
+      const noOtherTile = !(state.others ?? []).length;
+      if (noOtherTile && !emptySnapshot) {
+        emptySnapshot = true;
+        log(`  Teams: nobody else on screen (${state.tiles ?? 0} tiles, people button ${state.badge || "—"})`);
+        await keepEvidence(page, "teams-nobody-else", log);
+      }
+      emptySince = noOtherTile && (state.tiles ?? 0) > 0 ? (emptySince ?? Date.now()) : null;
+      if (
+        emptySince &&
+        !aloneNow &&
+        (state.badge ?? 0) <= 2 + (state.bots?.length ?? 0) &&
+        Date.now() - emptySince > ALONE_MS &&
+        Math.max(lastHeardAt ?? 0, rtHeardAt) < emptySince
+      ) {
+        await finish("everybody else left — nobody else on screen, and not a word for a minute");
         break;
       }
     }

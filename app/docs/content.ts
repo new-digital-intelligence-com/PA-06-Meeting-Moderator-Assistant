@@ -12,7 +12,7 @@ export const UPDATED = "2026-10-07";
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
   { label: "Anam", value: "Three accounts, each with its own Elena: the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
-  { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
+  { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
@@ -29,6 +29,36 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-07",
+    title: "A client's super admin, and only their people's invites",
+    points: [
+      "Each client has a super admin: the address NDI set them up with, marked on their Setup tab. Anybody on their list adds people; only the super admin removes them, and nobody of theirs can remove the super admin — someone added could before. NDI can make someone else the super admin.",
+      "She joins a client's meeting only when its organiser is on that client's list — the super admin or somebody added — no longer anybody at the company's domain or another address. NDI's own client keeps everybody at NDI.",
+      "A new client is created with its name and super admin (and anyone else, if you like). Signing in is unchanged: Google for a Google address, otherwise a link by email — Outlook too — and only for the people on a list.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-07",
+    title: "Teams: she leaves when everybody has",
+    points: [
+      "In her first real Teams call she stayed on after the other person left, until the meeting was ended from the site. With only her left, Teams can take her own tile off the stage and hide its People number: she counted nobody, and nobody counted is never “alone”. Nobody else on screen and no count above one now is — tested on the page she saw in that call.",
+      "And if Teams' People button goes on counting somebody who has left: a minute with nobody else on screen and not a word from anybody, and she leaves. She keeps a snapshot of the page the first time nobody else is on screen.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-07",
+    title: "Google Meet or Microsoft Teams, on every meeting",
+    points: [
+      "Each meeting on a client's page — coming up and past — says which it is on: Google Meet (she goes as herself) or Microsoft Teams (as a guest, admitted from the lobby).",
+    ],
+    commits: [],
+    tone: "slate",
+  },
   {
     date: "2026-10-07",
     title: "Teams invites reach her calendar",

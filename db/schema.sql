@@ -40,13 +40,15 @@ create table if not exists "pa-06".clients (
 -- For a schema made before logos: the only line it needs.
 alter table "pa-06".clients add column if not exists logo_url text;
 
--- People who can sign in to a client's portal. One client per address.
+-- People who can sign in to a client's portal — and whose invites are the client's. One
+-- client per address. role: 'owner', the client's super admin (the address NDI set it up
+-- with: nobody of theirs removes them), or 'member', the people added since.
 create table if not exists "pa-06".members (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references "pa-06".clients(id) on delete cascade,
   email text not null unique,
   name text,
-  role text not null default 'owner',
+  role text not null default 'member',
   invited_at timestamptz not null default now(),
   last_login_at timestamptz
 );
