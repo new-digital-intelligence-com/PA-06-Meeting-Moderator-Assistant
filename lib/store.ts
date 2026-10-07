@@ -4,12 +4,12 @@
  * Two clients write to it constantly and they are not in the same place: the stage runs
  * inside Recall's browser, the control room in yours, and on a serverless host neither
  * request is guaranteed to land on the same instance twice. So the state cannot sit in
- * a module variable, and it cannot sit on disk — Vercel's filesystem is read-only and
- * its instances do not share one.
+ * a module variable, and it cannot sit on disk — on a serverless host the disk is
+ * read-only and not shared, and on any host each deploy starts on a fresh one.
  *
  * Four backends, picked by what is in the environment, in this order:
  *
- *   Redis   (Vercel KV / Upstash)  when the REST credentials are set
+ *   Redis   (Upstash, over HTTP)   when the REST credentials are set
  *   Redis   (any, e.g. Railway's)  when only REDIS_URL is set — a plain connection
  *   MongoDB (Atlas or anywhere)    when MONGODB_URI is set
  *   a file  (data/meeting.json)    otherwise — local dev, no services to set up
@@ -54,7 +54,7 @@ function redisCreds() {
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   // Upstash's REST address is its Redis host over HTTPS, and the integration also sets
   // the plain Redis URL. With only that left — KV_REST_API_URL was deleted once and every
-  // page that reads the meeting fell back to a file, which Vercel does not allow — work
+  // page that reads the meeting fell back to a file, which a deployment cannot keep — work
   // the address out from it.
   if (!url && token) {
     const tcp = process.env.KV_URL || process.env.REDIS_URL;

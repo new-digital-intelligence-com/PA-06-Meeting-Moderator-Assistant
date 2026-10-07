@@ -8,7 +8,7 @@ the start time. She runs on a server, always on; nothing depends on anybody's PC
 
 Two parts:
 
-- **Her brain** is the web app on Vercel. It decides what she says, keeps the transcript,
+- **Her brain** is the web app on Railway. It decides what she says, keeps the transcript,
   takes the notes and writes and sends the follow-up.
 - **Her body** is this folder, running as one container on a server. Inside it is a real
   Google Chrome on a virtual screen, signed in as her.
@@ -54,7 +54,7 @@ Use your own account on whichever you pick.
 
 Once, in this order.
 
-**1. The app** — in Vercel's environment variables, then redeploy:
+**1. The app** — in the site's variables on Railway, then redeploy:
 
 ```
 AVA_RUNNER_KEY=<a long random value — the same one goes in step 3>

@@ -213,7 +213,7 @@ export default function Docs() {
                 <Stat value="gpt-6-luna" label="GPT-Live’s backend · web search, the meeting’s record" />
                 <Stat value="Claude" label="The notes · Haiku 4.5 and Sonnet 5" />
                 <Stat value="Anam" label="Her face · lip-synced to her voice" />
-                <Stat value="Upstash Redis" label="The meeting state" />
+                <Stat value="Railway Redis" label="The meeting state, beside the site" />
                 <Stat value="Google APIs" label="Calendar, Gmail, Drive" />
                 <Stat value="Supabase" label="Clients, their documents (pgvector), meetings and notes — schema pa-06" />
                 <Stat value="OpenAI embeddings" label="Clients’ documents, searchable by meaning · text-embedding-3-small" />
@@ -855,8 +855,8 @@ export default function Docs() {
                     rows={[
                       [<C key="v">ANTHROPIC_API_KEY</C>, "Claude"],
                       [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the notes models (and the Claude brain's)"],
-                      [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state, over Upstash's web API (on Vercel); the URL is worked out from KV_URL if missing"],
-                      [<C key="v">REDIS_URL</C>, "Or a plain Redis connection, used when there is no REST token — Railway's Redis beside the site, on its private network"],
+                      [<C key="v">REDIS_URL</C>, "Redis for the meeting state — Railway's, beside the site, on its private network"],
+                      [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Or Redis over Upstash's web API: if set, used instead of REDIS_URL (not set on Railway); the URL is worked out from KV_URL if missing"],
                       [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "One Google OAuth client (project ava-avatar) for Ava's own account, the site's sign-in and the Drive button"],
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
@@ -977,7 +977,7 @@ notify pgrst, 'reload schema';
                   ["Meet captions", "As good as Google’s captions; one language at a time, following what is spoken", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting per seat (AVA_SEATS, two by default); the seats share its processors and memory", "A small VPS, about €5–25 a month; bigger for two meetings at once"],
-                  ["Clients’ documents", "4 MB per upload (Vercel’s limit; bigger through Google Drive), 400,000 characters each, 300 per client", "Embeddings $0.02 per million tokens — a 100-page document is about a tenth of a cent; its summary a cent or two"],
+                  ["Clients’ documents", "4 MB per upload (bigger, up to 30 MB, through Google Drive), 400,000 characters each, 300 per client", "Embeddings $0.02 per million tokens — a 100-page document is about a tenth of a cent; its summary a cent or two"],
                   ["Supabase", "The team’s shared “pocs” project: its plan’s limits, shared with the other projects", "On the team’s plan"],
                 ]}
               />

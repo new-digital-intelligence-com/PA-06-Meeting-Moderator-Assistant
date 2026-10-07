@@ -31,6 +31,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "The guides say Railway",
+    points: [
+      "The README's deploy guide is Railway's now: the site and its Redis, the three addresses, what Google needs listed, deploying a push by hand. Her server's guide and example settings point at Railway too, and these docs show the meeting state on Railway's Redis.",
+      "The 4 MB upload limit no longer gives Vercel as its reason: bigger files come through Google Drive, up to 30 MB.",
+      "Checked from a client's account: the Drive picker opens with their files on the Railway address, so Google accepts its key there.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "Vercel retired: Railway only",
     points: [
       "The Vercel project is deleted: its address (pa-06-meeting-moderator-assistant.vercel.app) no longer answers, and Google's sign-in settings list only the Railway address. The site, its Redis and her server's link are all on Railway.",

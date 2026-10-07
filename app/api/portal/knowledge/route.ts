@@ -9,7 +9,7 @@ import { clientMeeting, prepLocked } from "@/lib/schedule";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** Vercel takes request bodies up to 4.5 MB; bigger files come from Google Drive instead. */
+/** Held in memory whole, and the door (proxy.ts) passes on only a body's first 10 MB: bigger files come from Google Drive instead. */
 const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 
 /** The client's documents — or, with ?meeting=<id>, the ones added to that meeting's preparation. */

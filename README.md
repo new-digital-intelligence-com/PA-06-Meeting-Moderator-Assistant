@@ -127,43 +127,55 @@ npm run dev
 
 Open <http://localhost:3000>, connect Google, and check every pill is green.
 
-## Deploying to Vercel
+## Deploying to Railway
 
-A permanent URL and no tunnel. One thing has to be set up or it will be subtly broken.
+A permanent URL, always on, and no tunnel. Ours runs in Railway's POCs project, in the
+**[PA-06]** group: the site, built from this repo's `main`, and its own **Redis** beside
+it. One thing has to be set up or it will be subtly broken.
 
-**The meeting needs an external store.** Serverless instances do not share a process or
-a filesystem, so the stage and the control room would each end up with their own copy of
-the meeting. `lib/store.ts` picks a backend from the environment:
+**The meeting needs an external store.** Each deploy starts the site afresh, disk and
+all, and the stage, the control room and her runner must all see the same meeting.
+`lib/store.ts` picks a backend from the environment, in this order:
 
 | set | backend |
 | --- | --- |
-| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Redis — best fit here |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Redis over Upstash's web API |
+| `REDIS_URL` | Redis over a plain connection — Railway's, beside the site |
 | `MONGODB_URI` | MongoDB — use it if you already have a cluster |
-| neither | `data/meeting.json` — local dev only |
+| none of them | `data/meeting.json` — local dev only |
 
-Redis is the better fit: the state is one small blob rewritten every couple of seconds
-over HTTP, with no connection to pool and no handshake on a cold start. Adding the
-**Upstash** integration from the Vercel dashboard sets both variables for you.
+Redis beside the site is the fit: the state is one small blob rewritten every couple of
+seconds, over one connection kept open on Railway's private network.
 
 Then:
 
-1. Push the repo and import it in Vercel.
-2. Add every variable from `.env.example` in **Settings → Environment Variables**,
-   with these three pointing at the deployment rather than localhost:
+1. In Railway, add a service from this GitHub repo (branch `main`) and a Redis database
+   beside it.
+2. Give the site every variable from `.env.example`, with these three pointing at the
+   address Railway gives it rather than localhost:
 
    ```
-   PUBLIC_URL=https://your-app.vercel.app
-   APP_URL=https://your-app.vercel.app
-   GOOGLE_REDIRECT_URI=https://your-app.vercel.app/api/auth/google/callback
+   PUBLIC_URL=https://your-app.up.railway.app
+   APP_URL=https://your-app.up.railway.app
+   GOOGLE_REDIRECT_URI=https://your-app.up.railway.app/api/auth/google/callback
    ```
 
-3. Add that same callback URL to **Google Cloud Console → Credentials → your OAuth
-   client → Authorised redirect URIs**. Missing this is the usual cause of
-   `redirect_uri_mismatch` on first sign-in.
+   and `REDIS_URL` set to the Redis service's own `REDIS_URL` (a reference variable):
+   its private address. `APP_URL` matters more than it looks — behind Railway's proxy the
+   site sees only its address inside Railway, so every redirect is built from it
+   (`lib/origin.ts`).
+3. In **Google Cloud Console → Credentials**: that callback URL under your OAuth client's
+   **Authorised redirect URIs**, and the site's address under its **Authorised JavaScript
+   origins** (the Drive button) and in `GOOGLE_API_KEY`'s website restrictions. A
+   missing redirect URI is the usual cause of `redirect_uri_mismatch` on first sign-in.
 4. Deploy, open it, and check the header says **Redis** (or **Mongo**) — not **File**.
    File on a deployment means the store variables did not arrive.
 
 The control room shows the backend it is using for exactly this reason.
+
+Railway deploys every push to `main` once its GitHub App can see the repo. Until then,
+deploy a pushed commit yourself:
+`railway redeploy --service "[PA-06] meeting-moderator-assistant" --from-source --yes`
 
 ## Using it
 
@@ -265,7 +277,7 @@ So she gets a small Workspace of her own, on a subdomain:
    <https://docs.recall.ai/docs/google-meet-login-getting-started>
 6. **In Recall**, create a Google Login with her address, the key and the certificate,
    put it in a Login Group, and copy the **login group id**.
-7. **Set it** in Vercel and redeploy:
+7. **Set it** in the site's variables on Railway and redeploy:
 
    ```
    RECALL_GOOGLE_LOGIN_GROUP_ID=<the login group id>

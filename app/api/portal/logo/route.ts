@@ -6,7 +6,7 @@ import { hasCloudinary, removeLogo, uploadLogo } from "@/lib/cloudinary";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-/** A logo is small: this leaves room under Vercel's 4.5 MB for a request. */
+/** A logo is small: 2 MB is plenty, well inside the first 10 MB of a body the door (proxy.ts) passes on. */
 const MAX_BYTES = 2 * 1024 * 1024;
 
 /** What the bytes are, whatever the file's name or the browser says. */

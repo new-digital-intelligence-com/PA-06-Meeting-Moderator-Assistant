@@ -182,7 +182,7 @@ export async function remove(google: GoogleClient, id: string): Promise<void> {
   }
 }
 
-/** Largest file sent back for a preview: a response from Vercel stays under 4.5 MB. */
+/** Largest file sent back for a preview: it goes through the site whole, held in memory. */
 export const PREVIEW_MAX_BYTES = 4.3 * 1024 * 1024;
 
 /**
