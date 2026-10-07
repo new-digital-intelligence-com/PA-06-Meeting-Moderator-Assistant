@@ -31,6 +31,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "NDI's own super admin can have an NDI address",
+    points: [
+      "On NDI's own client, an address on its list can be changed to an NDI one — its super admin's from a personal address to helmi.lakhder@new-digital-intelligence.com, for one. Still refused anywhere: an address on another client's list or at another client's domain; and an NDI address on any other client's list, where NDI's meetings would move.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "The company domain, locked on the client's side",
     points: [
       "On a client's Setup the company domain shows in a greyed-out field that cannot be changed there — set by NDI; their super admin asks for a change below it.",

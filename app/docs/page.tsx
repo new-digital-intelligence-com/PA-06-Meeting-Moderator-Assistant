@@ -648,7 +648,8 @@ export default function Docs() {
                   invites people again or removes them (never themselves), and nobody of theirs removes the super admin. A changed
                   address keeps its place and role; the old one is locked out at once. NDI does all of it, to the super admin too,
                   and makes someone the super admin; a client left without one is told so. Pausing and removing a client are NDI’s.
-                  Nobody can be on two clients’ lists or at another client’s domain — their meetings would move — nor anyone at NDI.
+                  Nobody can be on two clients’ lists or at another client’s domain — their meetings would move — nor anyone at NDI
+                  (but on NDI’s own client, whose list may hold an NDI address in place of another: its super admin’s, say).
                   Somebody at a client’s own domain is not added, nor invited: they have access already and sign in directly. A company domain is NDI’s to set — on the New client form or the client’s page; their super admin asks for a change from their Setup tab, emailed to Ava’s inbox — and must be real — it receives email, looked up
                   in its DNS — not a shared provider like gmail.com, not NDI’s, and not another client’s.
                 </Card>

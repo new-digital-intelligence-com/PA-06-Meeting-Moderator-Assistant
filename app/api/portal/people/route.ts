@@ -22,12 +22,13 @@ export const maxDuration = 30;
 
 /**
  * Why an address cannot be one of this client's people, or null if it can. NDI's own: NDI
- * sees every client — and for NDI's own client they count already. At another client's
- * company domain, or on another client's list: their meetings would move here. Only NDI is
- * told whose. (Somebody at this client's own domain can be added: it is not needed.)
+ * sees every client — and on another client's list their meetings would move there. For NDI's
+ * own client they count already, so none is added; but one already on its list may be
+ * changed to one (`changing`): its super admin's, say. At another client's company domain,
+ * or on another client's list: their meetings would move here. Only NDI is told whose.
  */
-async function refusal(email: string, clientId: string, ndisOwn: boolean, admin: boolean): Promise<string | null> {
-  if (isAdminEmail(email)) {
+async function refusal(email: string, clientId: string, ndisOwn: boolean, admin: boolean, changing = false): Promise<string | null> {
+  if (isAdminEmail(email) && !(ndisOwn && changing)) {
     return ndisOwn
       ? `${email} is NDI's already: everybody at @${adminDomain()} signs in as an admin, and the meetings they organise count here. Add personal addresses only.`
       : "NDI's own addresses are not added to a client: NDI already sees every client.";
@@ -159,7 +160,7 @@ export async function PATCH(request: Request) {
     if (members.some((m) => m.email === email)) throw new HttpError(400, `${email} is already on the list.`);
     const client = await getClient(clientId);
     if (!client) throw new HttpError(404, "No such client.");
-    const refused = await refusal(email, clientId, client.domains.includes(adminDomain()), admin);
+    const refused = await refusal(email, clientId, client.domains.includes(adminDomain()), admin, true);
     if (refused) throw new HttpError(400, refused);
     try {
       await changeAddress(clientId, id, email);
