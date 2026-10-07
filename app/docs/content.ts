@@ -13,6 +13,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
   { label: "Anam", value: "Three accounts, each with its own Elena: the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "Built — waiting for its first real call", tone: "sky" },
+  { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
@@ -28,6 +29,17 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-07",
+    title: "The site moves to Railway",
+    points: [
+      "The site runs on Railway, in the POCs project's [PA-06] group: the site (https://pa-06-meeting-moderator-assistant-production.up.railway.app) and its own Redis beside it, reachable only on Railway's private network. Same settings as on Vercel; her Google account connected again there.",
+      "Her server talks to Railway now: her calendar, the heartbeat in meetings, “Need Ava now?”, the notes. Use the Railway address from here on — the live meeting is only on Railway's Redis; clients, preparations and notes are in Supabase, shared by both.",
+      "Always on, so no cold starts, and Railway has no 4.5 MB request limit. Until Railway's GitHub App can see the repo, each push to main is deployed to Railway by hand; Vercel still deploys on push.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-10-07",
     title: "Redirects go to the site's own address",

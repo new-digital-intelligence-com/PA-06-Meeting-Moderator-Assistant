@@ -197,7 +197,7 @@ export default function Docs() {
                   <span className="lg:hidden">↓ ↑</span>
                   <span className="hidden lg:block">⇄</span>
                 </div>
-                <Card tone="emerald" kicker="The memory · Vercel" title="Next.js web app" className="h-full">
+                <Card tone="emerald" kicker="The memory · Railway" title="Next.js web app" className="h-full">
                   <ul className="space-y-1">
                     <li>Keeps the transcript, actions and working notes</li>
                     <li>Gives GPT-Live’s backend the meeting’s record and the client’s documents</li>
@@ -671,7 +671,7 @@ export default function Docs() {
             </Section>
 
             {/* ── brain modules ────────────────────────────────────────── */}
-            <Section id="brain" eyebrow="Modules" title="The brain — web app" intro="Next.js on Vercel. The meeting lives in Redis, so every serverless instance sees the same one.">
+            <Section id="brain" eyebrow="Modules" title="The brain — web app" intro="Next.js on Railway — the [PA-06] group in the POCs project: the site, and its Redis beside it on Railway's private network, where the meeting lives. (It ran on Vercel before; the code still runs there unchanged.)">
               <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-5">
                 <FileRow path="app/api/moderator/tick" tag={<Chip tone="emerald">the heart</Chip>}>
                   Takes what was heard and folds it into the transcript, with her own lines and the state of her voice and face.
@@ -846,10 +846,10 @@ export default function Docs() {
             </Section>
 
             {/* ── config ───────────────────────────────────────────────── */}
-            <Section id="config" eyebrow="Reference" title="Configuration" intro="Names only — values live in Vercel and in bot/.env, never in the repo.">
+            <Section id="config" eyebrow="Reference" title="Configuration" intro="Names only — values live in Railway (the site's service) and in bot/.env, never in the repo.">
               <div className="grid gap-6 xl:grid-cols-2">
                 <div className="min-w-0">
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Web app (Vercel)</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Web app (Railway)</h3>
                   <Table
                     head={["Variable", "For"]}
                     rows={[
@@ -940,7 +940,7 @@ http://localhost:8080/vnc.html`}</CodeBlock>
                                # schema pa-06, its tables and functions,
                                # nothing else; NDI is client number one
 Project Settings → Data API → Exposed schemas → add pa-06
-# and SUPABASE_URL, SUPABASE_SCHEMA, SUPABASE_SERVICE_ROLE_KEY in Vercel
+# and SUPABASE_URL, SUPABASE_SCHEMA, SUPABASE_SERVICE_ROLE_KEY in the site's settings
 
 # a schema made before logos needs only its logo line:
 alter table "pa-06".clients add column if not exists logo_url text;
