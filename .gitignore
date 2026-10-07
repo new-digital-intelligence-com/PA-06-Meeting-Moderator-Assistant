@@ -52,3 +52,7 @@ data/
 # SSO key material for her Google account — effectively her password
 *.key
 ava-sso.*
+
+# Claude Code: this machine only (the Railway deploy-after-push hook)
+.claude/settings.local.json
+.claude/hooks/
