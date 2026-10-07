@@ -31,6 +31,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Changing addresses; NDI decides everything on a client's list",
+    points: [
+      "A client's super admin changes the addresses on their list — theirs too, and then signs in again with the new one. The people they added cannot. A changed address keeps its place and role, and the old one is locked out at once.",
+      "NDI does all of it on any client's list, the super admin included: change their address, remove them (the client is then told it has no super admin until NDI makes someone it), add, invite again.",
+      "On NDI's own client, an NDI address is refused with the reason: everybody at NDI is in already — they sign in as admins, and the meetings they organise count there.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-07",
     title: "The notes are not lost to one bad reply",
     points: [
       "A short meeting's notes were not written: the write-up came back from Claude without one of its parts, and the code tripped on it (“Cannot read properties of undefined”). Now a reply without the notes is asked for again, with twice the room; a missing subject or opening is made from the meeting itself (its title, the actions captured); and only notes missing twice is an error, said plainly and logged.",

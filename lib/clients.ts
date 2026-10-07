@@ -3,8 +3,10 @@
  *
  * Who can use her is one list per client (the members table): its super admin — the
  * address NDI set the client up with (role "owner") — and the people added since
- * ("member"). They all have the same page and can add people; only the super admin (and
- * NDI) removes anyone, and nobody removes the super admin — NDI can make someone else it.
+ * ("member"). They all have the same page and can add people. Only the super admin
+ * changes addresses (theirs too), sends an invitation again and removes people; nobody of
+ * theirs removes the super admin. NDI does all of it, the super admin included, and makes
+ * someone the super admin.
  *
  * A meeting is a client's when its organiser is on that list: not by company domain, and
  * never by a guest — otherwise anybody could put one client employee on an invite and
@@ -194,6 +196,21 @@ export async function addMember(clientId: string, email: string, name?: string):
 
 export async function removeMember(clientId: string, memberId: string): Promise<void> {
   await rows(db().from("members").delete().eq("id", memberId).eq("client_id", clientId));
+}
+
+/**
+ * Gives someone on a client's list a new address: the same place on it, the same role. The
+ * name and last sign-in go with the old address.
+ */
+export async function changeAddress(clientId: string, memberId: string, email: string): Promise<void> {
+  const [e] = cleanAddresses([email]);
+  if (!e) throw new Error("That is not an email address.");
+  const [taken] = await takenElsewhere([e], clientId);
+  if (taken) throw new Error(`${e} already signs in for ${taken.client}.`);
+  const changed = await rows<{ id: string }[]>(
+    db().from("members").update({ email: e, name: null, last_login_at: null }).eq("id", memberId).eq("client_id", clientId).select("id"),
+  );
+  if (!changed.length) throw new Error("They are not on this client's list.");
 }
 
 /** NDI makes someone on a client's list its super admin; the one before stays on the list. */

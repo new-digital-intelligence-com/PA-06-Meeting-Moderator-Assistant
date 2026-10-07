@@ -560,7 +560,7 @@ export default function Docs() {
                   },
                   {
                     title: "The client signs in (/client)",
-                    body: "With Google, for an address that is a Google account, or else a link by email — Outlook or anything — that works once for 15 minutes; no passwords. Only the people on the client’s list get in; nobody signs up. Their Setup tab: their logo and name, and who can use her — anybody on the list adds people (Ava emails them the invitation); only the super admin sends it again or removes them, and nobody of theirs removes the super admin.",
+                    body: "With Google, for an address that is a Google account, or else a link by email — Outlook or anything — that works once for 15 minutes; no passwords. Only the people on the client’s list get in; nobody signs up. Their Setup tab: their logo and name, and who can use her — anybody on the list adds people (Ava emails them the invitation); only the super admin changes addresses (theirs too), sends it again or removes them, and nobody of theirs removes the super admin. NDI can do all of it, to the super admin too.",
                     tone: "sky",
                   },
                   {
@@ -644,9 +644,12 @@ export default function Docs() {
                   people see their own page and nothing else; every request is checked against who may sign in for whom, at
                   that moment, so removing somebody locks them out at once. A paused client’s meetings are skipped and nobody
                   signs in for it; its preparation is kept. Its super admin is the address NDI set it up with: anybody on the list
-                  adds people, only the super admin invites them again or removes them (never themselves), and nobody of theirs removes the super admin —
-                  NDI can make someone else it. Pausing and removing a client are NDI’s. Nobody can be added who is on another
-                  client’s list — their meetings would move — nor anyone at NDI.
+                  adds people; only the super admin changes addresses — theirs too, and then signs in again with the new one —
+                  invites people again or removes them (never themselves), and nobody of theirs removes the super admin. A changed
+                  address keeps its place and role; the old one is locked out at once. NDI does all of it, to the super admin too,
+                  and makes someone the super admin; a client left without one is told so. Pausing and removing a client are NDI’s.
+                  Nobody can be on two clients’ lists — their meetings would move — nor anyone at NDI: for NDI’s own client,
+                  everybody at NDI counts already.
                 </Card>
                 <Card tone="violet" title="Reading documents">
                   PDFs are read here; a scan with no text, and images, are read by Drive. Word, Excel and PowerPoint become Google
@@ -842,7 +845,7 @@ export default function Docs() {
                   [<C key="r">GET /api/auth/google</C>, "Admins", "Connect Google (?as=ava for her account)"],
                   [<C key="r">/api/auth/login · email · email/verify · logout</C>, "Anyone", "Sign in with Google or an emailed link; sign out"],
                   [<C key="r">/api/admin/clients · [id]</C>, "Admins", "List clients and create one (with its invitations); delete one"],
-                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; who can use her — add; invite again and remove (their super admin, or NDI); make someone super admin (NDI); pausing, NDI only"],
+                  [<C key="r">/api/portal/setup · people · logo</C>, "Clients, admins", "A client’s setup: name and logo; who can use her — add; change an address, invite again and remove (their super admin, or NDI — the super admin too); make someone super admin (NDI); pausing, NDI only"],
                   [<C key="r">GET /api/portal/workspace</C>, "Clients, admins", "A client’s page: instructions, digest, documents, meetings"],
                   [<C key="r">/api/portal/knowledge · [id]</C>, "Clients, admins", "Add a document (upload, Drive, link, text written on the page); read back what she took from one, or remove it"],
                   [<C key="r">GET /api/portal/knowledge/[id]/file</C>, "Clients, admins", "The kept copy of a document, for its preview"],

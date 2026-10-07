@@ -6,8 +6,9 @@
  * The same box for both sides. NDI sees it at the top of a client's page in /admin and
  * changes everything; the client's own people see it in their Setup tab and change their
  * logo and name, and add people. Only their super admin — the address NDI set them up with —
- * removes people, and nobody of theirs removes the super admin. Who the super admin is,
- * pausing her and removing the client stay NDI's.
+ * changes addresses (theirs too), sends an invitation again and removes people, and nobody of
+ * theirs removes the super admin. NDI does all of it, to the super admin too, and alone
+ * decides who the super admin is, pauses her and removes the client.
  */
 
 import { useRouter } from "next/navigation";
@@ -38,6 +39,8 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Someone's address being changed, as typed so far. */
+  const [editing, setEditing] = useState<{ id: string; email: string } | null>(null);
   const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -73,9 +76,10 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     return error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-slate-500">Loading…</p>;
   }
   const { client, people, me, admin } = data;
-  // Their super admin removes people and sends an invitation again; NDI does too. Everybody on the list adds them.
-  const inCharge = admin || people.some((p) => p.owner && p.email === me);
   const owner = people.find((p) => p.owner);
+  // Their super admin changes addresses, sends an invitation again and removes people; NDI does
+  // all of it, to the super admin too. Everybody on the list adds people.
+  const inCharge = admin || (owner !== undefined && owner.email === me);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -131,7 +135,10 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   }
 
   async function removePerson(p: Person) {
-    if (!window.confirm(`${p.email} will no longer be able to use Ava for ${client.name}. Remove?`)) return;
+    const warning = p.owner
+      ? `${p.email} is ${client.name}'s super admin. Remove them? Until you make someone else super admin, nobody of theirs removes people, changes addresses or sends an invitation again.`
+      : `${p.email} will no longer be able to use Ava for ${client.name}. Remove?`;
+    if (!window.confirm(warning)) return;
     const r = await step(`remove:${p.id}`, () => api<{ people: Person[] }>(`/api/portal/people${q}${amp}person=${p.id}`, { method: "DELETE" }));
     if (r) setData((d) => (d ? { ...d, people: r.people } : d));
   }
@@ -139,10 +146,38 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   /** NDI only: the client's super admin becomes someone else on the list. */
   async function makeSuperAdmin(p: Person) {
     if (!window.confirm(`Make ${p.email} ${client.name}'s super admin? ${owner ? `${owner.email} stays on the list, as one of their people.` : ""}`)) return;
-    const r = await step(`owner:${p.id}`, () => api<{ people: Person[] }>(`/api/portal/people${q}${amp}person=${p.id}`, { method: "PATCH" }));
+    const r = await step(`owner:${p.id}`, () =>
+      api<{ people: Person[] }>(`/api/portal/people${q}${amp}person=${p.id}`, { method: "PATCH", body: JSON.stringify({ owner: true }) }),
+    );
     if (!r) return;
     setData((d) => (d ? { ...d, people: r.people } : d));
     setNotice(`${p.email} is ${client.name}'s super admin now.`);
+  }
+
+  /** A new address for someone on the list — their super admin's, or NDI's, to change. */
+  async function saveAddress(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    const p = people.find((x) => x.id === editing.id);
+    if (!p) return;
+    const email = editing.email.trim().toLowerCase();
+    if (!admin && p.email === me && !window.confirm(`Change your address to ${email}? You sign in again with it.`)) return;
+    const r = await step(`address:${p.id}`, () =>
+      api<{ people: Person[]; changed: boolean; self?: boolean }>(`/api/portal/people${q}${amp}person=${p.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ email }),
+      }),
+    );
+    if (!r) return;
+    setEditing(null);
+    if (r.self) {
+      // This session was the old address's: signing in again proves the new one.
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+      router.push(`/login?email=${encodeURIComponent(email)}`);
+      return;
+    }
+    setData((d) => (d ? { ...d, people: r.people } : d));
+    if (r.changed) setNotice(`${p.email} is now ${email}: they sign in with it from now on. Send them the invitation again if they need it.`);
   }
 
   async function removeClient() {
@@ -256,18 +291,44 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                   They sign in to give Ava documents and prepare her, and she joins the meetings they invite her to — from any
                   address, company or personal. Everyone here can add people; only the super admin
                   {admin
-                    ? " — the address the client was set up with — and NDI invite them again or remove them"
-                    : " invites them again or removes them"}
-                  , and nobody{admin ? " of theirs" : ""} can remove the super admin.
+                    ? " — the address the client was set up with — changes addresses, invites them again or removes them, and nobody of theirs can remove the super admin. NDI can do all of it, to the super admin too."
+                    : " changes addresses (theirs too), invites people again or removes them, and nobody can remove the super admin."}
                 </p>
               </div>
             </div>
+            {people.length > 0 && !owner && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                No super admin — {admin ? "make one of them the super admin." : "ask NDI to make one of you the super admin."}
+              </p>
+            )}
             {people.length === 0 ? (
               <p className="text-sm text-slate-500">Nobody yet.</p>
             ) : (
               <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
                 {people.map((p) => {
                   const you = !admin && p.email === me;
+                  if (editing?.id === p.id) {
+                    return (
+                      <li key={p.id} className="p-3">
+                        <form onSubmit={saveAddress} className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="email"
+                            autoFocus
+                            aria-label={`New address for ${p.email}`}
+                            className={`${field} min-w-48 flex-1`}
+                            value={editing.email}
+                            onChange={(e) => setEditing({ id: p.id, email: e.target.value })}
+                          />
+                          <button className={quiet} disabled={busy !== null || !editing.email.includes("@")}>
+                            {busy === `address:${p.id}` ? "Saving…" : "Save"}
+                          </button>
+                          <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setEditing(null)}>
+                            Cancel
+                          </button>
+                        </form>
+                      </li>
+                    );
+                  }
                   return (
                     <li key={p.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
                       <span className="min-w-40 flex-1 truncate text-slate-700" title={p.email}>
@@ -276,6 +337,11 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                       </span>
                       {p.owner && <Chip tone="warn">Super admin</Chip>}
                       {you ? <Chip tone="info">You</Chip> : p.last_login_at ? <Chip tone="good">Signed in {ago(p.last_login_at)}</Chip> : <Chip>Not yet</Chip>}
+                      {inCharge && (
+                        <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => setEditing({ id: p.id, email: p.email })} disabled={busy !== null}>
+                          Change address
+                        </button>
+                      )}
                       {!you && (
                         <>
                           {inCharge && (
@@ -288,7 +354,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                               {busy === `owner:${p.id}` ? "Saving…" : "Make super admin"}
                             </button>
                           )}
-                          {inCharge && !p.owner && (
+                          {(admin || (inCharge && !p.owner)) && (
                             <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void removePerson(p)} disabled={busy !== null}>
                               Remove
                             </button>
