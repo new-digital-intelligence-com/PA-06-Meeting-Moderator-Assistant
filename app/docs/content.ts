@@ -30,6 +30,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Ready for Railway: a plain Redis connection",
+    points: [
+      "The meeting state can be kept in any Redis over a normal connection (REDIS_URL), used when there are no Upstash REST credentials — for the site on Railway, with its own Redis beside it in the POCs project, reachable only on Railway's private network. On Vercel nothing changes: Upstash's web API, as before.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "A third Anam account; voice only when no account can give her a face",
     points: [
       "A third Anam account on her server (ANAM_API_KEY_3), with its own copy of Elena — checked from her server: its key, its avatar, and a session Anam issued.",

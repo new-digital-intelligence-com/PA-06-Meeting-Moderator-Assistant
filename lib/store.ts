@@ -7,16 +7,18 @@
  * a module variable, and it cannot sit on disk — Vercel's filesystem is read-only and
  * its instances do not share one.
  *
- * Three backends, picked by what is in the environment, in this order:
+ * Four backends, picked by what is in the environment, in this order:
  *
  *   Redis   (Vercel KV / Upstash)  when the REST credentials are set
+ *   Redis   (any, e.g. Railway's)  when only REDIS_URL is set — a plain connection
  *   MongoDB (Atlas or anywhere)    when MONGODB_URI is set
  *   a file  (data/meeting.json)    otherwise — local dev, no services to set up
  *
  * Redis first because it suits this shape best: one small blob rewritten every couple
- * of seconds, over HTTP, with no connection to pool and no cold-start handshake. Mongo
- * is there because a cluster you already have beats a service you have to sign up for,
- * and its findOneAndUpdate is atomic enough to hold the lock.
+ * of seconds. On a serverless host over HTTP (Upstash), with no connection to pool and no
+ * cold-start handshake; on a server that stays up (Railway) over one connection kept open.
+ * Mongo is there because a cluster you already have beats a service you have to sign up
+ * for, and its findOneAndUpdate is atomic enough to hold the lock.
  *
  * One meeting per seat — her server can be in more than one meeting at a time
  * (lib/meeting.ts) — each under its own key and lock. Seat 1 keeps the key it always had.
@@ -63,6 +65,12 @@ function redisCreds() {
     }
   }
   return url && token ? { url: url.replace(/\/$/, ""), token } : null;
+}
+
+/** A plain Redis address — Railway's, beside the site — when there are no REST credentials. */
+function redisAddress(): string | null {
+  const url = process.env.REDIS_URL?.trim();
+  return url && /^rediss?:\/\//.test(url) && !redisCreds() ? url : null;
 }
 
 /* ------------------------------------------------------------------- redis */
@@ -118,6 +126,58 @@ function redisStore(creds: { url: string; token: string }): Store {
         return await fn();
       } finally {
         if (held) await command(["EVAL", RELEASE, 1, lock, token]).catch(() => undefined);
+      }
+    },
+  };
+}
+
+/* ---------------------------------------------------------- redis, plain */
+
+/** The same lock release as above: only the holder's token deletes it. */
+const RELEASE_LOCK = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
+
+/**
+ * A plain Redis connection, for a site that stays up (Railway): one connection for the life
+ * of the process, opened on first use. `family: 0` lets it reach Railway's private network,
+ * which is IPv6.
+ */
+function redisTcpStore(url: string): Store {
+  let connecting: Promise<import("ioredis").Redis> | null = null;
+  const redis = () =>
+    (connecting ??= import("ioredis").then(({ default: Redis }) => new Redis(url, { family: 0, maxRetriesPerRequest: 3, enableAutoPipelining: true })));
+
+  return {
+    kind: "redis",
+    async read(seat) {
+      return (await redis()).get(keyOf(seat));
+    },
+    async write(value, seat) {
+      await (await redis()).set(keyOf(seat), value);
+    },
+    async readKey(key) {
+      return (await redis()).get(key);
+    },
+    async writeKey(key, value) {
+      await (await redis()).set(key, value);
+    },
+    async withLock(fn, seat) {
+      const r = await redis();
+      const lock = lockOf(seat);
+      const token = crypto.randomBytes(12).toString("hex");
+      const deadline = Date.now() + LOCK_MS;
+      let held = false;
+      while (Date.now() < deadline) {
+        if ((await r.set(lock, token, "PX", LOCK_MS, "NX")) === "OK") {
+          held = true;
+          break;
+        }
+        await new Promise((res) => setTimeout(res, 40));
+      }
+      // As above: proceeding without the lock beats hanging the meeting.
+      try {
+        return await fn();
+      } finally {
+        if (held) await r.eval(RELEASE_LOCK, 1, lock, token).catch(() => undefined);
       }
     },
   };
@@ -263,15 +323,16 @@ let cached: Store | null = null;
 export function store(): Store {
   if (!cached) {
     const creds = redisCreds();
+    const plain = redisAddress();
     const mongo = process.env.MONGODB_URI;
-    cached = creds ? redisStore(creds) : mongo ? mongoStore(mongo) : fileStore();
+    cached = creds ? redisStore(creds) : plain ? redisTcpStore(plain) : mongo ? mongoStore(mongo) : fileStore();
   }
   return cached;
 }
 
 /** Shown in the control room so a misconfigured deployment is visible, not mysterious. */
 export function storeKind(): StoreKind {
-  if (redisCreds()) return "redis";
+  if (redisCreds() || redisAddress()) return "redis";
   if (process.env.MONGODB_URI) return "mongo";
   return "file";
 }
@@ -291,7 +352,7 @@ export function storeDiagnostics() {
     .sort();
   return {
     kind: storeKind(),
-    reads: ["KV_REST_API_URL / UPSTASH_REDIS_REST_URL (+ matching token)", "MONGODB_URI"],
+    reads: ["KV_REST_API_URL / UPSTASH_REDIS_REST_URL (+ matching token)", "REDIS_URL (a plain connection, without a REST token)", "MONGODB_URI"],
     found: relevant.map((k) => `${k}${process.env[k] ? "" : " (EMPTY)"}`),
   };
 }

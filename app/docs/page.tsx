@@ -855,7 +855,8 @@ export default function Docs() {
                     rows={[
                       [<C key="v">ANTHROPIC_API_KEY</C>, "Claude"],
                       [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the notes models (and the Claude brain's)"],
-                      [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state — required; the URL is worked out from KV_URL if missing"],
+                      [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Redis for the meeting state, over Upstash's web API (on Vercel); the URL is worked out from KV_URL if missing"],
+                      [<C key="v">REDIS_URL</C>, "Or a plain Redis connection, used when there is no REST token — Railway's Redis beside the site, on its private network"],
                       [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "One Google OAuth client (project ava-avatar) for Ava's own account, the site's sign-in and the Drive button"],
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
