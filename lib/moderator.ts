@@ -565,9 +565,9 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
     ? m.files.map((f) => `- ${f.name}: ${f.link}`).join("\n")
     : "(no files were shared)";
 
-  const response = await client().messages.create({
+  const ask = (maxTokens: number) => client().messages.create({
     model: WRITER,
-    max_tokens: 4000,
+    max_tokens: maxTokens,
     system: [
       {
         type: "text",
@@ -605,13 +605,31 @@ export async function composeFollowUp(m: Meeting, senderName: string): Promise<{
     ],
   });
 
-  const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  if (!block) throw new Error("The model did not return a write-up.");
-  const written = block.input as { summary: string; subject: string; body: string };
+  // A reply without its notes is asked for again, with more room: one came back missing a
+  // part and a meeting's notes were lost altogether. Anything else missing is filled from
+  // the meeting itself.
+  const parts: { summary?: string; subject?: string; body?: string } = {};
+  for (const maxTokens of [4000, 8000]) {
+    const response = await ask(maxTokens);
+    const block = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const input = (block?.input ?? {}) as Record<string, unknown>;
+    for (const k of ["summary", "subject", "body"] as const) {
+      const v = input[k];
+      if (typeof v === "string" && v.trim()) parts[k] = v.trim();
+    }
+    const missing = (["summary", "subject", "body"] as const).filter((k) => !parts[k]);
+    if (!missing.length) break;
+    console.warn(`[followup] the write-up came back without ${missing.join(", ")} (stop: ${response.stop_reason})${parts.summary ? "" : " — asking again"}`);
+    if (parts.summary) break;
+  }
+  if (!parts.summary) throw new Error("The write-up came back without its notes, twice.");
+  const agreed = m.actions.map((a, i) => `${i + 1}. ${a.owner ? `${a.owner} — ` : ""}${a.text}${a.due ? ` (by ${a.due})` : ""}`);
+  const opening =
+    parts.body ?? (agreed.length ? ["Thanks for the meeting. The actions agreed:", "", ...agreed].join("\n") : "Thanks for the meeting. No actions were agreed.");
   return {
-    summary: written.summary,
-    subject: written.subject,
-    body: assemble(written, m.files, "en"),
+    summary: parts.summary,
+    subject: parts.subject ?? `Notes: ${m.title || "the meeting"}`,
+    body: assemble({ body: opening, summary: parts.summary }, m.files, "en"),
   };
 }
 

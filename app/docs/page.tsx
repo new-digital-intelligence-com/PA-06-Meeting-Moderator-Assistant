@@ -625,8 +625,8 @@ export default function Docs() {
                 <Card tone="rose" title="Locked a minute before">
                   From a minute before a meeting starts, its preparation is what she walks in with: the page shows it read-only
                   (“View preparation”), and the server refuses any change to it — the preparation, her brief, the meeting’s
-                  documents — whatever a page sends. A meeting is over once she has finished it (its notes are filed) or its
-                  time on the calendar is up, whichever comes first, and then it is under Past meetings. Nothing of a meeting is
+                  documents — whatever a page sends. A meeting is over the moment she leaves it — her notes still to come — or
+                  when its time on the calendar is up, whichever comes first, and then it is under Past meetings. Nothing of a meeting is
                   deleted: its preparation, documents, brief, notes and history stay with it for good.
                 </Card>
                 <Card tone="violet" title="Earlier meetings">

@@ -160,7 +160,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   // Called off — deleted by the host, or she was taken off the invite — kept apart, with their history.
   const cancelled = data.meetings.filter((m) => m.status === "cancelled").reverse();
   const held = data.meetings.filter((m) => m.status !== "cancelled");
-  // Over once she has finished it (its notes are filed) or its time on the calendar is up — whichever comes first.
+  // Over once she has left it (marked when she does, notes or not) or its time on the calendar is up — whichever comes first.
   const over = (m: Meeting) => m.status === "ended" || Boolean(m.ended_at) || new Date(m.ends_at ?? m.starts_at).getTime() <= now;
   const upcoming = held.filter((m) => !over(m));
   const past = held.filter(over).reverse();

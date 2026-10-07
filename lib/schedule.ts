@@ -334,6 +334,12 @@ export async function savePrep(clientId: string, id: string, prep: Prep): Promis
 }
 
 /** The notes she wrote after a client's meeting, kept with it so the client can read them back. */
+/** She has left the meeting: it is over on the client's page now, whether or not its notes come. */
+export async function markEnded(meetingId: string): Promise<void> {
+  const now = isoNow();
+  await rows(db().from("meetings").update({ status: "ended", ended_at: now, updated_at: now }).eq("id", meetingId).is("ended_at", null));
+}
+
 export async function saveNotes(
   meetingId: string,
   notes: { to?: string; subject?: string; body?: string; summary?: string; sentAt?: number; actions?: unknown[] },

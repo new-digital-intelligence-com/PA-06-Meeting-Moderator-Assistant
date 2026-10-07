@@ -92,6 +92,7 @@ export async function POST(request: Request) {
   try {
     written = await composeFollowUp(meeting, sender);
   } catch (e) {
+    console.warn("[followup] the write-up failed:", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not write the notes." },
       { status: 502 },

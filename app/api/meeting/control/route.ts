@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { elapsed, getMeeting, seatOf, updateMeeting, type Where } from "@/lib/meeting";
 import { RecallError, cancelBot, leaveCall } from "@/lib/recall";
 import { isRunner, runnerAt } from "@/lib/ava";
+import { hasDb } from "@/lib/db";
 import { record } from "@/lib/history";
+import { markEnded } from "@/lib/schedule";
 import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -147,6 +149,11 @@ export async function POST(request: Request) {
       by: endedBy,
       detail: reason ? { reason: String(reason).slice(0, 300) } : {},
     });
+    // Over on the client's page at once — not only when the notes are filed, which a failed
+    // write-up once held up until the calendar's end time.
+    if (hasDb()) {
+      await markEnded(before.client.meetingId).catch((e) => console.warn("[control] not marked over:", e instanceof Error ? e.message : e));
+    }
   }
 
   return NextResponse.json({

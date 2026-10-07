@@ -31,6 +31,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "The notes are not lost to one bad reply",
+    points: [
+      "A short meeting's notes were not written: the write-up came back from Claude without one of its parts, and the code tripped on it (“Cannot read properties of undefined”). Now a reply without the notes is asked for again, with twice the room; a missing subject or opening is made from the meeting itself (its title, the actions captured); and only notes missing twice is an error, said plainly and logged.",
+      "A meeting is over on the client's page the moment she leaves — before, only once its notes were filed, so that one stayed “Happening now” until its calendar end time.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-07",
     title: "A sign-in ends after 30 days, for the server too",
     points: [
       "The 30 days were kept only by the browser's cookie: a cookie copied off a computer would have gone on working. The end date is now inside the session as well, and the site refuses it after that.",
