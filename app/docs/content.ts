@@ -31,6 +31,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Inviting again: the super admin's",
+    points: [
+      "“Resend invite” is the super admin's — and NDI's — only: the people they added no longer see it, and the site refuses it from them. Adding someone new, with their first invitation, stays open to everyone on the list.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "A client's super admin, and only their people's invites",
     points: [
       "Each client has a super admin: the address NDI set them up with, marked on their Setup tab. Anybody on their list adds people; only the super admin removes them, and nobody of theirs can remove the super admin — someone added could before. NDI can make someone else the super admin.",

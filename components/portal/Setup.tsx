@@ -73,8 +73,8 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     return error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-slate-500">Loading…</p>;
   }
   const { client, people, me, admin } = data;
-  // Their super admin removes people; NDI does too. Everybody on the list adds them.
-  const canRemove = admin || people.some((p) => p.owner && p.email === me);
+  // Their super admin removes people and sends an invitation again; NDI does too. Everybody on the list adds them.
+  const inCharge = admin || people.some((p) => p.owner && p.email === me);
   const owner = people.find((p) => p.owner);
 
   async function save(e: React.FormEvent) {
@@ -255,8 +255,10 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                 <p className="mt-0.5 text-xs leading-5 text-slate-500">
                   They sign in to give Ava documents and prepare her, and she joins the meetings they invite her to — from any
                   address, company or personal. Everyone here can add people; only the super admin
-                  {admin ? " — the address the client was set up with — and NDI remove them" : " removes them"}, and nobody
-                  {admin ? " of theirs" : ""} can remove the super admin.
+                  {admin
+                    ? " — the address the client was set up with — and NDI invite them again or remove them"
+                    : " invites them again or removes them"}
+                  , and nobody{admin ? " of theirs" : ""} can remove the super admin.
                 </p>
               </div>
             </div>
@@ -276,15 +278,17 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                       {you ? <Chip tone="info">You</Chip> : p.last_login_at ? <Chip tone="good">Signed in {ago(p.last_login_at)}</Chip> : <Chip>Not yet</Chip>}
                       {!you && (
                         <>
-                          <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => void resend(p)} disabled={busy !== null}>
-                            {busy === `resend:${p.id}` ? "Sending…" : "Resend invite"}
-                          </button>
+                          {inCharge && (
+                            <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => void resend(p)} disabled={busy !== null}>
+                              {busy === `resend:${p.id}` ? "Sending…" : "Resend invite"}
+                            </button>
+                          )}
                           {admin && !p.owner && (
                             <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => void makeSuperAdmin(p)} disabled={busy !== null}>
                               {busy === `owner:${p.id}` ? "Saving…" : "Make super admin"}
                             </button>
                           )}
-                          {canRemove && !p.owner && (
+                          {inCharge && !p.owner && (
                             <button className="text-xs text-slate-400 hover:text-rose-700" onClick={() => void removePerson(p)} disabled={busy !== null}>
                               Remove
                             </button>

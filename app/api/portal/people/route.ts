@@ -7,9 +7,9 @@ export const maxDuration = 30;
 
 /**
  * Someone who can use her — they open the client's page, and her invites from them are the
- * client's — added by anyone on the client's list or by NDI; with `invite`, Ava emails them
- * (again). Somebody on another client's list is refused: their meetings would move here.
- * Clients are not told whose.
+ * client's — added by anyone on the client's list or by NDI; with `invite`, Ava emails them.
+ * Again, to somebody already on the list: only their super admin, or NDI. Somebody on
+ * another client's list is refused: their meetings would move here. Clients are not told whose.
  */
 export async function POST(request: Request) {
   return handle(async () => {
@@ -22,6 +22,14 @@ export async function POST(request: Request) {
     if (!email) throw new HttpError(400, "That is not an email address.");
     // NDI already sees every client; on a list, all their meetings would become this client's.
     if (isAdminEmail(email)) throw new HttpError(400, "NDI's own addresses are not added to a client: NDI already sees every client.");
+    // Sending somebody on the list their invitation again is the super admin's — and NDI's.
+    if (body.invite && !admin) {
+      const members = await listMembers(clientId);
+      const owner = ownerOf(members);
+      if (members.some((m) => m.email === email) && user.email !== owner?.email) {
+        throw new HttpError(403, `Only your super admin${owner ? `, ${owner.email},` : ""} sends an invitation again.`);
+      }
+    }
 
     const using = await clientPeople();
     const usesElsewhere = using.get(email);
