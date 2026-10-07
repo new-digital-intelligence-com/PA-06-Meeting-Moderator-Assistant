@@ -218,7 +218,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.invite} onChange={set("invite")} className="accent-blue-600" />
-                Email them an invitation from {ava ?? "Ava"}
+                Email the super admin an invitation from {ava ?? "Ava"}
               </label>
             </fieldset>
 

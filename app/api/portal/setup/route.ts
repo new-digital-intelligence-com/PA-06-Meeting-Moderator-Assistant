@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError, portalClient } from "@/lib/auth";
-import { domainsFor, getClient, listMembers, ownerOf, peopleOf, updateClient } from "@/lib/clients";
+import { domainsFor, getClient, peopleOf, updateClient } from "@/lib/clients";
 
 export const runtime = "nodejs";
 
@@ -34,8 +34,9 @@ export async function GET(request: Request) {
 }
 
 /**
- * Their name, for anyone who can use her. Their company domains: their super admin, or NDI —
- * each checked to be real, and nobody else's (domainsFor). Active or paused: NDI only.
+ * Their name, for anyone who can use her. Their company domains and active or paused: NDI
+ * only — anybody at a domain signs in to the client's page, so a client asks for a change
+ * (/api/portal/domain-request). Each domain is checked to be real and nobody else's.
  */
 export async function PATCH(request: Request) {
   return handle(async () => {
@@ -43,10 +44,7 @@ export async function PATCH(request: Request) {
     const body = (await request.json().catch(() => ({}))) as { name?: string; status?: string; domains?: string | string[] };
     const admin = user.role === "admin";
     if (!admin && body.status !== undefined) throw new HttpError(403, "Pausing her is set by NDI.");
-    if (!admin && body.domains !== undefined) {
-      const owner = ownerOf(await listMembers(clientId));
-      if (user.email !== owner?.email) throw new HttpError(403, `Only your super admin${owner ? `, ${owner.email},` : ""} sets your company domain.`);
-    }
+    if (!admin && body.domains !== undefined) throw new HttpError(403, "Your company domain is set by NDI — ask for a change on your Setup tab.");
     if (body.name !== undefined && !body.name.trim()) throw new HttpError(400, "Give the company a name.");
     try {
       const domains = body.domains !== undefined ? await domainsFor(clientId, body.domains, { admin }) : undefined;

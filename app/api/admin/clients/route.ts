@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { avaGoogle } from "@/lib/ava";
 import { appOrigin, handle, HttpError, requireAdmin } from "@/lib/auth";
-import { createClient, listClients, listMembers, sendInvite } from "@/lib/clients";
+import { createClient, listClients, listMembers, ownerOf, sendInvite } from "@/lib/clients";
 import { skippedInvites, syncIfStale } from "@/lib/schedule";
 
 export const runtime = "nodejs";
@@ -31,15 +31,15 @@ export async function POST(request: Request) {
     }
     const invited: string[] = [];
     const failed: { email: string; error: string }[] = [];
-    if (body.invite) {
-      const origin = appOrigin(request);
-      for (const m of await listMembers(client.id)) {
-        try {
-          await sendInvite(client, m.email, origin);
-          invited.push(m.email);
-        } catch (e) {
-          failed.push({ email: m.email, error: e instanceof Error ? e.message : "not sent" });
-        }
+    // The invitation is the super admin's alone: they bring in the rest, and anybody at the
+    // company's domain signs in by themselves.
+    const owner = body.invite ? ownerOf(await listMembers(client.id)) : null;
+    if (owner) {
+      try {
+        await sendInvite(client, owner.email, appOrigin(request));
+        invited.push(owner.email);
+      } catch (e) {
+        failed.push({ email: owner.email, error: e instanceof Error ? e.message : "not sent" });
       }
     }
     return NextResponse.json({ client, invited, failed });

@@ -41,6 +41,8 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   const [notice, setNotice] = useState<string | null>(null);
   /** Someone's address being changed, as typed so far. */
   const [editing, setEditing] = useState<{ id: string; email: string } | null>(null);
+  /** The company domain their super admin is asking NDI for, as typed so far. */
+  const [requesting, setRequesting] = useState<{ domains: string; note: string } | null>(null);
   const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -80,11 +82,13 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   // Their super admin changes addresses, sends an invitation again and removes people; NDI does
   // all of it, to the super admin too. Everybody on the list adds people.
   const inCharge = admin || (owner !== undefined && owner.email === me);
+  /** The client's own super admin — not NDI. */
+  const superAdmin = !admin && inCharge;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    // Their super admin and NDI send the company domain; only NDI whether she is paused.
-    const body = { name: form.name, ...(inCharge ? { domains: form.domains } : {}), ...(admin ? { status: form.status } : {}) };
+    // Only NDI sends the company domain and whether she is paused.
+    const body = { name: form.name, ...(admin ? { domains: form.domains, status: form.status } : {}) };
     const r = await step("save", () =>
       api<{ client: { name: string; domains: string[] } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }),
     );
@@ -124,9 +128,8 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     if (!r) return;
     setData((d) => (d ? { ...d, people: r.people } : d));
     if (r.atDomain) {
-      // Their own company: access already, nothing to add — only the invitation, if asked for.
-      const has = `${newPerson.email} is at @${r.atDomain}, ${admin ? "their" : "your"} company domain: they have access already, without being added.`;
-      setNotice(r.inviteError ? `${has} The invitation was not sent: ${r.inviteError}` : r.invited ? `${has} Invitation sent.` : has);
+      // Their own company: access already — nothing to add, nobody to invite.
+      setNotice(`${newPerson.email} is at @${r.atDomain}, ${admin ? "their" : "your"} company domain: they have access already and sign in directly — nothing to add.`);
     } else {
       setNotice(r.inviteError ? `Added, but the invitation was not sent: ${r.inviteError}` : r.invited ? `Invitation sent to ${newPerson.email}.` : "Added.");
     }
@@ -187,6 +190,17 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     }
     setData((d) => (d ? { ...d, people: r.people } : d));
     if (r.changed) setNotice(`${p.email} is now ${email}: they sign in with it from now on. Send them the invitation again if they need it.`);
+  }
+
+  /** Their super admin asks NDI for another company domain: checked, then an email to Ava's inbox. */
+  async function requestDomain() {
+    if (!requesting) return;
+    const r = await step("domain-request", () =>
+      api<{ sent: boolean }>(`/api/portal/domain-request${q}`, { method: "POST", body: JSON.stringify(requesting) }),
+    );
+    if (!r) return;
+    setRequesting(null);
+    setNotice("Your request went to NDI: they change the domain and let you know.");
   }
 
   async function removeClient() {
@@ -260,7 +274,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
               <p className="text-sm font-semibold text-slate-900">Which meetings Ava joins {admin ? "for them" : "for you"}</p>
-              {inCharge && (
+              {admin && (
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-700">Company domain</span>
                   <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
@@ -274,7 +288,47 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                 Those whose invite comes from{" "}
                 {client.domains.length > 0 && <>anybody at {client.domains.map((d) => `@${d}`).join(", ")}, or from </>}
                 one of the people who can use her. Invites from anyone else she leaves alone.
+                {!admin && <> Your company domain is set by NDI.</>}
               </p>
+              {superAdmin &&
+                (requesting ? (
+                  <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                    <label className="block space-y-1">
+                      <span className="text-xs font-medium text-slate-700">The company domain you would like</span>
+                      <input
+                        className={field}
+                        value={requesting.domains}
+                        onChange={(e) => setRequesting({ ...requesting, domains: e.target.value })}
+                        placeholder="acme.com"
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs font-medium text-slate-700">A note for NDI (optional)</span>
+                      <input
+                        className={field}
+                        value={requesting.note}
+                        onChange={(e) => setRequesting({ ...requesting, note: e.target.value })}
+                        placeholder="e.g. we moved to acme.com"
+                      />
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <button type="button" className={quiet} onClick={() => void requestDomain()} disabled={busy !== null}>
+                        {busy === "domain-request" ? "Sending…" : "Send to NDI"}
+                      </button>
+                      <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setRequesting(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    onClick={() => setRequesting({ domains: client.domains.join(", "), note: "" })}
+                  >
+                    {client.domains.length ? "Ask NDI to change it" : "Ask NDI to add your company domain"}
+                  </button>
+                ))}
             </div>
 
             {admin && (
@@ -404,15 +458,22 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                   {busy === "person" ? "Adding…" : "Add"}
                 </button>
               </div>
-              <label className="flex items-center gap-2 text-xs text-slate-500">
-                <input
-                  type="checkbox"
-                  className="accent-blue-600"
-                  checked={newPerson.invite}
-                  onChange={(e) => setNewPerson((n) => ({ ...n, invite: e.target.checked }))}
-                />
-                Email them an invitation from Ava
-              </label>
+              {client.domains.includes(newPerson.email.trim().toLowerCase().split("@")[1] ?? "") ? (
+                <p className="text-xs text-slate-500">
+                  At @{newPerson.email.trim().toLowerCase().split("@")[1]}, {admin ? "their" : "your"} company domain: they have access
+                  already and sign in directly — nothing to add, no invitation.
+                </p>
+              ) : (
+                <label className="flex items-center gap-2 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
+                    className="accent-blue-600"
+                    checked={newPerson.invite}
+                    onChange={(e) => setNewPerson((n) => ({ ...n, invite: e.target.checked }))}
+                  />
+                  Email them an invitation from Ava
+                </label>
+              )}
             </form>
           </div>
         </div>

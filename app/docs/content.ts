@@ -31,6 +31,25 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "The company domain is NDI's to set",
+    points: [
+      "Only NDI changes a client's company domain — anybody at it signs in to the client's page. Their super admin asks for a change on their Setup tab: the domain asked for is checked as NDI's would be (real, not a shared provider, nobody else's), then the request is emailed to Ava's inbox with a link to the client's page. One request every 10 minutes at most.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
+    title: "Who gets an invitation",
+    points: [
+      "Creating a client, Ava emails the invitation to its super admin only; they bring in the rest.",
+      "On a client's Setup, an invitation goes only to somebody actually added — from outside the company's domain. Somebody at the domain has access already and signs in directly: they are not added and get no email, and the page says so as their address is typed.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-07",
     title: "Company domains, for every client",
     points: [
       "A client can have a company domain, as NDI has NDI's: anybody with an address there signs in to the client's page and has their invites accepted for it, without being added. The list comes first — somebody on one client's list stays that client's, whatever their domain.",

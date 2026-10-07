@@ -51,7 +51,8 @@ async function refusal(email: string, clientId: string, ndisOwn: boolean, admin:
  * Someone who can use her — they open the client's page, and her invites from them are the
  * client's — added by anyone on the client's list or by NDI; with `invite`, Ava emails them.
  * Again, to somebody already on the list: only their super admin, or NDI. Somebody at the
- * client's own company domain has access already: they are not added — only invited, if asked.
+ * client's own company domain has access already: they are not added, nor invited — they sign
+ * in by themselves.
  */
 export async function POST(request: Request) {
   return handle(async () => {
@@ -74,15 +75,7 @@ export async function POST(request: Request) {
     if (refused) throw new HttpError(400, refused);
 
     if (client.domains.includes(emailDomain(email)) && !(await listMembers(clientId)).some((m) => m.email === email)) {
-      let inviteError: string | null = null;
-      if (body.invite) {
-        try {
-          await sendInvite(client, email, appOrigin(request));
-        } catch (e) {
-          inviteError = e instanceof Error ? e.message : "The invitation was not sent.";
-        }
-      }
-      return NextResponse.json({ people: await peopleOf(clientId), atDomain: emailDomain(email), invited: Boolean(body.invite) && !inviteError, inviteError });
+      return NextResponse.json({ people: await peopleOf(clientId), atDomain: emailDomain(email), invited: false, inviteError: null });
     }
 
     let member;
