@@ -66,8 +66,9 @@ export default function Docs() {
             <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">
               Ava joins your <strong className="font-semibold text-slate-800">Google Meet</strong> as a normal member, with her own
               Google account. Invite her like anybody else: she turns up at the start time, listens, answers and joins in out
-              loud, takes notes, and emails the write-up to the guests when it ends. A client can also send her into any Meet or{" "}
-              <strong className="font-semibold text-slate-800">Microsoft Teams</strong> meeting right away, from their page. She hears
+              loud, takes notes, and emails the write-up to the guests when it ends. To a{" "}
+              <strong className="font-semibold text-slate-800">Microsoft Teams</strong> meeting she goes as a guest. A client can also
+              send her into any Meet or Teams meeting right away, from their page. She hears
               and talks through <strong className="font-semibold text-slate-800">OpenAI GPT-Live</strong>, which listens while she
               speaks — so she answers almost at once, and can be interrupted like anybody else.
             </p>
@@ -117,8 +118,9 @@ export default function Docs() {
                     title: "Her runner notices",
                     body: (
                       <>
-                        It reads her calendar every 60 seconds. Declined meetings, all-day entries and anything without a Meet link
-                        are ignored, and so is a meeting whose organiser is nobody’s client (see{" "}
+                        It reads her calendar every 60 seconds. Declined meetings, all-day entries and anything with neither a
+                        Google Meet nor a Teams link (read from the invite’s description, where Outlook and Teams put it) are
+                        ignored, and so is a meeting whose organiser is nobody’s client (see{" "}
                         <a href="#clients" className="text-blue-600 underline decoration-blue-300">Clients</a>). It opens the
                         meeting a minute before the start (<C>AVA_JOIN_EARLY_SECONDS</C>), with the app’s briefing for that client.
                       </>
@@ -435,18 +437,18 @@ export default function Docs() {
               id="teams"
               eyebrow="Second platform"
               title="Microsoft Teams"
-              intro="Teams meetings never reach her calendar, so she is sent from the client's page. Everything after she is in — listening, talking, notes — is the same as in Meet."
+              intro="Invite her from Outlook or Teams like anybody else — the meeting shows on the client's page and she answers the invite — or send her from the client's page. She goes as a guest. Everything after she is in — listening, talking, notes — is the same as in Meet."
             >
               <Steps
                 items={[
                   {
-                    title: "“Need Ava now?” on the client’s page",
-                    body: "Paste the Teams link, and a line about the meeting if you like, then Send Ava. She goes at once, for that client, with what she knows about them.",
+                    title: "An invite, or “Need Ava now?”",
+                    body: "Invited from Outlook or Teams: the app reads the join link from the invite’s description, where they put it (never their “Meeting options” link), and she goes at the start time. Or paste the Teams link on the client’s page, with a line about the meeting if you like, then Send Ava: she goes at once, for that client, with what she knows about them.",
                     tone: "sky",
                   },
                   {
                     title: "Her container picks it up",
-                    body: "It asks the app every 10 seconds whether she has been sent anywhere, and takes each meeting once — with its client.",
+                    body: "From her calendar every 60 seconds, as for Meet; from a page within 10 seconds, when it asks the app whether she has been sent anywhere. Each meeting once — with its client.",
                     tone: "sky",
                   },
                   {
@@ -519,7 +521,7 @@ export default function Docs() {
                   her: she asks in the meeting chat for addresses.)
                 </Card>
                 <Card tone="amber" title="Sent from a client’s page: filed, not emailed">
-                  A meeting she was sent to with “Need Ava now?” — every Teams meeting, and any Meet link pasted there: the notes
+                  A meeting she was sent to with “Need Ava now?” — a Meet or Teams link pasted there: the notes
                   are written and filed with the meeting on that client’s page (Past meetings), and she does not promise an email
                   in her hello. Meet and Teams show names, never addresses. To have them emailed, invite her on the calendar.
                 </Card>
@@ -597,7 +599,7 @@ export default function Docs() {
                   meeting gets one answer for the series, and a clashing occurrence its own no. She does not go to a meeting she
                   declined; it shows on the client’s page as declined, with why, and is accepted again by itself if it moves to a
                   free time or the other meeting goes. A no somebody else gave on her calendar stands. Invites she does not go to
-                  anyway — nobody’s client, a paused client’s, no Google Meet link — are not answered.
+                  anyway — nobody’s client, a paused client’s, no Meet or Teams link — are not answered.
                 </Card>
                 <Card tone="sky" title="Whose meeting is it?">
                   The organiser’s: one of the client’s exact addresses first, then the people who can use her, then the company
@@ -694,7 +696,7 @@ export default function Docs() {
                 <FileRow path="lib/email.ts">The designed notes email — the client’s name in a client’s meeting, NDI’s otherwise — built from the plain-text notes.</FileRow>
                 <FileRow path="lib/google.ts · lib/session.ts">Google OAuth — Ava’s own account, and signing in — and the encrypted session cookie.</FileRow>
                 <FileRow path="lib/anam.ts">Short-lived Anam tokens: a lip-sync-only face, or the older full persona.</FileRow>
-                <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams.</FileRow>
+                <FileRow path="lib/platform.ts">Which product a link is — Google Meet or Microsoft Teams — and the join link written in an invite.</FileRow>
                 <FileRow path="app/api/ava/dispatch">
                   Where her runner asks “have I been sent anywhere?”, saying which of its seats are free — each meeting sent from a
                   client’s page is taken once, with its client, its seat and its id.

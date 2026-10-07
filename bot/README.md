@@ -31,9 +31,10 @@ Before: the invite's description is her briefing and its guests are who the note
 Declined meetings and all-day entries are ignored. Up to `AVA_SEATS` meetings at once (two by
 default), each in its own Chrome — different clients' only; the app answers the invites accordingly.
 
-**Microsoft Teams** is sent from the control room instead: paste the Teams link and press
-Send. The container checks every 10 seconds, opens it as a guest named Ava, and waits in
-the lobby until somebody admits her. `npm run check -- <teams link>` goes as far as the
+**Microsoft Teams** the same way: invited from Outlook or Teams, the app reads the join link
+in the invite. Or paste a Teams link in “Need Ava now?” on a client's page — the container
+checks every 10 seconds. Either way she opens it as a guest named Ava and waits in the
+lobby until somebody admits her. `npm run check -- <teams link>` goes as far as the
 pre-join screen without joining.
 
 **Proven, not assumed:** the container itself was run and pointed at a real Google Meet —

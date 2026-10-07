@@ -31,6 +31,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-07",
+    title: "Teams invites reach her calendar",
+    points: [
+      "Invited to a Microsoft Teams meeting from Outlook or Teams, she was never told: the app kept only invites with a Google Meet link, and a Teams invite carries its join link in its description (its location only says “Microsoft Teams Meeting”). Found with a client's first Teams meeting: on her calendar, not on their page.",
+      "The app now reads that join link — never Teams' “Meeting options” or help links, and through Outlook's Safe Links — so a client's Teams meeting shows on their page like a Meet one, she answers the invite, and at the start time she goes as a guest, to be admitted from the lobby. Its notes are emailed to the guests, as for any meeting she is invited to.",
+      "A Google Meet link written in an invite sent from outside Google counts too.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-07",
     title: "The guides say Railway",
     points: [
       "The README's deploy guide is Railway's now: the site and its Redis, the three addresses, what Google needs listed, deploying a push by hand. Her server's guide and example settings point at Railway too, and these docs show the meeting state on Railway's Redis.",

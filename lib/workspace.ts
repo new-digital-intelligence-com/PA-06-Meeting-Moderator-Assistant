@@ -8,6 +8,7 @@
  */
 
 import { GoogleClient } from "./google";
+import { joinLinkIn, platformOf } from "./platform";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -168,6 +169,7 @@ type CalendarEvent = {
   id: string;
   summary?: string;
   description?: string;
+  location?: string;
   hangoutLink?: string;
   start?: { dateTime?: string; date?: string };
   attendees?: { email: string; displayName?: string }[];
@@ -175,7 +177,17 @@ type CalendarEvent = {
 };
 
 /**
- * Pulls today's Meet events so the control room can fill the meeting URL, the title and
+ * The link she joins by: the invite's own Google Meet — or, for one sent from Outlook or
+ * Teams, the Google Meet or Microsoft Teams link written in it. Empty when there is none.
+ */
+function joinLink(e: CalendarEvent): string {
+  const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri;
+  for (const url of [e.hangoutLink, video]) if (url && platformOf(url)) return url;
+  return joinLinkIn(e.location) ?? joinLinkIn(e.description) ?? "";
+}
+
+/**
+ * Pulls today's Meet and Teams events so the control room can fill the meeting URL, the title and
  * the invitee list from the calendar instead of making you paste three things.
  */
 export async function upcomingMeetings(google: GoogleClient, timezone: string) {
@@ -193,12 +205,11 @@ export async function upcomingMeetings(google: GoogleClient, timezone: string) {
   );
   return (data.items ?? [])
     .map((e) => {
-      const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri;
       return {
         id: e.id,
         title: e.summary ?? "(no title)",
         start: e.start?.dateTime ?? e.start?.date ?? "",
-        meetingUrl: e.hangoutLink ?? video ?? "",
+        meetingUrl: joinLink(e),
         description: e.description ?? "",
         attendees: (e.attendees ?? []).map((a) => a.email).filter(Boolean),
       };
@@ -276,7 +287,6 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResul
     // All-day entries are not meetings she can walk into.
     .filter((e) => Boolean(e.start?.dateTime))
     .map((e) => {
-      const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri;
       const me = (e.attendees ?? []).find((a) => a.self);
       return {
         // Her own meeting needs no answer; one she is not on the guest list of herself cannot have one.
@@ -287,7 +297,7 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResul
         title: e.summary ?? "Meeting",
         start: Date.parse(e.start!.dateTime!),
         end: Date.parse(e.end?.dateTime ?? e.start!.dateTime!),
-        meetingUrl: e.hangoutLink ?? video ?? "",
+        meetingUrl: joinLink(e),
         description: stripHtml(e.description ?? ""),
         organizer: e.organizer?.displayName || e.organizer?.email || "",
         organizerEmail: (e.organizer?.email ?? "").toLowerCase(),
@@ -296,7 +306,8 @@ export async function avaInvites(google: GoogleClient, hoursAhead = 12, maxResul
           .map((a) => ({ email: a.email.toLowerCase(), name: a.displayName })),
       };
     })
-    .filter((e) => /^https:\/\/meet\.google\.com\//.test(e.meetingUrl));
+    // Google Meet, as herself, or Microsoft Teams, as a guest: the two she can walk into.
+    .filter((e) => platformOf(e.meetingUrl) !== null);
 }
 
 /** Calendar descriptions are often HTML; she wants the words. */
