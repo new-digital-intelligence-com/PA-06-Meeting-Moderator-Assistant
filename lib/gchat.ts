@@ -135,8 +135,24 @@ async function conversationOf(google: GoogleClient, space: Space, m: ChatMessage
  * and if Google will not have that, in the space itself, with both refusals in her log.
  */
 async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: string, log: (m: string) => void) {
-  const post = (body: object, query = "") =>
-    google.request(`${CHAT}/${space.name}/messages${query}`, { method: "POST", body: JSON.stringify(body) });
+  // Google's whole answer when it refuses — its status and reasons, not just its one line —
+  // and what the chat is and her place in it, to tell a setting of NDI's from a mistake of hers.
+  const post = async (body: object, query = "") => {
+    const res = await fetch(`${CHAT}/${space.name}/messages${query}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await google.token()}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return;
+    const refusal = (await res.text()).replace(/\s+/g, " ").slice(0, 900);
+    const [about, member] = await Promise.all([
+      google.request<Record<string, unknown>>(`${CHAT}/${space.name}`).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+      google.request<Record<string, unknown>>(`${CHAT}/${space.name}/members/users/me`).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+    ]);
+    log(`[chat] Google refused her message (${res.status}): ${refusal}`);
+    log(`[chat] the chat: ${JSON.stringify(about).slice(0, 500)} — her in it: ${JSON.stringify(member).slice(0, 400)}`);
+    throw new Error(`Google Chat refused her message (${res.status})`);
+  };
   if (space.spaceType === "DIRECT_MESSAGE" || !m.thread?.name) {
     await post({ text });
     return;
