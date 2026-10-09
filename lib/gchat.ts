@@ -129,11 +129,24 @@ async function conversationOf(google: GoogleClient, space: Space, m: ChatMessage
   return said.length ? said : [{ from: await nameOf(m.sender?.name ?? ""), text: withoutMention(m, her) }];
 }
 
-async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: string) {
-  await google.request(`${CHAT}/${space.name}/messages?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD`, {
-    method: "POST",
-    body: JSON.stringify({ text, ...(m.thread?.name ? { thread: { name: m.thread.name } } : {}) }),
-  });
+/**
+ * Her message, as herself. A one-to-one chat has no threads to answer in: just the message
+ * (naming one there, Google refused it as not found). In a space, in the message's thread —
+ * and if Google will not have that, in the space itself, with both refusals in her log.
+ */
+async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: string, log: (m: string) => void) {
+  const post = (body: object, query = "") =>
+    google.request(`${CHAT}/${space.name}/messages${query}`, { method: "POST", body: JSON.stringify(body) });
+  if (space.spaceType === "DIRECT_MESSAGE" || !m.thread?.name) {
+    await post({ text });
+    return;
+  }
+  try {
+    await post({ text, thread: { name: m.thread.name } }, "?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD");
+  } catch (e) {
+    log(`[chat] could not answer in the thread (${e instanceof Error ? e.message : e}) — answering in the space`);
+    await post({ text });
+  }
 }
 
 let running = false;
@@ -187,7 +200,9 @@ export async function answerChats(google: GoogleClient, log: (m: string) => void
           log(`[chat] not answered — not one of her clients' people: ${email ?? m.sender?.name ?? "?"} in ${space.displayName || space.name}`);
           if (direct && !toldStranger.has(space.name)) {
             toldStranger.add(space.name);
-            await reply(google, space, m, "Hi — I'm Ava, a meeting assistant. I can only help the people of the companies I work for, so I can't answer here.").catch(() => undefined);
+            await reply(google, space, m, "Hi — I'm Ava, a meeting assistant. I can only help the people of the companies I work for, so I can't answer here.", log).catch(
+              (e) => log(`[chat] could not tell a stranger: ${e instanceof Error ? e.message : e}`),
+            );
           }
           continue;
         }
@@ -198,7 +213,7 @@ export async function answerChats(google: GoogleClient, log: (m: string) => void
         try {
           const conversation = await conversationOf(google, space, m, her, nameOf);
           const text = await answerMessage({ client, channel: "chat", sender: { email: email! }, conversation });
-          await reply(google, space, m, text);
+          await reply(google, space, m, text, log);
           answered = { to: email!, client: client.name };
           log(`[chat] answered ${email} for ${client.name} in ${direct ? "a one-to-one chat" : space.displayName || space.name}`);
         } catch (e) {

@@ -32,6 +32,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-09",
+    title: "Google Chat: her reply in a one-to-one chat",
+    points: [
+      "She knew who wrote, wrote her answer — and Google refused to post it (“Permission denied … or the resource doesn't exist”): she named the message's thread, and a one-to-one chat has none to answer in. There she now just answers; in a space, in the thread, and if Google will not have that, in the space — with Google's exact refusal in her log either way.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-09",
     title: "Google Chat knows NDI's people; all of her Google account",
     points: [
       "Her email worked from the first message. In Google Chat she took everybody for a stranger: she asked NDI's directory who wrote in a way that lookup does not take, and every answer was an error. She now reads NDI's directory whole (listDirectoryPeople), once an hour, and looks people up in it; a directory she cannot read stops the look, shown in the control room and tried again, instead of anybody being taken for a stranger.",
