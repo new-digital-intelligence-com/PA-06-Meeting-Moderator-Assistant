@@ -9,12 +9,11 @@
  * after she started answering; never her own.
  */
 import { answerMessage, clientOfSender, noteStatus, type Said } from "./answers";
-import { granted, type GoogleClient } from "./google";
+import { EMAIL_SCOPES, granted, type GoogleClient } from "./google";
 import { redisOrMongoKey } from "./store";
 import { sendReply } from "./workspace";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
-const SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 /** At most this many answers to one sender in an hour: two machines must not talk forever. */
 const PER_SENDER_HOUR = 10;
 
@@ -104,7 +103,7 @@ let running = false;
 export async function answerInbox(google: GoogleClient, log: (m: string) => void = console.log): Promise<void> {
   if (running) return;
   if (process.env.AVA_ANSWER_EMAIL === "off") return noteStatus("email", { state: "off", at: Date.now() });
-  if (!granted(google.current, [SCOPE])) {
+  if (!granted(google.current, EMAIL_SCOPES)) {
     return noteStatus("email", { state: "reconnect", at: Date.now(), detail: "Connect Ava's Google again to let her read and answer her email." });
   }
   running = true;

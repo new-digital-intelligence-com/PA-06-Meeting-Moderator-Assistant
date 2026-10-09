@@ -25,8 +25,8 @@ type Config = {
   avaAccount: string | null;
   avaExpected: string | null;
   runnerKey: boolean;
-  /** Her email and Google Chat: `ready` once her account lets her answer them. */
-  between: { ready: boolean; email: BetweenStatus | null; chat: BetweenStatus | null };
+  /** Her email and Google Chat: `ready` once her account lets her answer them; `full` once it gives her all she could use. */
+  between: { ready: boolean; full: boolean; email: BetweenStatus | null; chat: BetweenStatus | null };
 };
 
 /** How her answering goes on one channel. */
@@ -180,6 +180,9 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
                   <>
                     <BetweenLine label="Her email" s={config.between.email} off="AVA_ANSWER_EMAIL" />
                     <BetweenLine label="Google Chat" s={config.between.chat} off="AVA_ANSWER_CHAT" />
+                    {!config.between.full && (
+                      <p className="text-amber-700">Reconnect her account to give her the rest of her Google access.</p>
+                    )}
                   </>
                 ) : (
                   <p>Reconnect her account to let her answer her email and Google Chat.</p>

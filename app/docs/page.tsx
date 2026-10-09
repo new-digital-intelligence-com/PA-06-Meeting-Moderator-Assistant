@@ -574,12 +574,15 @@ export default function Docs() {
                 <Card tone="amber" title="Google Chat">
                   As herself: people find Ava in Chat like a colleague. A one-to-one chat: she answers every message; a space or
                   a group chat: when somebody @mentions her, in that thread. Every ten seconds, with her server’s check for
-                  meetings to join. Chat names its writer only by an id: NDI’s directory turns it into an address. A stranger
+                  meetings to join. Chat names its writer only by an id: NDI’s directory — read whole, once an hour — turns it into
+                  an address; when it cannot be read, the look stops and is tried again, nobody taken for a stranger. A stranger
                   in a one-to-one chat gets one line saying she cannot help. At most thirty answers to one person an hour.
                 </Card>
                 <Card tone="rose" title="Turning it on">
                   Her Google account gives her more for this: reading her mail (<C>gmail.modify</C>), her chats and spaces, and
-                  NDI’s directory. Until it is connected again with them, the control room says so and she answers neither.
+                  NDI’s directory — and asks for all of it she could use next: all of Gmail and Calendar, Docs, Sheets, Slides and
+                  Forms, Tasks, her contacts, Chat spaces and their members, Meet’s meeting spaces and the records of her meetings.
+                  Until it is connected again with them, the control room says so.
                   Google Cloud needs the Google Chat API turned on and configured (a name, an icon, a description — Google asks
                   for it even when she chats as herself) and the People API turned on. <C>AVA_ANSWER_EMAIL</C> or{" "}
                   <C>AVA_ANSWER_CHAT</C> set to <C>off</C> stops either.

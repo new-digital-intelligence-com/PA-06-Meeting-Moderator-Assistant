@@ -4,7 +4,7 @@ import { requireAdminPage } from "@/lib/auth";
 import { inMeeting, minutesIn, seatList, seatMeetings } from "@/lib/meeting";
 import { avaEmail, avaGoogle, seatCount } from "@/lib/ava";
 import { betweenStatus } from "@/lib/answers";
-import { AVA_SCOPES, granted } from "@/lib/google";
+import { AVA_SCOPES, CHAT_SCOPES, EMAIL_SCOPES, granted } from "@/lib/google";
 import { storeKind } from "@/lib/store";
 
 // Read on every visit: what she is doing right now is part of the page.
@@ -58,7 +58,12 @@ export default async function Home({
           avaExpected: process.env.AVA_EMAIL || null,
           runnerKey: Boolean(process.env.AVA_RUNNER_KEY),
           // Her email and Google Chat: whether her account lets her answer them, and how it goes.
-          between: { ready: Boolean(her && granted(her.current, AVA_SCOPES)), ...between },
+          between: {
+            ready: Boolean(her && granted(her.current, [...EMAIL_SCOPES, ...CHAT_SCOPES])),
+            // The rest of her Google account, for what comes next.
+            full: Boolean(her && granted(her.current, AVA_SCOPES)),
+            ...between,
+          },
         }}
       />
     </>

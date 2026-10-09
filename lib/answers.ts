@@ -29,7 +29,7 @@ export type BetweenStatus = {
 export async function noteStatus(channel: "email" | "chat", s: Omit<BetweenStatus, "last"> & { answered?: { to: string; client: string } }): Promise<void> {
   try {
     const key = redisOrMongoKey(`between:${channel}`);
-    const before = JSON.parse((await key.read()) ?? "null") as BetweenStatus | null;
+    const before = JSON.parse((await key.read()) || "null") as BetweenStatus | null;
     const { answered, ...rest } = s;
     const next: BetweenStatus = { ...rest, last: answered ? { at: s.at, ...answered } : before?.last };
     await key.write(JSON.stringify(next));
@@ -40,7 +40,7 @@ export async function noteStatus(channel: "email" | "chat", s: Omit<BetweenStatu
 
 /** Where her email and chat answering stand. */
 export async function betweenStatus(): Promise<{ email: BetweenStatus | null; chat: BetweenStatus | null }> {
-  const read = async (c: "email" | "chat") => JSON.parse((await redisOrMongoKey(`between:${c}`).read().catch(() => null)) ?? "null") as BetweenStatus | null;
+  const read = async (c: "email" | "chat") => JSON.parse((await redisOrMongoKey(`between:${c}`).read().catch(() => null)) || "null") as BetweenStatus | null;
   const [email, chat] = await Promise.all([read("email"), read("chat")]);
   return { email, chat };
 }

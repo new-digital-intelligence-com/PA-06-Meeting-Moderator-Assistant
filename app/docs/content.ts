@@ -16,7 +16,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
-  { label: "Email & Chat", value: "Built: she answers her email and Google Chat — once her Google account is connected again with the new permissions", tone: "sky" },
+  { label: "Email & Chat", value: "Live: she answers her email (first answer 9 October) and Google Chat; reconnect her account once more to grant the rest of her Google access", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
 ];
 
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-09",
+    title: "Google Chat knows NDI's people; all of her Google account",
+    points: [
+      "Her email worked from the first message. In Google Chat she took everybody for a stranger: she asked NDI's directory who wrote in a way that lookup does not take, and every answer was an error. She now reads NDI's directory whole (listDirectoryPeople), once an hour, and looks people up in it; a directory she cannot read stops the look, shown in the control room and tried again, instead of anybody being taken for a stranger.",
+      "Her Google account asks for all of it she could use: all of Gmail and Calendar, Docs, Sheets, Slides and Forms, Tasks, contacts, Chat spaces, members and reactions, Meet's meeting spaces and her meetings' records. The control room asks for one more reconnect until it is given; email and Chat answer meanwhile.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
   {
     date: "2026-10-09",
     title: "She answers her email and Google Chat",

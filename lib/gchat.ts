@@ -4,21 +4,17 @@
  * check for meetings to join (/api/ava/dispatch), in the message's thread, with the
  * sender's client's knowledge (lib/answers.ts).
  *
- * Chat says who wrote only by an id: NDI's directory turns it into an address, and an address
- * that is nobody she works for gets no answer — in a one-to-one chat, one line saying so.
+ * Chat says who wrote only by an id: NDI's directory — read whole, once an hour — turns it into
+ * an address, and an address that is nobody she works for gets no answer — in a one-to-one
+ * chat, one line saying so. A directory that cannot be read stops the look, to be retried:
+ * nobody is taken for a stranger for it.
  * Only messages from after she started answering; never her own, nor another bot's.
  */
 import { answerMessage, clientOfSender, noteStatus, type Said } from "./answers";
-import { granted, type GoogleClient } from "./google";
+import { CHAT_SCOPES, granted, type GoogleClient } from "./google";
 import { redisOrMongoKey } from "./store";
 
 const CHAT = "https://chat.googleapis.com/v1";
-const SCOPES = [
-  "https://www.googleapis.com/auth/chat.spaces.readonly",
-  "https://www.googleapis.com/auth/chat.messages.readonly",
-  "https://www.googleapis.com/auth/chat.messages.create",
-  "https://www.googleapis.com/auth/directory.readonly",
-];
 /** At most this many answers to one person in an hour. */
 const PER_SENDER_HOUR = 30;
 
@@ -41,20 +37,52 @@ async function herId(google: GoogleClient): Promise<string> {
   return me;
 }
 
+/**
+ * NDI's directory: everybody's Google id → their address, read whole — once an hour, or
+ * sooner for somebody it does not know yet (a newcomer). The People API's listDirectoryPeople:
+ * Chat's users/<id> is the directory's people/<id>.
+ */
+let directory: { at: number; byId: Map<string, string> } | null = null;
+async function readDirectory(google: GoogleClient): Promise<Map<string, string>> {
+  const byId = new Map<string, string>();
+  let pageToken = "";
+  for (let page = 0; page < 20; page++) {
+    const r = await google.request<{
+      people?: { resourceName?: string; emailAddresses?: { value?: string; metadata?: { primary?: boolean } }[] }[];
+      nextPageToken?: string;
+    }>(
+      `https://people.googleapis.com/v1/people:listDirectoryPeople?${new URLSearchParams({
+        readMask: "emailAddresses",
+        sources: "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE",
+        pageSize: "1000",
+        ...(pageToken ? { pageToken } : {}),
+      })}`,
+    );
+    for (const p of r.people ?? []) {
+      const list = p.emailAddresses ?? [];
+      const email = (list.find((e) => e.metadata?.primary) ?? list[0])?.value?.toLowerCase();
+      if (p.resourceName && email) byId.set(p.resourceName.replace(/^people\//, ""), email);
+    }
+    if (!r.nextPageToken) break;
+    pageToken = r.nextPageToken;
+  }
+  directory = { at: Date.now(), byId };
+  return byId;
+}
+
+/** NDI's directory, read again when an hour old. Throws when it cannot be read. */
+async function theDirectory(google: GoogleClient): Promise<Map<string, string>> {
+  return directory && Date.now() - directory.at < 60 * 60_000 ? directory.byId : readDirectory(google);
+}
+
 /** Who wrote: their address, from NDI's directory — null for anybody outside it. */
-const emails = new Map<string, string | null>();
 async function emailOf(google: GoogleClient, user: string): Promise<string | null> {
-  if (emails.has(user)) return emails.get(user)!;
   const id = user.replace(/^users\//, "");
-  const person = await google
-    .request<{ emailAddresses?: { value?: string; metadata?: { primary?: boolean } }[] }>(
-      `https://people.googleapis.com/v1/people/${encodeURIComponent(id)}?personFields=emailAddresses&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE`,
-    )
-    .catch(() => null);
-  const list = person?.emailAddresses ?? [];
-  const email = (list.find((e) => e.metadata?.primary) ?? list[0])?.value?.toLowerCase() ?? null;
-  emails.set(user, email);
-  return email;
+  const known = (await theDirectory(google)).get(id);
+  if (known) return known;
+  // Somebody new since it was read: once more, if it is more than five minutes old.
+  if (directory && Date.now() - directory.at > 5 * 60_000) return (await readDirectory(google).catch(() => directory!.byId)).get(id) ?? null;
+  return null;
 }
 
 /** The words of a message without the @mention of her that brought it. */
@@ -114,15 +142,17 @@ let running = false;
 export async function answerChats(google: GoogleClient, log: (m: string) => void = console.log): Promise<void> {
   if (running) return;
   if (process.env.AVA_ANSWER_CHAT === "off") return noteStatus("chat", { state: "off", at: Date.now() });
-  if (!granted(google.current, SCOPES)) {
+  if (!granted(google.current, CHAT_SCOPES)) {
     return noteStatus("chat", { state: "reconnect", at: Date.now(), detail: "Connect Ava's Google again to let her answer in Google Chat." });
   }
   running = true;
   const key = redisOrMongoKey("between:chat:seen");
   try {
     const now = Date.now();
-    const seen: Seen = JSON.parse((await key.read()) ?? "null") ?? { since: now, spaces: {} };
+    const seen: Seen = JSON.parse((await key.read()) || "null") ?? { since: now, spaces: {} };
     const her = await herId(google);
+    // Before any message: a directory that cannot be read stops this look, nothing answered.
+    await theDirectory(google);
     const nameOf = async (u: string) => (await emailOf(google, u)) ?? "Someone";
 
     const spaces: Space[] = [];

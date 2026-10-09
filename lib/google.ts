@@ -14,17 +14,43 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive",
 ];
 
-/**
- * Asked of her account only, on top: her inbox, to answer the emails people write to her
- * (and label what she has dealt with); Google Chat as herself — the chats and spaces she is
- * in, their messages, and her replies; and NDI's directory, to know who wrote in Chat.
- */
-export const AVA_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.modify",
+/** What answering her email needs: reading her inbox, and labelling what she has dealt with. */
+export const EMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"];
+
+/** What Google Chat needs: her chats and spaces, their messages, her replies — and NDI's directory, to know who wrote. */
+export const CHAT_SCOPES = [
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.messages.readonly",
   "https://www.googleapis.com/auth/chat.messages.create",
   "https://www.googleapis.com/auth/directory.readonly",
+];
+
+/**
+ * Asked of her account only: all of it she could use — her email and Google Chat (answered
+ * now), and the rest of her Google Workspace for what comes next: all of Gmail and Calendar,
+ * Docs, Sheets, Slides and Forms, Tasks, her contacts, Chat spaces and their members, and
+ * Google Meet's meeting spaces and the records of her meetings (transcripts among them).
+ */
+export const AVA_SCOPES = [
+  ...EMAIL_SCOPES,
+  ...CHAT_SCOPES,
+  "https://mail.google.com/",
+  "https://www.googleapis.com/auth/gmail.settings.basic",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/presentations",
+  "https://www.googleapis.com/auth/forms.body",
+  "https://www.googleapis.com/auth/forms.responses.readonly",
+  "https://www.googleapis.com/auth/tasks",
+  "https://www.googleapis.com/auth/contacts",
+  "https://www.googleapis.com/auth/contacts.other.readonly",
+  "https://www.googleapis.com/auth/chat.messages",
+  "https://www.googleapis.com/auth/chat.messages.reactions",
+  "https://www.googleapis.com/auth/chat.spaces",
+  "https://www.googleapis.com/auth/chat.memberships",
+  "https://www.googleapis.com/auth/meetings.space.created",
+  "https://www.googleapis.com/auth/meetings.space.readonly",
 ];
 
 /** Whether these tokens carry every one of `scopes` — false for an account connected before they were asked. */
