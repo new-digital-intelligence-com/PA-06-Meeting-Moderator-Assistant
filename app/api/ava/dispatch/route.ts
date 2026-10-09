@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
-import { isRunner } from "@/lib/ava";
+import { NextResponse, after } from "next/server";
+import { avaGoogle, isRunner } from "@/lib/ava";
+import { hasDb } from "@/lib/db";
+import { answerChats } from "@/lib/gchat";
 import { DISPATCH_STALE_MS, getMeeting, seatOf, updateMeeting, type Meeting } from "@/lib/meeting";
 import { platformOf } from "@/lib/platform";
 
@@ -18,6 +20,9 @@ export async function POST(request: Request) {
   if (!isRunner(request)) {
     return NextResponse.json({ error: "Runner key required." }, { status: 403 });
   }
+  // Google Chat, every few seconds with this check: she answers her chats (lib/gchat.ts).
+  const google = hasDb() ? await avaGoogle() : null;
+  if (google) after(() => answerChats(google).catch(() => undefined));
   const { earlySeconds = 60, free = ["1"] } = (await request.json().catch(() => ({}))) as { earlySeconds?: number; free?: unknown[] };
   const seats = [...new Set((Array.isArray(free) ? free : ["1"]).map(seatOf))];
 

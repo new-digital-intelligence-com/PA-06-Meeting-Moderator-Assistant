@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { avaEmail, avaGoogle, isRunner, noteScreen, noteSeats } from "@/lib/ava";
 import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
+import { answerInbox } from "@/lib/inbox";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
 import { avaInvites, type Invite } from "@/lib/workspace";
@@ -37,6 +38,8 @@ export async function GET(request: Request) {
       { status: 409 },
     );
   }
+  // Her inbox, once a minute with this read: she answers the people she works for (lib/inbox.ts).
+  if (hasDb()) after(() => answerInbox(google).catch(() => undefined));
   const hours = Number(new URL(request.url).searchParams.get("hours") || 12);
   try {
     if (!hasDb()) {

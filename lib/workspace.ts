@@ -115,9 +115,16 @@ export async function fileMeta(google: GoogleClient, fileId: string): Promise<Dr
  * falls back to the text. Both parts, and the subject, are encoded so that a dash or an
  * accent arrives as written.
  */
-function rfc822(to: string, subject: string, body: string, html?: string) {
+function rfc822(to: string, subject: string, body: string, html?: string, extra: string[] = []) {
   const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64").replace(/.{76}/g, "$&\r\n");
-  const head = [`To: ${to}`, `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`, "MIME-Version: 1.0"];
+  // A header is one line: whatever came from a message she was sent cannot add another.
+  const one = (s: string) => s.replace(/[\r\n]+/g, " ");
+  const head = [
+    `To: ${one(to)}`,
+    `Subject: =?UTF-8?B?${Buffer.from(one(subject), "utf8").toString("base64")}?=`,
+    ...extra.map(one),
+    "MIME-Version: 1.0",
+  ];
   const lines = html
     ? (() => {
         const boundary = `ava-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -161,6 +168,22 @@ export async function sendEmail(google: GoogleClient, to: string, subject: strin
     body: JSON.stringify({ raw: rfc822(to, subject, body, html) }),
   });
   return { messageId: sent.id, to };
+}
+
+/**
+ * Her answer to an email, in its thread: Gmail's own (threadId) and the headers every other
+ * mail app threads by — so it arrives under the message it answers.
+ */
+export async function sendReply(
+  google: GoogleClient,
+  r: { to: string; subject: string; body: string; threadId: string; inReplyTo?: string; references?: string },
+) {
+  const extra = [...(r.inReplyTo ? [`In-Reply-To: ${r.inReplyTo}`] : []), ...(r.references ? [`References: ${r.references}`] : [])];
+  const sent = await google.request<{ id: string }>(`${GMAIL}/messages/send`, {
+    method: "POST",
+    body: JSON.stringify({ raw: rfc822(r.to, r.subject, r.body, undefined, extra), threadId: r.threadId }),
+  });
+  return { messageId: sent.id };
 }
 
 /* --------------------------------------------------------------- calendar */

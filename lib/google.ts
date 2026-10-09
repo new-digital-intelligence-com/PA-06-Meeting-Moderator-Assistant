@@ -14,6 +14,25 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive",
 ];
 
+/**
+ * Asked of her account only, on top: her inbox, to answer the emails people write to her
+ * (and label what she has dealt with); Google Chat as herself — the chats and spaces she is
+ * in, their messages, and her replies; and NDI's directory, to know who wrote in Chat.
+ */
+export const AVA_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/chat.spaces.readonly",
+  "https://www.googleapis.com/auth/chat.messages.readonly",
+  "https://www.googleapis.com/auth/chat.messages.create",
+  "https://www.googleapis.com/auth/directory.readonly",
+];
+
+/** Whether these tokens carry every one of `scopes` — false for an account connected before they were asked. */
+export function granted(tokens: { scope?: string }, scopes: string[]): boolean {
+  const have = new Set((tokens.scope ?? "").split(/\s+/));
+  return scopes.every((s) => have.has(s));
+}
+
 function creds() {
   const client_id = process.env.GOOGLE_CLIENT_ID;
   const client_secret = process.env.GOOGLE_CLIENT_SECRET;
@@ -42,13 +61,13 @@ export function redirectUri() {
   );
 }
 
-export function buildAuthUrl(state: string, loginHint?: string) {
+export function buildAuthUrl(state: string, loginHint?: string, scopes: string[] = GOOGLE_SCOPES) {
   const { client_id } = creds();
   const params = new URLSearchParams({
     client_id,
     redirect_uri: redirectUri(),
     response_type: "code",
-    scope: GOOGLE_SCOPES.join(" "),
+    scope: scopes.join(" "),
     access_type: "offline",
     include_granted_scopes: "true",
     // select_account as well as consent: connecting Ava is done from a browser that is

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { buildAuthUrl } from "@/lib/google";
+import { AVA_SCOPES, GOOGLE_SCOPES, buildAuthUrl } from "@/lib/google";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,8 @@ export async function GET(request: Request) {
   const state = crypto.randomBytes(16).toString("hex");
   const hint = asAva ? process.env.AVA_EMAIL || undefined : undefined;
 
-  const response = NextResponse.redirect(buildAuthUrl(state, asAva ? hint ?? "" : undefined));
+  // Hers asks more: her inbox and Google Chat, which she answers herself (lib/inbox.ts, lib/gchat.ts).
+  const response = NextResponse.redirect(buildAuthUrl(state, asAva ? hint ?? "" : undefined, asAva ? [...GOOGLE_SCOPES, ...AVA_SCOPES] : GOOGLE_SCOPES));
   response.cookies.set(cookie("pa_oauth_state", state));
   response.cookies.set(cookie("pa_oauth_as", asAva ? "ava" : "me"));
   return response;

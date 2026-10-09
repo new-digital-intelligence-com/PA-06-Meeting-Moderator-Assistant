@@ -27,6 +27,7 @@ const SECTIONS = [
   { id: "teams", label: "Microsoft Teams" },
   { id: "languages", label: "Languages" },
   { id: "notes", label: "Notes and follow-up" },
+  { id: "between", label: "Email and Google Chat" },
   { id: "clients", label: "Clients and their knowledge" },
   { id: "brain", label: "Modules: the brain" },
   { id: "runner", label: "Modules: the runner" },
@@ -544,6 +545,52 @@ export default function Docs() {
               </div>
             </Section>
 
+            {/* ── between ──────────────────────────────────────────────── */}
+            <Section
+              id="between"
+              eyebrow="Between meetings"
+              title="Email and Google Chat"
+              intro="People write to her between meetings — to ava@ by email, or in Google Chat — and she answers as herself, with the knowledge of the client the sender belongs to."
+            >
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card tone="sky" title="Who she answers">
+                  The people she works for: NDI’s team, and each client’s people — on its list or at its company domain — each
+                  with their own client’s knowledge and nothing of another’s. In a client’s conversation she is their assistant
+                  and never mentions NDI. A stranger, a machine (a newsletter, an automatic reply, a no-reply address) or a
+                  calendar invitation (her calendar answers those) gets no answer.
+                </Card>
+                <Card tone="violet" title="What she answers from">
+                  Their instructions, what she knows about them, the passages of their documents closest to the question, and
+                  their meetings — those coming up, and the notes and actions of the last ones. When the answer is not there she
+                  says so; she never invents. She does not act from a message: for a meeting, they invite her from their
+                  calendar or use “Need Ava now?”; documents and preparation go on their page.
+                </Card>
+                <Card tone="emerald" title="Email">
+                  Once a minute, with her server’s calendar read. Only mail that came after she started — never a backlog — and
+                  never her own. She replies in the thread, to the sender only. Each email she deals with is labelled in her
+                  Gmail: <C>Ava/Answered</C> (and read), or <C>Ava/Not answered</C>, left unread for NDI to see. At most ten
+                  answers to one sender an hour.
+                </Card>
+                <Card tone="amber" title="Google Chat">
+                  As herself: people find Ava in Chat like a colleague. A one-to-one chat: she answers every message; a space or
+                  a group chat: when somebody @mentions her, in that thread. Every ten seconds, with her server’s check for
+                  meetings to join. Chat names its writer only by an id: NDI’s directory turns it into an address. A stranger
+                  in a one-to-one chat gets one line saying she cannot help. At most thirty answers to one person an hour.
+                </Card>
+                <Card tone="rose" title="Turning it on">
+                  Her Google account gives her more for this: reading her mail (<C>gmail.modify</C>), her chats and spaces, and
+                  NDI’s directory. Until it is connected again with them, the control room says so and she answers neither.
+                  Google Cloud needs the Google Chat API turned on and configured (a name, an icon, a description — Google asks
+                  for it even when she chats as herself) and the People API turned on. <C>AVA_ANSWER_EMAIL</C> or{" "}
+                  <C>AVA_ANSWER_CHAT</C> set to <C>off</C> stops either.
+                </Card>
+                <Card tone="slate" title="In the control room">
+                  The card of her Google account shows both: when she last looked, and her last answer — to whom, for which
+                  client — or why she cannot (her account to reconnect, an error from Google).
+                </Card>
+              </div>
+            </Section>
+
             {/* ── clients ──────────────────────────────────────────────── */}
             <Section
               id="clients"
@@ -735,6 +782,10 @@ export default function Docs() {
                   Signing in with Google (who you are, nothing more) or with a link by email: 15 minutes, once, stored only as a
                   hash, and used by a button — mail scanners open links, and would spend it.
                 </FileRow>
+                <FileRow path="lib/answers.ts · lib/inbox.ts · lib/gchat.ts">
+                  Between meetings: her answer to a message, with the sender’s client’s knowledge; her inbox, read and answered once
+                  a minute; Google Chat, as herself, every ten seconds.
+                </FileRow>
                 <FileRow path="lib/clients.ts">Clients, who can use her for them — the super admin and the people added — matching an organiser to a client, the invitation email.</FileRow>
                 <FileRow path="lib/schedule.ts">
                   Her calendar copied into Postgres, each meeting given to a client by its organiser — or skipped. Preparation and
@@ -876,6 +927,7 @@ export default function Docs() {
                       [<C key="v">SESSION_SECRET</C>, "Encrypts sessions and her stored access"],
                       [<C key="v">AVA_RUNNER_KEY</C>, "Shared with the runner"],
                       [<C key="v">AVA_EMAIL</C>, "Her address; any other is refused"],
+                      [<C key="v">AVA_ANSWER_EMAIL · AVA_ANSWER_CHAT</C>, "“off” stops her answering her email, or Google Chat"],
                       [<C key="v">AVA_ALIASES</C>, "Other spellings of her name (default Eva, Iva, Eeva, Ayva, Avah)"],
                       [<C key="v">BOT_NAME</C>, "Her name"],
                       [<C key="v">SUPABASE_URL · SUPABASE_SCHEMA · SUPABASE_SERVICE_ROLE_KEY</C>, "Clients, documents, meetings — the team’s Supabase project, her schema (pa-06), and its secret key (server only)"],
@@ -992,6 +1044,7 @@ notify pgrst, 'reload schema';
                   ["Meet captions", "As good as Google’s captions; one language at a time, following what is spoken", "Free"],
                   ["Teams", "Guest only: waits in the lobby; needs the organiser’s company to allow guests and captions", "Free"],
                   ["Runner", "One meeting per seat (AVA_SEATS, two by default); the seats share its processors and memory", "A small VPS, about €5–25 a month; bigger for two meetings at once"],
+                  ["Email and Google Chat", "The people she works for only; ten answers to one sender an hour by email, thirty in Chat; email read every minute, Chat every ten seconds, while her server runs", "Claude for each answer — about a cent"],
                   ["Clients’ documents", "4 MB per upload (bigger, up to 30 MB, through Google Drive), 400,000 characters each, 300 per client", "Embeddings $0.02 per million tokens — a 100-page document is about a tenth of a cent; its summary a cent or two"],
                   ["Supabase", "The team’s shared “pocs” project: its plan’s limits, shared with the other projects", "On the team’s plan"],
                 ]}

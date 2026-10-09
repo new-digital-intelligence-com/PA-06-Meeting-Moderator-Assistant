@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-07";
+export const UPDATED = "2026-10-09";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -16,6 +16,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
+  { label: "Email & Chat", value: "Built: she answers her email and Google Chat — once her Google account is connected again with the new permissions", tone: "sky" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
 ];
 
@@ -29,6 +30,17 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-09",
+    title: "She answers her email and Google Chat",
+    points: [
+      "Between meetings, people write to her and she answers as herself: emails to her inbox, read once a minute, answered in their thread to the sender; Google Chat — every one-to-one message, and in spaces and group chats when @mentioned, in the thread — every ten seconds.",
+      "Only the people she works for — NDI's team and each client's people, on its list or at its domain — each with their own client's knowledge: instructions, what she knows about them, the passages of their documents closest to the question, their meetings coming up and the notes of the last ones. Strangers, machines and calendar invitations get no answer; nothing from before she started.",
+      "Her Google account asks more for it (her mail, her chats, NDI's directory): until it is connected again, the control room says so. Google Cloud needs the Google Chat API (configured) and the People API. AVA_ANSWER_EMAIL / AVA_ANSWER_CHAT turn either off. Tested end to end against stand-ins for Gmail, Chat and Claude: nothing was sent.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-10-07",
     title: "NDI's own super admin can have an NDI address",

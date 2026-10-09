@@ -14,7 +14,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ArrowRightIcon, DatabaseIcon, MailIcon, ServerIcon } from "./portal/icons";
-import { IconTile, Notice, type IconTone } from "./portal/ui";
+import type { BetweenStatus } from "@/lib/answers";
+import { IconTile, Notice, ago, type IconTone } from "./portal/ui";
 
 type Config = {
   publicUrl: string;
@@ -24,7 +25,29 @@ type Config = {
   avaAccount: string | null;
   avaExpected: string | null;
   runnerKey: boolean;
+  /** Her email and Google Chat: `ready` once her account lets her answer them. */
+  between: { ready: boolean; email: BetweenStatus | null; chat: BetweenStatus | null };
 };
+
+/** How her answering goes on one channel. */
+function BetweenLine({ label, s, off }: { label: string; s: BetweenStatus | null; off: string }) {
+  const dot = !s ? "bg-slate-300" : s.state === "on" ? "bg-emerald-500" : s.state === "off" ? "bg-slate-300" : "bg-rose-500";
+  const what = !s
+    ? "waiting for her server's first look"
+    : s.state === "off"
+      ? `off (${off})`
+      : s.state === "on"
+        ? `looked ${ago(new Date(s.at).toISOString())}${s.last ? ` · last answer ${ago(new Date(s.last.at).toISOString())}, to ${s.last.to} for ${s.last.client}` : ""}`
+        : (s.detail ?? s.state);
+  return (
+    <p className="flex items-start gap-2 text-sm">
+      <span className={`mt-1.5 size-2 shrink-0 rounded-full ${dot}`} />
+      <span className="min-w-0">
+        <span className="font-medium text-slate-700">{label}</span> — {what}
+      </span>
+    </p>
+  );
+}
 
 /** What she is doing now in one of her seats, worked out on the server (lib/meeting.ts, inMeeting). */
 export type Now = {
@@ -145,12 +168,28 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card
-          ok={Boolean(config.avaAccount)}
+          ok={Boolean(config.avaAccount) && config.between.ready}
           icon={<MailIcon className="size-5" />}
           tone="blue"
           title="Ava's Google account"
-          detail={config.avaAccount ?? "Not connected: she can't read her invites or send the notes."}
-          hint="Her own account: she reads her calendar invites from it and sends the meeting notes as her."
+          detail={
+            config.avaAccount ? (
+              <div className="space-y-1.5">
+                <p>{config.avaAccount}</p>
+                {config.between.ready ? (
+                  <>
+                    <BetweenLine label="Her email" s={config.between.email} off="AVA_ANSWER_EMAIL" />
+                    <BetweenLine label="Google Chat" s={config.between.chat} off="AVA_ANSWER_CHAT" />
+                  </>
+                ) : (
+                  <p>Reconnect her account to let her answer her email and Google Chat.</p>
+                )}
+              </div>
+            ) : (
+              "Not connected: she can't read her invites or send the notes."
+            )
+          }
+          hint="Her own account: she reads her calendar invites from it, sends the meeting notes as her, and answers her email and Google Chat."
           action={
             <a href="/api/auth/google?as=ava" title={`Sign in as ${config.avaExpected ?? "her"}, not as yourself.`} className={link}>
               {config.avaAccount ? "Reconnect" : "Connect her account"}

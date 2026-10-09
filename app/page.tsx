@@ -2,7 +2,9 @@ import ControlRoom, { type Now } from "@/components/ControlRoom";
 import TopBar from "@/components/TopBar";
 import { requireAdminPage } from "@/lib/auth";
 import { inMeeting, minutesIn, seatList, seatMeetings } from "@/lib/meeting";
-import { avaEmail, seatCount } from "@/lib/ava";
+import { avaEmail, avaGoogle, seatCount } from "@/lib/ava";
+import { betweenStatus } from "@/lib/answers";
+import { AVA_SCOPES, granted } from "@/lib/google";
 import { storeKind } from "@/lib/store";
 
 // Read on every visit: what she is doing right now is part of the page.
@@ -19,7 +21,7 @@ export default async function Home({
 }) {
   // NDI only: clients have their own page.
   const user = await requireAdminPage();
-  const [count, params, avaAccount] = await Promise.all([seatCount(), searchParams, avaEmail()]);
+  const [count, params, avaAccount, her, between] = await Promise.all([seatCount(), searchParams, avaEmail(), avaGoogle(), betweenStatus()]);
   const publicUrl = process.env.PUBLIC_URL || process.env.APP_URL || "";
 
   const google = typeof params.google === "string" ? params.google : null;
@@ -55,6 +57,8 @@ export default async function Home({
           avaAccount,
           avaExpected: process.env.AVA_EMAIL || null,
           runnerKey: Boolean(process.env.AVA_RUNNER_KEY),
+          // Her email and Google Chat: whether her account lets her answer them, and how it goes.
+          between: { ready: Boolean(her && granted(her.current, AVA_SCOPES)), ...between },
         }}
       />
     </>
