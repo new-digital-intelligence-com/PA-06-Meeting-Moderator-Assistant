@@ -16,7 +16,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
-  { label: "Email & Chat", value: "Live: she answers her email (first answer 9 October) and Google Chat — where each person's first chat with her is a message request, accepted in Google Chat as her", tone: "emerald" },
+  { label: "Email & Chat", value: "Live: she answers her email and Google Chat (first answers 9 October) — chats and spaces from NDI's people accepted automatically, for her account alone", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
 ];
 
@@ -30,6 +30,17 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-09",
+    title: "Google Chat: one answer, where she was asked",
+    points: [
+      "Her first answers in Google Chat came twice, a few seconds apart. Chat times its messages to the microsecond; she remembered the last one seen to the millisecond, so her next look found the same message again — after it, by a fraction of a millisecond. She now remembers the moment just after it.",
+      "In a space she answers where she was asked: in the thread when asked in one, in the conversation itself otherwise — with that thread, or the conversation's last messages outside threads, as what came before. Not always a thread any more.",
+      "NDI's Google Admin now accepts Chat invitations from NDI's people automatically for her account alone (an organizational unit of its own): their chats and spaces reach her with no message request. Anybody outside NDI still sends one.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-10-09",
     title: "Google Chat: a first chat with her is a message request",

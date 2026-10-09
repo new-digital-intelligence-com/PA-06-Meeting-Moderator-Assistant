@@ -1,8 +1,8 @@
 /**
  * Google Chat, as herself: she answers in her one-to-one chats, and in the spaces and group
  * chats she is in when somebody @mentions her — every few seconds, brought by her runner's
- * check for meetings to join (/api/ava/dispatch), in the message's thread, with the
- * sender's client's knowledge (lib/answers.ts).
+ * check for meetings to join (/api/ava/dispatch), where she was asked — in its thread, or in
+ * the conversation itself — with the sender's client's knowledge (lib/answers.ts).
  *
  * Chat says who wrote only by an id: NDI's directory — read whole, once an hour — turns it into
  * an address, and an address that is nobody she works for gets no answer — in a one-to-one
@@ -27,11 +27,29 @@ const PER_SENDER_HOUR = 30;
 type Space = { name: string; spaceType?: string; displayName?: string; lastActiveTime?: string; createTime?: string };
 type ChatUser = { name?: string; type?: string };
 type Annotation = { type?: string; startIndex?: number; length?: number; userMention?: { user?: ChatUser } };
-type ChatMessage = { name: string; sender?: ChatUser; createTime?: string; text?: string; thread?: { name?: string }; annotations?: Annotation[] };
-/** Since when she answers, and the time of the last message seen in each space. */
+/** `threadReply`: written in a thread, not in the conversation itself. */
+type ChatMessage = {
+  name: string;
+  sender?: ChatUser;
+  createTime?: string;
+  text?: string;
+  thread?: { name?: string };
+  threadReply?: boolean;
+  annotations?: Annotation[];
+};
+/** Since when she answers, and the moment just after the last message seen in each space. */
 type Seen = { since: number; spaces: Record<string, number> };
 
 const iso = (ms: number) => new Date(ms).toISOString();
+
+/**
+ * The moment just after a message. Chat times its messages to the microsecond: a look from
+ * the message's own millisecond would find it again, and answer it twice.
+ */
+const justAfter = (m: ChatMessage) => Date.parse(m.createTime ?? "") + 1;
+
+/** Asked in a thread — answered there, with the thread as the conversation. */
+const inThread = (m: ChatMessage) => Boolean(m.threadReply && m.thread?.name);
 
 /** Her own Chat id — users/<her Google account id>, the same as her sign-in's "sub". */
 let me: string | null = null;
@@ -131,19 +149,23 @@ async function isAccepted(google: GoogleClient, space: string): Promise<boolean>
   throw new Error(`Google Chat would not show her ${space} (${res.status})`);
 }
 
-/** The conversation the message is part of: its thread in a space, the last messages of a one-to-one chat. */
+/**
+ * The conversation the message is part of, up to it: its thread, when written in one; else
+ * the last messages of the conversation itself, those in threads left out.
+ */
 async function conversationOf(google: GoogleClient, space: Space, m: ChatMessage, her: string, nameOf: (u: string) => Promise<string>): Promise<Said[]> {
-  const direct = space.spaceType === "DIRECT_MESSAGE";
+  const threaded = inThread(m);
   const filter = [
     `createTime > "${iso(Date.parse(m.createTime ?? "") - 6 * 60 * 60_000)}"`,
-    ...(!direct && m.thread?.name ? [`thread.name = ${m.thread.name}`] : []),
+    ...(threaded ? [`thread.name = ${m.thread!.name}`] : []),
   ].join(" AND ");
   const { messages = [] } = await google
-    .request<{ messages?: ChatMessage[] }>(`${CHAT}/${space.name}/messages?${new URLSearchParams({ filter, orderBy: "createTime desc", pageSize: "12" })}`)
+    .request<{ messages?: ChatMessage[] }>(`${CHAT}/${space.name}/messages?${new URLSearchParams({ filter, orderBy: "createTime desc", pageSize: "30" })}`)
     .catch(() => ({ messages: [m] }));
   const upTo = Date.parse(m.createTime ?? "");
   const said: Said[] = [];
-  for (const x of messages.filter((x) => Date.parse(x.createTime ?? "") <= upTo).reverse()) {
+  const before = messages.filter((x) => Date.parse(x.createTime ?? "") <= upTo && (threaded || !x.threadReply));
+  for (const x of before.slice(0, 12).reverse()) {
     const mine = x.sender?.name === her;
     const text = mine ? (x.text ?? "") : withoutMention(x, her);
     if (text.trim()) said.push({ from: mine ? "Ava" : await nameOf(x.sender?.name ?? ""), text, mine });
@@ -152,9 +174,9 @@ async function conversationOf(google: GoogleClient, space: Space, m: ChatMessage
 }
 
 /**
- * Her message, as herself. A one-to-one chat has no threads to answer in: just the message
- * (naming one there, Google refused it as not found). In a space, in the message's thread —
- * and if Google will not have that, in the space itself, with both refusals in her log.
+ * Her message, as herself, where she was asked: in the conversation itself, there; in a
+ * thread, in that thread — and if Google will not have that, in the conversation, with its
+ * refusal in her log.
  */
 async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: string, log: (m: string) => void) {
   // Google's whole answer when it refuses — its status and reasons, not just its one line.
@@ -168,14 +190,14 @@ async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: s
     log(`[chat] Google refused her message (${res.status}): ${(await res.text()).replace(/\s+/g, " ").slice(0, 900)}`);
     throw new Error(`Google Chat refused her message (${res.status})`);
   };
-  if (space.spaceType === "DIRECT_MESSAGE" || !m.thread?.name) {
+  if (!inThread(m)) {
     await post({ text });
     return;
   }
   try {
-    await post({ text, thread: { name: m.thread.name } }, "?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD");
+    await post({ text, thread: { name: m.thread!.name } }, "?messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD");
   } catch (e) {
-    log(`[chat] could not answer in the thread (${e instanceof Error ? e.message : e}) — answering in the space`);
+    log(`[chat] could not answer in the thread (${e instanceof Error ? e.message : e}) — answering in the conversation`);
     await post({ text });
   }
 }
@@ -224,9 +246,9 @@ export async function answerChats(google: GoogleClient, log: (m: string) => void
           `${CHAT}/${space.name}/messages?${new URLSearchParams({ filter: `createTime > "${iso(from)}"`, orderBy: "createTime asc", pageSize: "25" })}`,
         );
         const direct = space.spaceType === "DIRECT_MESSAGE";
-        const times = messages.map((m) => Date.parse(m.createTime ?? "")).filter(Number.isFinite);
+        const times = messages.map(justAfter).filter(Number.isFinite);
         const mark = (m: ChatMessage) => {
-          const at = Date.parse(m.createTime ?? "");
+          const at = justAfter(m);
           if (Number.isFinite(at)) seen.spaces[space.name] = Math.max(seen.spaces[space.name] ?? from, at);
         };
         // Theirs — never her own, nor a bot's. In a one-to-one chat she answers the last, those

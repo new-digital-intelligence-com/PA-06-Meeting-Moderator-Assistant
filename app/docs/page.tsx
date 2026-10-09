@@ -572,9 +572,11 @@ export default function Docs() {
                   answers to one sender an hour.
                 </Card>
                 <Card tone="amber" title="Google Chat">
-                  As herself: people find Ava in Chat like a colleague. A one-to-one chat: she answers the last message, those
-                  before it being its conversation; a space or a group chat: when somebody @mentions her, in that thread. Every ten
-                  seconds, with her server’s check for meetings to join. Chat names its writer only by an id: NDI’s directory —
+                  As herself: people find Ava in Chat like a colleague. A one-to-one chat: she answers the last message; a space
+                  or a group chat: when somebody @mentions her. She answers where she was asked — in the thread when asked in one,
+                  else in the conversation itself — and reads that thread, or the conversation’s last messages outside threads,
+                  as what came before. Once each message: Chat times them finer than a millisecond, and she remembers the moment
+                  just after the last she saw. Every ten seconds, with her server’s check for meetings to join. Chat names its writer only by an id: NDI’s directory —
                   read whole, once an hour — turns it into an address; when it cannot be read, the look stops and is tried again,
                   nobody taken for a stranger. A chat Google errs on is tried again next look; the others are answered all the
                   same. A stranger in a one-to-one chat gets one line saying she cannot help. At most thirty answers to one person
@@ -588,7 +590,10 @@ export default function Docs() {
                   Forms, Tasks, her contacts, Chat spaces and their members, Meet’s meeting spaces and the records of her meetings.
                   Until it is connected again with them, the control room says so.
                   Google Cloud needs the Google Chat API turned on and configured (a name, an icon, a description — Google asks
-                  for it even when she chats as herself) and the People API turned on. <C>AVA_ANSWER_EMAIL</C> or{" "}
+                  for it even when she chats as herself) and the People API turned on. In NDI’s Google Admin, her account has an
+                  organizational unit of its own, where Google Chat’s <C>Chat invitations</C> accepts invitations from NDI’s
+                  people automatically: their chats and spaces reach her with no message request — for her alone, nobody
+                  else’s account touched. Anybody outside NDI still sends one. <C>AVA_ANSWER_EMAIL</C> or{" "}
                   <C>AVA_ANSWER_CHAT</C> set to <C>off</C> stops either.
                 </Card>
                 <Card tone="slate" title="In the control room">
