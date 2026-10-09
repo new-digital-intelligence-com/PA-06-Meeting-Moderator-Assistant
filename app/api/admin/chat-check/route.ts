@@ -55,3 +55,37 @@ export async function GET(request: Request) {
     });
   });
 }
+
+/**
+ * Temporary, NDI only: Ava setting up her one-to-one chat with `user` (spaces.setup) — Google
+ * gives back the chat they already have, with her joined — then whether the chat is hers now.
+ * Sends no message.
+ */
+export async function POST(request: Request) {
+  return handle(async () => {
+    await requireAdmin();
+    const google = await avaGoogle();
+    if (!google) throw new HttpError(409, "Ava's Google is not connected.");
+    const { user } = (await request.json().catch(() => ({}))) as { user?: string };
+    if (!user || !/^users\/\d+$/.test(user)) throw new HttpError(400, "Which user? users/<id>");
+    const token = await google.token();
+    const call = async (url: string, init: RequestInit = {}) => {
+      const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+      const text = await res.text();
+      let body: unknown = text.slice(0, 1500);
+      try {
+        body = JSON.parse(text);
+      } catch {
+        /* not JSON */
+      }
+      return { url: url.replace(CHAT, ""), status: res.status, body };
+    };
+    const setup = await call(`${CHAT}/spaces:setup`, {
+      method: "POST",
+      body: JSON.stringify({ space: { spaceType: "DIRECT_MESSAGE" }, memberships: [{ member: { name: user, type: "HUMAN" } }] }),
+    });
+    const name = (setup.body as { name?: string })?.name;
+    const after = name ? [await call(`${CHAT}/${name}`), await call(`${CHAT}/${name}/members?pageSize=10`)] : [];
+    return NextResponse.json({ setup, after });
+  });
+}
