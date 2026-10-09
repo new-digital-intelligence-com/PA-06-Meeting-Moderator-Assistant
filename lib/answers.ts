@@ -23,6 +23,8 @@ export type BetweenStatus = {
   detail?: string;
   /** Her last answer: when, to whom, for which client. */
   last?: { at: number; to: string; client: string };
+  /** Google Chat: first chats with her still message requests, to accept as her — who wrote, since when. */
+  requests?: { from: string; since: number }[];
 };
 
 /** Notes how her last look went, keeping her last answer. Never in the way of the look itself. */

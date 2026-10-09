@@ -572,11 +572,15 @@ export default function Docs() {
                   answers to one sender an hour.
                 </Card>
                 <Card tone="amber" title="Google Chat">
-                  As herself: people find Ava in Chat like a colleague. A one-to-one chat: she answers every message; a space or
-                  a group chat: when somebody @mentions her, in that thread. Every ten seconds, with her server’s check for
-                  meetings to join. Chat names its writer only by an id: NDI’s directory — read whole, once an hour — turns it into
-                  an address; when it cannot be read, the look stops and is tried again, nobody taken for a stranger. A stranger
-                  in a one-to-one chat gets one line saying she cannot help. At most thirty answers to one person an hour.
+                  As herself: people find Ava in Chat like a colleague. A one-to-one chat: she answers the last message, those
+                  before it being its conversation; a space or a group chat: when somebody @mentions her, in that thread. Every ten
+                  seconds, with her server’s check for meetings to join. Chat names its writer only by an id: NDI’s directory —
+                  read whole, once an hour — turns it into an address; when it cannot be read, the look stops and is tried again,
+                  nobody taken for a stranger. A chat Google errs on is tried again next look; the others are answered all the
+                  same. A stranger in a one-to-one chat gets one line saying she cannot help. At most thirty answers to one person
+                  an hour. Somebody’s first one-to-one chat with her is a message request: Google shows her the messages but
+                  refuses her answer until it is accepted in Google Chat, signed in as her (New chat → Message requests → Accept)
+                  — no API can. She waits on it, writing nothing, and answers its last message once accepted.
                 </Card>
                 <Card tone="rose" title="Turning it on">
                   Her Google account gives her more for this: reading her mail (<C>gmail.modify</C>), her chats and spaces, and
@@ -589,7 +593,8 @@ export default function Docs() {
                 </Card>
                 <Card tone="slate" title="In the control room">
                   The card of her Google account shows both: when she last looked, and her last answer — to whom, for which
-                  client — or why she cannot (her account to reconnect, an error from Google).
+                  client — or why she cannot (her account to reconnect, an error from Google); and any first chat with her still
+                  a message request — who wrote, since when.
                 </Card>
               </div>
             </Section>

@@ -9,6 +9,12 @@
  * chat, one line saying so. A directory that cannot be read stops the look, to be retried:
  * nobody is taken for a stranger for it.
  * Only messages from after she started answering; never her own, nor another bot's.
+ *
+ * Somebody's first one-to-one chat with her is a message request until it is accepted in
+ * Google Chat, signed in as her — no API accepts one. Till then Google shows her its messages
+ * but refuses her answer, and even the chat itself (spaces.get): such a chat waits, its
+ * messages kept and no answer written, looked at again once a minute and listed in the
+ * control room. Once it is accepted she answers its last message.
  */
 import { answerMessage, clientOfSender, noteStatus, type Said } from "./answers";
 import { CHAT_SCOPES, granted, type GoogleClient } from "./google";
@@ -109,6 +115,22 @@ function room(who: string, now: number): boolean {
 /** One-to-one chats already told she cannot help their writer. */
 const toldStranger = new Set<string>();
 
+/** One-to-one chats she is in, and those still a message request: who wrote, since when, last looked at. */
+const accepted = new Set<string>();
+const requests = new Map<string, { from: string; since: number; checked: number }>();
+
+/** Whether she is in a one-to-one chat — not in one Google refuses even to show her. */
+async function isAccepted(google: GoogleClient, space: string): Promise<boolean> {
+  if (accepted.has(space)) return true;
+  const res = await fetch(`${CHAT}/${space}`, { headers: { Authorization: `Bearer ${await google.token()}` } });
+  if (res.ok) {
+    accepted.add(space);
+    return true;
+  }
+  if (res.status === 403 || res.status === 404) return false;
+  throw new Error(`Google Chat would not show her ${space} (${res.status})`);
+}
+
 /** The conversation the message is part of: its thread in a space, the last messages of a one-to-one chat. */
 async function conversationOf(google: GoogleClient, space: Space, m: ChatMessage, her: string, nameOf: (u: string) => Promise<string>): Promise<Said[]> {
   const direct = space.spaceType === "DIRECT_MESSAGE";
@@ -135,8 +157,7 @@ async function conversationOf(google: GoogleClient, space: Space, m: ChatMessage
  * and if Google will not have that, in the space itself, with both refusals in her log.
  */
 async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: string, log: (m: string) => void) {
-  // Google's whole answer when it refuses — its status and reasons, not just its one line —
-  // and what the chat is and her place in it, to tell a setting of NDI's from a mistake of hers.
+  // Google's whole answer when it refuses — its status and reasons, not just its one line.
   const post = async (body: object, query = "") => {
     const res = await fetch(`${CHAT}/${space.name}/messages${query}`, {
       method: "POST",
@@ -144,13 +165,7 @@ async function reply(google: GoogleClient, space: Space, m: ChatMessage, text: s
       body: JSON.stringify(body),
     });
     if (res.ok) return;
-    const refusal = (await res.text()).replace(/\s+/g, " ").slice(0, 900);
-    const [about, member] = await Promise.all([
-      google.request<Record<string, unknown>>(`${CHAT}/${space.name}`).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
-      google.request<Record<string, unknown>>(`${CHAT}/${space.name}/members/users/me`).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
-    ]);
-    log(`[chat] Google refused her message (${res.status}): ${refusal}`);
-    log(`[chat] the chat: ${JSON.stringify(about).slice(0, 500)} — her in it: ${JSON.stringify(member).slice(0, 400)}`);
+    log(`[chat] Google refused her message (${res.status}): ${(await res.text()).replace(/\s+/g, " ").slice(0, 900)}`);
     throw new Error(`Google Chat refused her message (${res.status})`);
   };
   if (space.spaceType === "DIRECT_MESSAGE" || !m.thread?.name) {
@@ -200,45 +215,69 @@ export async function answerChats(google: GoogleClient, log: (m: string) => void
       const from = seen.spaces[space.name] ?? seen.since;
       const active = Date.parse(space.lastActiveTime ?? "");
       if (Number.isFinite(active) && active <= from) continue;
-      const { messages = [] } = await google.request<{ messages?: ChatMessage[] }>(
-        `${CHAT}/${space.name}/messages?${new URLSearchParams({ filter: `createTime > "${iso(from)}"`, orderBy: "createTime asc", pageSize: "25" })}`,
-      );
-      const direct = space.spaceType === "DIRECT_MESSAGE";
-      for (const m of messages) {
-        const at = Date.parse(m.createTime ?? "");
-        if (Number.isFinite(at)) seen.spaces[space.name] = Math.max(seen.spaces[space.name] ?? from, at);
-        if (m.sender?.name === her || m.sender?.type === "BOT") continue;
-        // In a space or a group chat, only what is said to her.
-        if (!direct && !mentions(m, her)) continue;
-        const email = m.sender?.name ? await emailOf(google, m.sender.name) : null;
-        const client = email ? await clientOfSender(email) : null;
-        if (!client) {
-          log(`[chat] not answered — not one of her clients' people: ${email ?? m.sender?.name ?? "?"} in ${space.displayName || space.name}`);
-          if (direct && !toldStranger.has(space.name)) {
-            toldStranger.add(space.name);
-            await reply(google, space, m, "Hi — I'm Ava, a meeting assistant. I can only help the people of the companies I work for, so I can't answer here.", log).catch(
-              (e) => log(`[chat] could not tell a stranger: ${e instanceof Error ? e.message : e}`),
-            );
+      // A message request, once a minute.
+      const waiting = requests.get(space.name);
+      if (waiting && now - waiting.checked < 60_000) continue;
+      // A chat Google errs on is tried again next look; the others go on.
+      try {
+        const { messages = [] } = await google.request<{ messages?: ChatMessage[] }>(
+          `${CHAT}/${space.name}/messages?${new URLSearchParams({ filter: `createTime > "${iso(from)}"`, orderBy: "createTime asc", pageSize: "25" })}`,
+        );
+        const direct = space.spaceType === "DIRECT_MESSAGE";
+        const times = messages.map((m) => Date.parse(m.createTime ?? "")).filter(Number.isFinite);
+        const mark = (m: ChatMessage) => {
+          const at = Date.parse(m.createTime ?? "");
+          if (Number.isFinite(at)) seen.spaces[space.name] = Math.max(seen.spaces[space.name] ?? from, at);
+        };
+        // Theirs — never her own, nor a bot's. In a one-to-one chat she answers the last, those
+        // before it being its conversation; in a space or a group chat, each said to her.
+        const theirs = messages.filter((m) => m.sender?.name !== her && m.sender?.type !== "BOT");
+        let held = false;
+        for (const m of direct ? theirs.slice(-1) : theirs.filter((x) => mentions(x, her))) {
+          const email = m.sender?.name ? await emailOf(google, m.sender.name) : null;
+          const client = email ? await clientOfSender(email) : null;
+          if (client && direct && !(await isAccepted(google, space.name))) {
+            if (!waiting) log(`[chat] not answered yet — ${email}'s first chat with her is a message request, to accept in Google Chat as her`);
+            requests.set(space.name, { from: email!, since: waiting?.since ?? (Date.parse(m.createTime ?? "") || now), checked: now });
+            held = true;
+            break;
           }
-          continue;
+          mark(m);
+          if (!client) {
+            log(`[chat] not answered — not one of her clients' people: ${email ?? m.sender?.name ?? "?"} in ${space.displayName || space.name}`);
+            if (direct && !toldStranger.has(space.name)) {
+              toldStranger.add(space.name);
+              await reply(google, space, m, "Hi — I'm Ava, a meeting assistant. I can only help the people of the companies I work for, so I can't answer here.", log).catch(
+                (e) => log(`[chat] could not tell a stranger: ${e instanceof Error ? e.message : e}`),
+              );
+            }
+            continue;
+          }
+          if (requests.delete(space.name)) log(`[chat] ${email}'s message request was accepted`);
+          if (!room(email!, now)) {
+            log(`[chat] not answered — ${PER_SENDER_HOUR} answers to ${email} this hour already`);
+            continue;
+          }
+          try {
+            const conversation = await conversationOf(google, space, m, her, nameOf);
+            const text = await answerMessage({ client, channel: "chat", sender: { email: email! }, conversation });
+            await reply(google, space, m, text, log);
+            answered = { to: email!, client: client.name };
+            log(`[chat] answered ${email} for ${client.name} in ${direct ? "a one-to-one chat" : space.displayName || space.name}`);
+          } catch (e) {
+            log(`[chat] could not answer ${email}: ${e instanceof Error ? e.message : e}`);
+          }
         }
-        if (!room(email!, now)) {
-          log(`[chat] not answered — ${PER_SENDER_HOUR} answers to ${email} this hour already`);
-          continue;
-        }
-        try {
-          const conversation = await conversationOf(google, space, m, her, nameOf);
-          const text = await answerMessage({ client, channel: "chat", sender: { email: email! }, conversation });
-          await reply(google, space, m, text, log);
-          answered = { to: email!, client: client.name };
-          log(`[chat] answered ${email} for ${client.name} in ${direct ? "a one-to-one chat" : space.displayName || space.name}`);
-        } catch (e) {
-          log(`[chat] could not answer ${email}: ${e instanceof Error ? e.message : e}`);
-        }
+        if (!held) seen.spaces[space.name] = Math.max(from, ...times);
+      } catch (e) {
+        log(`[chat] ${space.displayName || space.name}: ${e instanceof Error ? e.message : e} — tried again next look`);
       }
     }
+    // A request whose chat is gone waits no more.
+    for (const name of requests.keys()) if (!spaces.some((s) => s.name === name)) requests.delete(name);
     await key.write(JSON.stringify(seen));
-    await noteStatus("chat", { state: "on", at: Date.now(), answered });
+    const waitingNow = [...requests.values()].map(({ from, since }) => ({ from, since }));
+    await noteStatus("chat", { state: "on", at: Date.now(), answered, ...(waitingNow.length ? { requests: waitingNow } : {}) });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     log(`[chat] ${detail}`);

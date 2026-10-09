@@ -16,7 +16,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
-  { label: "Email & Chat", value: "Live: she answers her email (first answer 9 October) and Google Chat; reconnect her account once more to grant the rest of her Google access", tone: "emerald" },
+  { label: "Email & Chat", value: "Live: she answers her email (first answer 9 October) and Google Chat — where each person's first chat with her is a message request, accepted in Google Chat as her", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
 ];
 
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-09",
+    title: "Google Chat: a first chat with her is a message request",
+    points: [
+      "Why she still could not answer NDI's first chat with her: it was a message request — Google's for anybody's first one-to-one chat with her — never accepted. Till it is, Google shows her the messages but refuses her answer, and even the chat itself; no API accepts one, only Google Chat signed in as her (New chat → Message requests → Accept). Found with a temporary NDI-only check of her chats, now removed.",
+      "She now waits on such a chat — no answer written, its messages kept, looked at again once a minute — and the control room lists who is waiting, since when. Once it is accepted she answers its last message. In any one-to-one chat she answers the last message, those before it being its conversation; a chat Google errs on no longer stops the others, it is tried again next look.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
   {
     date: "2026-10-09",
     title: "Google Chat: her reply in a one-to-one chat",

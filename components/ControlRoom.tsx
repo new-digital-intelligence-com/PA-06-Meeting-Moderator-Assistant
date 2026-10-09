@@ -180,6 +180,13 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
                   <>
                     <BetweenLine label="Her email" s={config.between.email} off="AVA_ANSWER_EMAIL" />
                     <BetweenLine label="Google Chat" s={config.between.chat} off="AVA_ANSWER_CHAT" />
+                    {config.between.chat?.state === "on" && config.between.chat.requests?.length ? (
+                      <p className="text-amber-700">
+                        Waiting for her to accept — a first chat with her is a message request:{" "}
+                        {config.between.chat.requests.map((r) => `${r.from} (${ago(new Date(r.since).toISOString())})`).join(", ")}. In
+                        Google Chat, signed in as her: New chat → Message requests → Accept. She answers then.
+                      </p>
+                    ) : null}
                     {!config.between.full && (
                       <p className="text-amber-700">Reconnect her account to give her the rest of her Google access.</p>
                     )}
