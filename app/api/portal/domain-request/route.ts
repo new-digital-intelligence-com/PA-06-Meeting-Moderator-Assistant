@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const client = await getClient(clientId);
     if (!client) throw new HttpError(404, "No such client.");
 
-    const body = (await request.json().catch(() => ({}))) as { domains?: string; note?: string };
+    const body = (await request.json().catch(() => ({}))) as { domains?: string | string[]; note?: string };
     const note = String(body.note ?? "").trim().slice(0, 1000);
     let domains: string[];
     try {
@@ -47,24 +47,24 @@ export async function POST(request: Request) {
     const link = `${appOrigin(request)}/admin/clients/${client.id}`;
     const now = client.domains.length ? client.domains.map((d) => `@${d}`).join(", ") : "none";
     const asked = domains.length ? domains.map((d) => `@${d}`).join(", ") : "none — take it off";
-    const subject = `Company domain change asked for: ${client.name}`;
+    const subject = `Company domains: a change asked for ${client.name}`;
     const text = [
-      `${user.email}, ${client.name}'s super admin, asks NDI to change their company domain.`,
+      `${user.email}, ${client.name}'s super admin, asks NDI to change their company domains.`,
       "",
       `Now: ${now}`,
       `Asked for: ${asked}`,
       ...(note ? ["", `Their note: ${note}`] : []),
       "",
-      `Everybody at the domain signs in to ${client.name}'s page and has their invites accepted. Change it on their page:`,
+      `Everybody at their domains signs in to ${client.name}'s page and has their invites accepted. Change it on their page:`,
       link,
       "",
       "— Ava",
     ].join("\n");
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#111827;max-width:560px">
-<p><b>${escapeHtml(user.email)}</b>, ${escapeHtml(client.name)}'s super admin, asks NDI to change their company domain.</p>
+<p><b>${escapeHtml(user.email)}</b>, ${escapeHtml(client.name)}'s super admin, asks NDI to change their company domains.</p>
 <p>Now: <b>${escapeHtml(now)}</b><br>Asked for: <b>${escapeHtml(asked)}</b></p>
 ${note ? `<p>Their note: ${escapeHtml(note)}</p>` : ""}
-<p style="color:#6B7280">Everybody at the domain signs in to ${escapeHtml(client.name)}'s page and has their invites accepted.</p>
+<p style="color:#6B7280">Everybody at their domains signs in to ${escapeHtml(client.name)}'s page and has their invites accepted.</p>
 <p><a href="${link}" style="display:inline-block;background:#002A6C;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Open ${escapeHtml(client.name)}</a></p>
 <p style="color:#6B7280">— Ava</p></div>`;
     await sendEmail(google, to, subject, text, html);

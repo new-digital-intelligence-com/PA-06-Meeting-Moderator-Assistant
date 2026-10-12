@@ -22,7 +22,7 @@ export async function GET() {
 export async function POST(request: Request) {
   return handle(async () => {
     const admin = await requireAdmin();
-    const body = (await request.json().catch(() => ({}))) as { name?: string; owner?: string; contacts?: string; domains?: string; invite?: boolean };
+    const body = (await request.json().catch(() => ({}))) as { name?: string; owner?: string; contacts?: string; domains?: string | string[]; invite?: boolean };
     let client;
     try {
       client = await createClient({ name: body.name ?? "", owner: body.owner, contacts: body.contacts, domains: body.domains, by: admin.email });

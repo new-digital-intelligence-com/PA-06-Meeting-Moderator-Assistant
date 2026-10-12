@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { PERSONAL, emailDomain } from "@/lib/mail-domains";
 import { UsersIcon } from "../portal/icons";
-import { Chip, CompanyLogo, Notice, Section, ago, api, field, primary, quiet, when } from "../portal/ui";
+import { Chip, CompanyLogo, DomainList, Notice, Section, ago, api, field, primary, quiet, when } from "../portal/ui";
 
 type ClientSummary = {
   id: string;
@@ -29,7 +29,7 @@ type ClientSummary = {
 
 type Skipped = { id: string; title: string; starts_at: string; organizer: string | null; organizer_name: string | null };
 
-const EMPTY = { name: "", domains: "", owner: "", contacts: "", invite: true };
+const EMPTY = { name: "", domains: [] as string[], owner: "", contacts: "", invite: true };
 
 /** `screen`: her server's address, where each client's log is (bot/logs.mjs) — null until her runner has said it. */
 export default function Clients({ ava, screen = null }: { ava: string | null; screen?: string | null }) {
@@ -42,6 +42,8 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
   const [notice, setNotice] = useState<string | null>(null);
   /** The logo picked for the new client, shown before it is sent. */
   const [logo, setLogo] = useState<{ file: File; preview: string } | null>(null);
+  /** The skipped invite being given to a client, and to which. */
+  const [placing, setPlacing] = useState<{ id: string; client: string } | null>(null);
   const logoInput = useRef<HTMLInputElement>(null);
 
   // Each preview's local address is let go when another is picked, or the page closes.
@@ -69,7 +71,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     try {
       const r = await api<{ client: { id: string; name: string }; invited: string[]; failed: { email: string; error: string }[] }>("/api/admin/clients", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, domains: form.domains.filter((d) => d.trim()) }),
       });
       // The client exists now; its logo goes up after it, and failing does not undo the client.
       let logoError = "";
@@ -109,7 +111,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     const company = domain.split(".").slice(-2, -1)[0] ?? "";
     setForm({
       name: personal ? (m.organizer_name ?? "") : company.charAt(0).toUpperCase() + company.slice(1),
-      domains: personal ? "" : domain,
+      domains: personal ? [] : [domain],
       owner: email,
       contacts: "",
       invite: true,
@@ -118,7 +120,35 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  /**
+   * A skipped invite's organiser given to a client they belong to: their company domain —
+   * everybody at it — or only them. Her next look at her calendar, within a minute, gives
+   * that client the meetings they organise.
+   */
+  async function place(m: Skipped, what: "domain" | "person") {
+    const client = data?.clients.find((c) => c.id === placing?.client);
+    if (!client || !m.organizer) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (what === "domain") {
+        const domain = emailDomain(m.organizer);
+        await api(`/api/portal/setup?client=${client.id}`, { method: "PATCH", body: JSON.stringify({ domains: [...client.domains, domain] }) });
+        setNotice(`@${domain} is ${client.name}'s now: invites from anybody there are theirs from her next look at her calendar, within a minute.`);
+      } else {
+        await api(`/api/portal/people?client=${client.id}`, { method: "POST", body: JSON.stringify({ email: m.organizer, invite: false }) });
+        setNotice(`${m.organizer} can use her for ${client.name} now: their invites are ${client.name}'s from her next look at her calendar, within a minute.`);
+      }
+      setPlacing(null);
+      setVersion((v) => v + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add them.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const set = (k: "name" | "owner" | "contacts" | "invite") => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: k === "invite" ? e.target.checked : e.target.value }));
 
   return (
@@ -195,14 +225,15 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
                 They sign in to this site — with Google, or a link emailed to any address (Outlook too) — to give Ava their documents
                 and prepare her. She joins a meeting only when the person who <b>sent the invite</b> is one of them.
               </p>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-slate-700">Company domain (optional)</span>
-                <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
+              <div className="space-y-1.5">
+                <span className="block text-xs font-medium text-slate-700">Company domains (optional)</span>
+                <DomainList value={form.domains} onChange={(domains) => setForm((f) => ({ ...f, domains }))} />
                 <span className="block text-xs leading-5 text-slate-500">
-                  Everybody at it signs in and can invite her without being added — so nobody from there needs to go below but the
-                  super admin. It must receive email; not a shared one like gmail.com, nor another client&apos;s.
+                  As many as the company has (acme.com, acme.de…). Everybody at one signs in and can invite her without being added —
+                  so nobody from there needs to go below but the super admin. Each must receive email; not a shared one like gmail.com,
+                  nor another client&apos;s.
                 </span>
-              </label>
+              </div>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-700">Their super admin</span>
                 <input required type="email" className={field} value={form.owner} onChange={set("owner")} placeholder="anna@acme.com" />
@@ -294,21 +325,74 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
       {data && data.skipped.length > 0 && (
         <Section title="Invites she skipped">
           <p className="mb-3 text-sm text-slate-500">
-            From organisers on no client&apos;s list, so she did not go. Make one a client&apos;s super admin — a new client — and she will.
+            From organisers who are nobody&apos;s — on no client&apos;s list, at no client&apos;s domain — so she did not go. Add them, or
+            their company domain, to the client they belong to, or make them a new client&apos;s super admin, and she will.
           </p>
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-            {data.skipped.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
-                <span className="min-w-0 flex-1 truncate text-slate-700">{m.title}</span>
-                <span className="text-xs text-slate-500">{m.organizer_name || m.organizer}</span>
-                <span className="text-xs text-slate-400">{when(m.starts_at)}</span>
-                {m.organizer && (
-                  <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => fromInvite(m)}>
-                    Make a client
-                  </button>
-                )}
-              </li>
-            ))}
+            {data.skipped.map((m) => {
+              const domain = m.organizer ? emailDomain(m.organizer) : "";
+              return (
+                <li key={m.id} className="space-y-2 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="min-w-0 flex-1 truncate text-slate-700">{m.title}</span>
+                    <span className="text-xs text-slate-500">{m.organizer_name || m.organizer}</span>
+                    <span className="text-xs text-slate-400">{when(m.starts_at)}</span>
+                    {m.organizer && data.clients.length > 0 && (
+                      <button
+                        className="text-xs text-blue-600 hover:text-blue-700"
+                        // First the client with a domain of the same name — acme.com's for acme.de.
+                        onClick={() =>
+                          setPlacing({
+                            id: m.id,
+                            client: (data.clients.find((c) => c.domains.some((d) => d.split(".")[0] === domain.split(".")[0])) ?? data.clients[0]).id,
+                          })
+                        }
+                      >
+                        Add to a client
+                      </button>
+                    )}
+                    {m.organizer && (
+                      <button className="text-xs text-blue-600 hover:text-blue-700" onClick={() => fromInvite(m)}>
+                        Make a client
+                      </button>
+                    )}
+                  </div>
+                  {placing?.id === m.id && m.organizer && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <select
+                        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
+                        value={placing.client}
+                        onChange={(e) => setPlacing({ id: m.id, client: e.target.value })}
+                        aria-label="Which client"
+                      >
+                        {data.clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      {/* A shared mail provider is everybody: only the address, then. */}
+                      {!PERSONAL.has(domain) && (
+                        <button
+                          className={quiet}
+                          disabled={busy}
+                          onClick={() => void place(m, "domain")}
+                          title={`Everybody at @${domain} signs in to that client's page and can invite her`}
+                        >
+                          Add @{domain}
+                        </button>
+                      )}
+                      <button className={quiet} disabled={busy} onClick={() => void place(m, "person")} title="Only this address, without an invitation">
+                        Add only {m.organizer}
+                      </button>
+                      <button className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setPlacing(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Section>
       )}

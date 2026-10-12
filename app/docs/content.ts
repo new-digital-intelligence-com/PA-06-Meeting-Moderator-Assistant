@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-09";
+export const UPDATED = "2026-10-12";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -30,6 +30,17 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-12",
+    title: "Several company domains for a client",
+    points: [
+      "An invite she skipped showed why: “AI Coach” was organised from a client's second domain (.gr), and the client had only its first (.eu) — so the organiser was nobody's, and she did not go.",
+      "A client has as many company domains as the company has: a line each on NDI's New client form and the client's page, “Add another domain” for the next, “Remove” to take one off — each checked to be real and nobody else's. The client sees them locked; their super admin asks NDI for a change with the same list.",
+      "Under “Invites she skipped”, “Add to a client” gives the client the organiser belongs to their company domain — or only the organiser — beside “Make a client”: the client with a domain of the same name is offered first. Her next look at her calendar, within a minute, gives that client their meetings.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-10-09",
     title: "Google Chat: one answer, where she was asked",

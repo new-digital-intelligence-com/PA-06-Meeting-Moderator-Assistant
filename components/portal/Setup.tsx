@@ -14,7 +14,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SettingsIcon, UsersIcon } from "./icons";
-import { Chip, CompanyLogo, IconTile, Notice, Section, ago, api, danger, field, primary, quiet } from "./ui";
+import { Chip, CompanyLogo, DomainList, IconTile, Notice, Section, ago, api, danger, field, primary, quiet } from "./ui";
 
 type Client = {
   id: string;
@@ -34,15 +34,15 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   const q = clientId ? `?client=${clientId}` : "";
   const amp = q ? "&" : "?";
   const [data, setData] = useState<Data | null>(null);
-  const [form, setForm] = useState({ name: "", status: "active", domains: "" });
+  const [form, setForm] = useState<{ name: string; status: string; domains: string[] }>({ name: "", status: "active", domains: [] });
   const [newPerson, setNewPerson] = useState({ email: "", invite: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /** Someone's address being changed, as typed so far. */
   const [editing, setEditing] = useState<{ id: string; email: string } | null>(null);
-  /** The company domain their super admin is asking NDI for, as typed so far. */
-  const [requesting, setRequesting] = useState<{ domains: string; note: string } | null>(null);
+  /** The company domains their super admin is asking NDI for, as typed so far. */
+  const [requesting, setRequesting] = useState<{ domains: string[]; note: string } | null>(null);
   const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
       .then((d) => {
         if (!alive) return;
         setData(d);
-        setForm({ name: d.client.name, status: d.client.status, domains: d.client.domains.join(", ") });
+        setForm({ name: d.client.name, status: d.client.status, domains: d.client.domains });
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load."));
     return () => {
@@ -87,14 +87,14 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    // Only NDI sends the company domain and whether she is paused.
-    const body = { name: form.name, ...(admin ? { domains: form.domains, status: form.status } : {}) };
+    // Only NDI sends the company domains and whether she is paused.
+    const body = { name: form.name, ...(admin ? { domains: form.domains.filter((d) => d.trim()), status: form.status } : {}) };
     const r = await step("save", () =>
       api<{ client: { name: string; domains: string[] } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }),
     );
     if (!r) return;
     setData((d) => (d ? { ...d, client: { ...d.client, name: r.client.name, domains: r.client.domains } } : d));
-    setForm((f) => ({ ...f, domains: r.client.domains.join(", ") }));
+    setForm((f) => ({ ...f, domains: r.client.domains }));
     setNotice("Saved.");
     changed();
   }
@@ -192,15 +192,16 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     if (r.changed) setNotice(`${p.email} is now ${email}: they sign in with it from now on. Send them the invitation again if they need it.`);
   }
 
-  /** Their super admin asks NDI for another company domain: checked, then an email to Ava's inbox. */
+  /** Their super admin asks NDI for other company domains: checked, then an email to Ava's inbox. */
   async function requestDomain() {
     if (!requesting) return;
+    const body = { ...requesting, domains: requesting.domains.filter((d) => d.trim()) };
     const r = await step("domain-request", () =>
-      api<{ sent: boolean }>(`/api/portal/domain-request${q}`, { method: "POST", body: JSON.stringify(requesting) }),
+      api<{ sent: boolean }>(`/api/portal/domain-request${q}`, { method: "POST", body: JSON.stringify(body) }),
     );
     if (!r) return;
     setRequesting(null);
-    setNotice("Your request went to NDI: they change the domain and let you know.");
+    setNotice("Your request went to NDI: they make the change and let you know.");
   }
 
   async function removeClient() {
@@ -212,7 +213,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
     if (r) router.push("/admin");
   }
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: "name" | "status") => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
     <div className="space-y-4">
@@ -274,26 +275,20 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
               <p className="text-sm font-semibold text-slate-900">Which meetings Ava joins {admin ? "for them" : "for you"}</p>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-slate-700">Company domain</span>
+              <div className="space-y-1.5">
+                <span className="block text-xs font-medium text-slate-700">Company domains</span>
                 {admin ? (
-                  <input className={field} value={form.domains} onChange={set("domains")} placeholder="acme.com" />
+                  <DomainList value={form.domains} onChange={(domains) => setForm((f) => ({ ...f, domains }))} />
                 ) : (
                   // Theirs to see, NDI's to change: locked on the client's side.
-                  <input
-                    className={`${field} disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none`}
-                    value={client.domains.join(", ")}
-                    placeholder="None yet"
-                    disabled
-                    readOnly
-                  />
+                  <DomainList value={client.domains} disabled />
                 )}
                 <span className="block text-slate-500">
                   {admin
-                    ? "Everybody with an address there signs in here and can invite her, without being added. It must be a real company domain that receives email — not a shared one like gmail.com, and not another company's."
-                    : "Set by NDI. Everybody with an address there signs in here and can invite her, without being added."}
+                    ? "Everybody with an address at one of them signs in here and can invite her, without being added — as many as the company has (acme.com, acme.de…). Each must be a real company domain that receives email — not a shared one like gmail.com, and not another company's."
+                    : "Set by NDI. Everybody with an address at one of them signs in here and can invite her, without being added."}
                 </span>
-              </label>
+              </div>
               <p>
                 Those whose invite comes from{" "}
                 {client.domains.length > 0 && <>anybody at {client.domains.map((d) => `@${d}`).join(", ")}, or from </>}
@@ -302,15 +297,10 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
               {superAdmin &&
                 (requesting ? (
                   <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                    <label className="block space-y-1">
-                      <span className="text-xs font-medium text-slate-700">The company domain you would like</span>
-                      <input
-                        className={field}
-                        value={requesting.domains}
-                        onChange={(e) => setRequesting({ ...requesting, domains: e.target.value })}
-                        placeholder="acme.com"
-                      />
-                    </label>
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-slate-700">The company domains you would like</span>
+                      <DomainList value={requesting.domains} onChange={(domains) => setRequesting({ ...requesting, domains })} />
+                    </div>
                     <label className="block space-y-1">
                       <span className="text-xs font-medium text-slate-700">A note for NDI (optional)</span>
                       <input
@@ -333,9 +323,9 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                   <button
                     type="button"
                     className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    onClick={() => setRequesting({ domains: client.domains.join(", "), note: "" })}
+                    onClick={() => setRequesting({ domains: client.domains, note: "" })}
                   >
-                    {client.domains.length ? "Ask NDI to change it" : "Ask NDI to add your company domain"}
+                    {client.domains.length ? "Ask NDI to add or change one" : "Ask NDI to add your company domains"}
                   </button>
                 ))}
             </div>

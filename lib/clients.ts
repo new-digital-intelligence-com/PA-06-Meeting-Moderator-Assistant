@@ -27,9 +27,9 @@ import { sendEmail } from "./workspace";
 
 export { emailDomain };
 
-/** Domains as typed — "https://www.acme.com/about", "@acme.com" — down to "acme.com". */
+/** Domains as typed — "https://www.acme.com/about", "@acme.com", several on a line — down to "acme.com". */
 export function cleanDomains(input: string[] | string | undefined): string[] {
-  const list = Array.isArray(input) ? input : (input ?? "").split(/[\s,;]+/);
+  const list = (Array.isArray(input) ? input : [input ?? ""]).flatMap((d) => String(d).split(/[\s,;]+/));
   const out = list
     .map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/^@/, "").replace(/[/?#].*$/, ""))
     .filter(Boolean);

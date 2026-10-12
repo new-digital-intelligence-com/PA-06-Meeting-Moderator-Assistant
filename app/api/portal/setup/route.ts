@@ -44,7 +44,7 @@ export async function PATCH(request: Request) {
     const body = (await request.json().catch(() => ({}))) as { name?: string; status?: string; domains?: string | string[] };
     const admin = user.role === "admin";
     if (!admin && body.status !== undefined) throw new HttpError(403, "Pausing her is set by NDI.");
-    if (!admin && body.domains !== undefined) throw new HttpError(403, "Your company domain is set by NDI — ask for a change on your Setup tab.");
+    if (!admin && body.domains !== undefined) throw new HttpError(403, "Your company domains are set by NDI — ask for a change on your Setup tab.");
     if (body.name !== undefined && !body.name.trim()) throw new HttpError(400, "Give the company a name.");
     try {
       const domains = body.domains !== undefined ? await domainsFor(clientId, body.domains, { admin }) : undefined;

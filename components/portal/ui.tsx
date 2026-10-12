@@ -9,6 +9,48 @@ export const button =
 export const primary = `${button} bg-linear-to-b from-blue-500 to-blue-600 text-white shadow-md shadow-blue-600/20 hover:to-blue-700 hover:shadow-lg hover:shadow-blue-600/25`;
 export const quiet = `${button} border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900`;
 export const danger = `${button} border border-rose-200 bg-white text-rose-700 hover:border-rose-300 hover:bg-rose-50`;
+/** A field to see, not change. */
+export const locked = "disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none";
+
+/**
+ * A client's company domains, one a line: another added, any taken off. `disabled`: theirs
+ * to see, NDI's to change. Blank lines are left out when sent.
+ */
+export function DomainList({ value, onChange, disabled = false }: { value: string[]; onChange?: (domains: string[]) => void; disabled?: boolean }) {
+  const lines = value.length ? value : [""];
+  return (
+    <div className="space-y-2">
+      {lines.map((d, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            className={`${field} ${locked}`}
+            value={d}
+            disabled={disabled}
+            readOnly={disabled}
+            aria-label={`Company domain ${i + 1}`}
+            placeholder={disabled ? "None yet" : i ? "acme.de" : "acme.com"}
+            onChange={(e) => onChange?.(lines.map((x, j) => (j === i ? e.target.value : x)))}
+          />
+          {!disabled && lines.length > 1 && (
+            <button
+              type="button"
+              className="shrink-0 text-xs text-slate-400 hover:text-rose-700"
+              onClick={() => onChange?.(lines.filter((_, j) => j !== i))}
+              aria-label={`Take off ${d || "this line"}`}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      ))}
+      {!disabled && (
+        <button type="button" className="text-xs font-medium text-blue-600 hover:text-blue-700" onClick={() => onChange?.([...lines, ""])}>
+          + Add another domain
+        </button>
+      )}
+    </div>
+  );
+}
 
 const ICON_TONES = {
   blue: "bg-blue-50 text-blue-600 ring-blue-600/15",
