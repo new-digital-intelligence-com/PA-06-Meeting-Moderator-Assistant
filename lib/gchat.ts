@@ -5,9 +5,10 @@
  * the conversation itself — with the sender's client's knowledge (lib/answers.ts).
  *
  * Chat says who wrote only by an id: NDI's directory — read whole, once an hour — turns it into
- * an address, and an address that is nobody she works for gets no answer — in a one-to-one
- * chat, one line saying so. A directory that cannot be read stops the look, to be retried:
- * nobody is taken for a stranger for it.
+ * an address; somebody from outside NDI on a client's list is looked for by their address
+ * (outsiderEmail). An address that is nobody she works for gets no answer — in a one-to-one
+ * chat she is in, one line saying so. A directory that cannot be read stops the look, to be
+ * retried: nobody is taken for a stranger for it.
  * Only messages from after she started answering; never her own, nor another bot's.
  *
  * Somebody's first one-to-one chat with her is a message request until it is accepted in
@@ -17,6 +18,7 @@
  * control room. Once it is accepted she answers its last message.
  */
 import { answerMessage, clientOfSender, noteStatus, type Said } from "./answers";
+import { clientPeople } from "./clients";
 import { CHAT_SCOPES, granted, type GoogleClient } from "./google";
 import { redisOrMongoKey } from "./store";
 
@@ -99,8 +101,43 @@ async function theDirectory(google: GoogleClient): Promise<Map<string, string>> 
   return directory && Date.now() - directory.at < 60 * 60_000 ? directory.byId : readDirectory(google);
 }
 
-/** Who wrote: their address, from NDI's directory — null for anybody outside it. */
+/**
+ * Clients' people from outside NDI, as Chat knows them: users/<id> → their address. NDI's
+ * directory knows only NDI, and Chat names nobody by address — so everybody on a client's
+ * list is looked for by theirs: her one-to-one chat with them (spaces.findDirectMessage,
+ * which finds even one still a message request), or their membership of the space
+ * (spaces.members.get) — and remembered once found. A chat with a writer nobody knows is
+ * looked through at most every five minutes. Somebody only at a client's domain, on no
+ * list, cannot be told apart this way.
+ */
+const outsiders = new Map<string, string>();
+const searched = new Map<string, number>();
+async function outsiderEmail(google: GoogleClient, space: Space, user: string): Promise<string | null> {
+  const known = outsiders.get(user);
+  if (known) return known;
+  if (Date.now() - (searched.get(space.name) ?? 0) < 5 * 60_000) return null;
+  searched.set(space.name, Date.now());
+  const ndi = new Set(directory?.byId.values() ?? []);
+  for (const email of [...(await clientPeople()).keys()].filter((e) => !ndi.has(e))) {
+    if (space.spaceType === "DIRECT_MESSAGE") {
+      const dm = await google
+        .request<{ name?: string }>(`${CHAT}/spaces:findDirectMessage?${new URLSearchParams({ name: `users/${email}` })}`)
+        .catch(() => null);
+      if (dm?.name !== space.name) continue;
+    } else {
+      const m = await google.request<{ member?: { name?: string } }>(`${CHAT}/${space.name}/members/${encodeURIComponent(email)}`).catch(() => null);
+      if (m?.member?.name !== user) continue;
+    }
+    outsiders.set(user, email);
+    return email;
+  }
+  return null;
+}
+
+/** Who wrote: their address, from NDI's directory or found before — null for anybody else. */
 async function emailOf(google: GoogleClient, user: string): Promise<string | null> {
+  const outside = outsiders.get(user);
+  if (outside) return outside;
   const id = user.replace(/^users\//, "");
   const known = (await theDirectory(google)).get(id);
   if (known) return known;
@@ -256,7 +293,7 @@ export async function answerChats(google: GoogleClient, log: (m: string) => void
         const theirs = messages.filter((m) => m.sender?.name !== her && m.sender?.type !== "BOT");
         let held = false;
         for (const m of direct ? theirs.slice(-1) : theirs.filter((x) => mentions(x, her))) {
-          const email = m.sender?.name ? await emailOf(google, m.sender.name) : null;
+          const email = m.sender?.name ? ((await emailOf(google, m.sender.name)) ?? (await outsiderEmail(google, space, m.sender.name))) : null;
           const client = email ? await clientOfSender(email) : null;
           if (client && direct && !(await isAccepted(google, space.name))) {
             if (!waiting) log(`[chat] not answered yet — ${email}'s first chat with her is a message request, to accept in Google Chat as her`);
@@ -269,9 +306,12 @@ export async function answerChats(google: GoogleClient, log: (m: string) => void
             log(`[chat] not answered — not one of her clients' people: ${email ?? m.sender?.name ?? "?"} in ${space.displayName || space.name}`);
             if (direct && !toldStranger.has(space.name)) {
               toldStranger.add(space.name);
-              await reply(google, space, m, "Hi — I'm Ava, a meeting assistant. I can only help the people of the companies I work for, so I can't answer here.", log).catch(
-                (e) => log(`[chat] could not tell a stranger: ${e instanceof Error ? e.message : e}`),
-              );
+              // A message request she has not accepted takes no answer at all: nothing to tell them there.
+              if (await isAccepted(google, space.name).catch(() => false)) {
+                await reply(google, space, m, "Hi — I'm Ava, a meeting assistant. I can only help the people of the companies I work for, so I can't answer here.", log).catch(
+                  (e) => log(`[chat] could not tell a stranger: ${e instanceof Error ? e.message : e}`),
+                );
+              }
             }
             continue;
           }

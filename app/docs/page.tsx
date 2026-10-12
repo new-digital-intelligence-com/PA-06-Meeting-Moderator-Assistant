@@ -577,7 +577,9 @@ export default function Docs() {
                   else in the conversation itself — and reads that thread, or the conversation’s last messages outside threads,
                   as what came before. Once each message: Chat times them finer than a millisecond, and she remembers the moment
                   just after the last she saw. Every ten seconds, with her server’s check for meetings to join. Chat names its writer only by an id: NDI’s directory —
-                  read whole, once an hour — turns it into an address; when it cannot be read, the look stops and is tried again,
+                  read whole, once an hour — turns it into an address; somebody from outside NDI on a client’s list is found by their
+                  address — her one-to-one chat with them, or their membership of the space — and remembered (somebody only at a
+                  client’s domain, on no list, cannot be told apart in Chat: add them to the list, or they email her); when the directory cannot be read, the look stops and is tried again,
                   nobody taken for a stranger. A chat Google errs on is tried again next look; the others are answered all the
                   same. A stranger in a one-to-one chat gets one line saying she cannot help. At most thirty answers to one person
                   an hour. Somebody’s first one-to-one chat with her is a message request: Google shows her the messages but
@@ -593,7 +595,8 @@ export default function Docs() {
                   for it even when she chats as herself) and the People API turned on. In NDI’s Google Admin, her account has an
                   organizational unit of its own, where Google Chat’s <C>Chat invitations</C> accepts invitations from NDI’s
                   people automatically: their chats and spaces reach her with no message request — for her alone, nobody
-                  else’s account touched. Anybody outside NDI still sends one. <C>AVA_ANSWER_EMAIL</C> or{" "}
+                  else’s account touched. Anybody outside NDI still sends one, accepted once as her — the control room lists it
+                  when it is one of her clients’ people. <C>AVA_ANSWER_EMAIL</C> or{" "}
                   <C>AVA_ANSWER_CHAT</C> set to <C>off</C> stops either.
                 </Card>
                 <Card tone="slate" title="In the control room">

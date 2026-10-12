@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-12",
+    title: "Google Chat knows clients' people from outside NDI",
+    points: [
+      "Grand Automative's super admin wrote to her in Google Chat from a Gmail address, and she took him for a stranger: Chat names its writer only by an id, and she turned ids into addresses with NDI's directory alone. Her one line for strangers was refused too — his first chat was a message request, which the automatic acceptance (NDI's people only) does not cover.",
+      "Everybody on a client's list is now found by their address — her one-to-one chat with them, or their membership of the space — and remembered. A first chat from one of them is listed in the control room until it is accepted once as her; then she answers its last message. A stranger in a chat she has not accepted gets nothing — there is nothing she can post there. Somebody only at a client's domain, on no list, cannot be told apart in Chat.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
+  {
+    date: "2026-10-12",
     title: "Several company domains for a client",
     points: [
       "An invite she skipped showed why: “AI Coach” was organised from a client's second domain (.gr), and the client had only its first (.eu) — so the organiser was nobody's, and she did not go.",
