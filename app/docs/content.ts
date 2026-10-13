@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-12";
+export const UPDATED = "2026-10-13";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -14,7 +14,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Anam", value: "Three accounts, each with its own Elena: the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
-  { label: "Runner", value: "AWS EC2 server (2 vCPU, 4 GB), always on — two seats: two clients' meetings at once, until a bigger server", tone: "emerald" },
+  { label: "Runner", value: "Google Cloud VM (Compute Engine e2-medium: 2 vCPU, 4 GB, Frankfurt), always on since 13 October — two seats: two clients' meetings at once", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
   { label: "Email & Chat", value: "Live: she answers her email and Google Chat (first answers 9 October) — chats and spaces from NDI's people accepted automatically, for her account alone", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-13",
+    title: "Her server moved to Google Cloud",
+    points: [
+      "From the AWS EC2 server to a Google Cloud VM — Compute Engine e2-medium (2 vCPU, 4 GB, the same as before), Frankfurt, Ubuntu 24.04, a static address, ports 80 and 443 open for her screen. The same container, built from the same code, with the same settings — only her screen's address (AVA_SCREEN_HOST) changed — and her data carried over: both seats' Chrome profiles, the meetings she attended, her logs.",
+      "Moved while she was free, the AWS one stopped first so two of her never walk into the same meeting. Google asked for her sign-in again on the new machine, once, through her screen. The AWS server stays stopped a few days as a fallback, then goes.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-10-12",
     title: "Google Chat knows clients' people from outside NDI",
