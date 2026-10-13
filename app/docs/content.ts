@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her camera: lighter, for a smoother face and a clean voice",
+    points: [
+      "In the first call on the new server her face was not smooth and her voice had noise. Her lips' delay was what it always was (a median of 820 ms, against 763 to 794 before the move); the server was not: one call left it loaded beyond its 2 vCPUs (load 2.7). Her camera is a canvas drawn and encoded in software, at 1280x720 and 25 frames a second.",
+      "It is now 960x540 at 20 frames a second by default — under half the pixels a second to draw and encode — set by AVA_FACE_SIZE and AVA_FACE_FPS for a bigger server. Measured in the next call before anything more is changed.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
+  {
+    date: "2026-10-13",
     title: "Her server: twice the memory, and back by herself after a restart",
     points: [
       "Her VM went from e2-medium to e2-standard-2: the same 2 vCPU, dedicated rather than shared, and 8 GB instead of 4 — room for two seats with her face. Her address, disk, sign-in and settings stayed.",

@@ -45,6 +45,14 @@ type FaceOptions = {
    * held back to match the lips — or "anam", the face's own copy (AVA_FACE_AUDIO).
    */
   faceAudio?: "direct" | "anam";
+  /**
+   * Her camera's size and frames a second (AVA_FACE_SIZE, AVA_FACE_FPS). Drawn and encoded
+   * in software: at 1280×720 and 25 a second it alone filled a 2-vCPU server, and her face
+   * stuttered and her voice crackled.
+   */
+  width?: number;
+  height?: number;
+  fps?: number;
 };
 
 declare global {
@@ -530,8 +538,9 @@ if (window.top === window && platform && !window.__ava) {
 
   /* ── her camera: a canvas, so the picture never drops out ─────────────── */
 
-  const W = 1280;
-  const H = 720;
+  const W = options.width ?? 960;
+  const H = options.height ?? 540;
+  const FPS = options.fps ?? 20;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -915,10 +924,10 @@ if (window.top === window && platform && !window.__ava) {
         return;
       }
 
-      camera = canvas.captureStream(25);
+      camera = canvas.captureStream(FPS);
       // Timers, not animation frames: an animation frame never fires in a window nobody
       // is looking at, and her camera would freeze.
-      setInterval(draw, 40);
+      setInterval(draw, Math.round(1000 / FPS));
       if (opts.idleClip?.length) await loadIdle(opts.idleClip).catch((e) => log(`idle clip unusable: ${e}`));
 
       firstToken = opts.token;

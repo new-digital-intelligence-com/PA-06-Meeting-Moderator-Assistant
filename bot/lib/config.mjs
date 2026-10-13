@@ -69,7 +69,17 @@ export const FACE = {
   // Where her voice is heard from while the face is up: "direct" (default) — GPT-Live's own
   // audio, held back to match the lips — or "anam", the face's copy, which carried noise.
   faceAudio: process.env.AVA_FACE_AUDIO === "anam" ? "anam" : "direct",
+  // Her camera, drawn and encoded in software: 1280x720 at 25 a second filled a 2-vCPU
+  // server on its own (face stuttering, voice crackling). AVA_FACE_SIZE "960x540" and
+  // AVA_FACE_FPS 20 by default; even sizes, 320 to 1920 wide; 10 to 30 a second.
+  ...faceSize(process.env.AVA_FACE_SIZE),
+  fps: Math.min(30, Math.max(10, Math.round(Number(process.env.AVA_FACE_FPS) || 20))),
 };
+
+function faceSize(value = "") {
+  const [w, h] = value.toLowerCase().split("x").map((n) => Math.round(Number(n) / 2) * 2);
+  return w >= 320 && w <= 1920 && h >= 180 && h <= 1080 ? { width: w, height: h } : { width: 960, height: 540 };
+}
 
 /**
  * Who hears and speaks for her in a meeting:
