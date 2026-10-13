@@ -32,6 +32,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her screen: capitals with Caps Lock",
+    points: [
+      "Signing her in on the new server, capital letters typed with Caps Lock came out small. The viewer sends the capital already, and its Caps Lock key switched Caps Lock on in her screen too: the two cancelled out. Her screen now leaves Caps Lock to the viewer (x11vnc -skip_lockkeys); Shift worked and still does. Tested through noVNC as a French keyboard types: letters, Shift, Caps Lock, digits.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-13",
     title: "Her server moved to Google Cloud",
     points: [
       "From the AWS EC2 server to a Google Cloud VM — Compute Engine e2-medium (2 vCPU, 4 GB, the same as before), Frankfurt, Ubuntu 24.04, a static address, ports 80 and 443 open for her screen. The same container, built from the same code, with the same settings — only her screen's address (AVA_SCREEN_HOST) changed — and her data carried over: both seats' Chrome profiles, the meetings she attended, her logs.",
