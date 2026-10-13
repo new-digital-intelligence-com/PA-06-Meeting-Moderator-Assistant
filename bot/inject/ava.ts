@@ -28,6 +28,7 @@
 import { AnamEvent, createClient } from "@anam-ai/js-sdk";
 import type { AgentAudioInputStream, AnamClient } from "@anam-ai/js-sdk";
 import { nextLag, type Lag } from "./lag";
+import { makeUp2 } from "./upsample";
 
 type FaceOptions = {
   /** Her name, for the card shown when there is no picture of her at all. */
@@ -115,6 +116,11 @@ type AvaApi = {
 
 /** Avatar mode's audio format, which is what Anam lip-syncs to. */
 const PCM_RATE = 16000;
+/**
+ * Her microphone's rate: Meet's own. Chrome's default on her server was 44.1 kHz, and each
+ * piece of her voice was converted to it on its own, crudely — noise and crackle (upsample.ts).
+ */
+const MIC_RATE = 48000;
 /** How far Anam's picture and sound run behind the audio we send it. */
 const FACE_LAG_MS = 600;
 /** How long her face's sound stays open after what she said should have played. */
@@ -245,7 +251,7 @@ if (window.top === window && platform && !window.__ava) {
 
   const ensureAudio = () => {
     if (!audio) {
-      audio = new AudioContext();
+      audio = new AudioContext({ sampleRate: MIC_RATE });
       mic = audio.createMediaStreamDestination();
       faceGain = audio.createGain();
       faceGain.connect(mic);
@@ -827,6 +833,8 @@ if (window.top === window && platform && !window.__ava) {
   /* ── her voice from GPT-Live, played as it streams in ────────────────────── */
 
   const RT_RATE = 24000;
+  /** Her voice doubled to her microphone's 48 kHz, seamlessly from piece to piece. */
+  const up2 = makeUp2();
   let rtItem = "";
   /**
    * Where her voice is heard right now: through her face (lip-synced) or straight into her
@@ -922,6 +930,7 @@ if (window.top === window && platform && !window.__ava) {
     rtSources = [];
     rtNext = 0;
     rtFaceEnd = 0;
+    up2.reset();
     rtItem = "";
   };
 
@@ -1071,6 +1080,7 @@ if (window.top === window && platform && !window.__ava) {
         rtItem = turn;
         rtVia = faceReady ? "face" : "mic";
         resetResampler();
+        up2.reset();
         // A little ahead, so a piece arriving late does not leave a click in the middle.
         rtNext = Math.max(rtNext, audio.currentTime + 0.15);
       } else if (rtVia === "mic" && faceReady && quiet(samples)) {
@@ -1090,8 +1100,9 @@ if (window.top === window && platform && !window.__ava) {
       };
       /** Into her microphone, each piece after the last, at least `lead` seconds from now. */
       const schedule = (lead: number) => {
-        const buffer = audio.createBuffer(1, Math.max(1, samples.length), RT_RATE);
-        buffer.getChannelData(0).set(samples);
+        const doubled = up2(samples);
+        const buffer = audio.createBuffer(1, Math.max(1, doubled.length), MIC_RATE);
+        buffer.getChannelData(0).set(doubled);
         const source = audio.createBufferSource();
         source.buffer = buffer;
         source.connect(mic);

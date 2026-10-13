@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her voice: clean, not a crackle",
+    points: [
+      "Her voice still had noise once her server had CPU to spare. GPT-Live sends it at 24 kHz in small pieces; her page played each piece on its own into an audio engine at Chrome's default rate (44.1 kHz on her server), and Chrome converted each one crudely. Measured with a test tone played the same way and recorded as Meet takes it: 41 dB of signal over noise at best, down to 7 dB at the joins — the crackle.",
+      "Her microphone now runs at 48 kHz, Meet's own rate, and her code doubles her voice to it with a proper filter carried from piece to piece (bot/inject/upsample.ts): 119 dB in every window of three runs, not a sample off. (A 24 kHz engine, tried first, dropped out.) Meet's Noise cancellation is now turned off with Studio sound and Adaptive audio, so nothing filters her synthetic voice again.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-13",
     title: "Her lips: a one-off slow reading left out",
     points: [
       "Her voice is held back by however long her face takes to move its lips, measured on her replies and averaged. One slow reading in a call (1368 ms among 739 and 795) pulled the hold-back to 1004 ms, and her voice trailed her lips by a quarter of a second for the rest of it. A reading far from the rest is now left out as a hiccup; two in a row that agree mean the lag really changed, and she follows. Tested on its own (bot/inject/lag.ts), with that call's readings among others.",

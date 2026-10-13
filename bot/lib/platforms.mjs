@@ -246,7 +246,8 @@ export const meet = {
 
   /**
    * Meet's own voice processing, off. "Studio sound" has Gemini rebuild the voice to sound
-   * studio-recorded, and "Adaptive audio" merges laptops sharing a room. Her voice is
+   * studio-recorded, "Adaptive audio" merges laptops sharing a room, and "Noise
+   * cancellation" filters out what it takes for background noise. Her voice is
    * already clean and synthetic: processed again it came out watery, with an echo, and not
    * the voice GPT-Live made. Meet's tips cover the buttons, so they are clicked from inside
    * the page or forced.
@@ -260,7 +261,7 @@ export const meet = {
       await page.getByRole("tab", { name: /audio/i }).first().click({ force: true, timeout: 3000 }).catch(() => {});
       await sleep(800);
       const found = [];
-      for (const name of ["Studio sound", "Adaptive audio"]) {
+      for (const name of ["Studio sound", "Adaptive audio", "Noise cancellation"]) {
         const toggle = page.getByRole("switch", { name, exact: true }).first();
         if (!(await toggle.isVisible({ timeout: 1500 }).catch(() => false))) {
           found.push(`${name}: not offered`);
