@@ -30,6 +30,7 @@ import type { AgentAudioInputStream, AnamClient } from "@anam-ai/js-sdk";
 import { nextLag, type Lag } from "./lag";
 import { makeUp2 } from "./upsample";
 import { makeRecorder } from "./record";
+import { makeMeetStats } from "./meetstats";
 
 type FaceOptions = {
   /** Her name, for the card shown when there is no picture of her at all. */
@@ -161,6 +162,7 @@ if (window.top === window && platform && !window.__ava) {
   const mode = window.__AVA_MODE === "avatar" ? "avatar" : "voice";
   const options: FaceOptions = { sessionSeconds: 180, idleSeconds: 45, ...window.__AVA_FACE };
   const rec = options.record ? makeRecorder(log) : null;
+  const meetStats = makeMeetStats(log);
   let isSpeaking = false;
   let finished: (() => void) | null = null;
 
@@ -205,8 +207,12 @@ if (window.top === window && platform && !window.__ava) {
       // Hers: made while her face connects — or made by Anam's SDK at any time, since it
       // builds a new connection when it reconnects mid-session, and hearing that one would
       // have her hear her own voice.
-      if (buildingFace || /initPeerConnection/.test(new Error().stack ?? "")) hers.add(pc);
-      else rec?.watch(pc);
+      if (buildingFace || /initPeerConnection/.test(new Error().stack ?? "")) {
+        hers.add(pc);
+      } else {
+        rec?.watch(pc);
+        if (mode === "avatar") meetStats.watch(pc);
+      }
       pc.addEventListener("track", (e: RTCTrackEvent) => {
         if (e.track.kind !== "audio" || hers.has(pc)) return;
         remote.set(e.track.id, e.track);

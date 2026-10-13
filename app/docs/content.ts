@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her camera sharper again, and what Meet sends of it in her log",
+    points: [
+      "On the 4-vCPU server her camera is back to 1280x720 at 25 frames a second (AVA_FACE_SIZE, AVA_FACE_FPS). Why the meeting looks less sharp than Anam's own demo: there, the avatar is decoded once, by the viewer's own computer; in a meeting her server must be her webcam — decode Anam's video, draw it, compress it again in software — and Meet compresses it once more for each viewer.",
+      "Her log now says what Meet actually sends of her camera — its size, frames a second, bitrate and encoder, and what holds it back (Chrome's own \"cpu\" or \"bandwidth\") — half a minute into a call, then every two minutes and whenever that changes (bot/inject/meetstats.ts).",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-13",
     title: "Back to her voice held back by the measured figure",
     points: [
       "Following the face's sound (the entry below) did well against a pretend face, but not in a real call: two screen recordings, measured the same way, put her voice about 30 ms from her lips on average when held back by the measured figure, and about 230 ms behind them when following the face's sound. The face's sound reaches her page a quarter of a second after its picture, so waiting for the sound made her late. And the call felt worse. Back to the figure — with one-off slow readings left out — and bot/inject/follow.ts removed; the noise fixes stay.",
