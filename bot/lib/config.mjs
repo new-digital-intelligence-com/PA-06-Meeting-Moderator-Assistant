@@ -76,6 +76,13 @@ export const FACE = {
   fps: Math.min(30, Math.max(10, Math.round(Number(process.env.AVA_FACE_FPS) || 20))),
 };
 
+/**
+ * A test call recorded (AVA_RECORD_VOICE=1): her voice as GPT-Live sends it and as her
+ * microphone gives it to Meet, and Meet's numbers for the sound it sends — to find where
+ * noise comes from. Her voice only. Written to /data/recordings; off unless set.
+ */
+export const RECORD = process.env.AVA_RECORD_VOICE === "1";
+
 function faceSize(value = "") {
   const [w, h] = value.toLowerCase().split("x").map((n) => Math.round(Number(n) / 2) * 2);
   return w >= 320 && w <= 1920 && h >= 180 && h <= 1080 ? { width: w, height: h } : { width: 960, height: 540 };

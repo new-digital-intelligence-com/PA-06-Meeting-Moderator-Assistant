@@ -29,6 +29,7 @@ import { AnamEvent, createClient } from "@anam-ai/js-sdk";
 import type { AgentAudioInputStream, AnamClient } from "@anam-ai/js-sdk";
 import { nextLag, type Lag } from "./lag";
 import { makeUp2 } from "./upsample";
+import { makeRecorder } from "./record";
 
 type FaceOptions = {
   /** Her name, for the card shown when there is no picture of her at all. */
@@ -55,6 +56,8 @@ type FaceOptions = {
   width?: number;
   height?: number;
   fps?: number;
+  /** A test call: her voice recorded at two points of its path, and Meet's numbers (record.ts). */
+  record?: boolean;
 };
 
 declare global {
@@ -76,6 +79,8 @@ declare global {
     __avaFaceGone?: (why: string) => Promise<void>;
     /** GPT-Live: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
     __avaHear?: (base64: string) => void;
+    /** A test call's recording of her voice, in pieces, for /data/recordings (record.ts). */
+    __avaRecording?: (kind: string, part: number, base64: string, last: boolean, rate: number) => Promise<void>;
   }
 }
 
@@ -155,6 +160,7 @@ const platform =
 if (window.top === window && platform && !window.__ava) {
   const mode = window.__AVA_MODE === "avatar" ? "avatar" : "voice";
   const options: FaceOptions = { sessionSeconds: 180, idleSeconds: 45, ...window.__AVA_FACE };
+  const rec = options.record ? makeRecorder(log) : null;
   let isSpeaking = false;
   let finished: (() => void) | null = null;
 
@@ -200,6 +206,7 @@ if (window.top === window && platform && !window.__ava) {
       // builds a new connection when it reconnects mid-session, and hearing that one would
       // have her hear her own voice.
       if (buildingFace || /initPeerConnection/.test(new Error().stack ?? "")) hers.add(pc);
+      else rec?.watch(pc);
       pc.addEventListener("track", (e: RTCTrackEvent) => {
         if (e.track.kind !== "audio" || hers.has(pc)) return;
         remote.set(e.track.id, e.track);
@@ -1075,6 +1082,10 @@ if (window.top === window && platform && !window.__ava) {
       const bytes = bytesOf(base64);
       const samples = pcm24(bytes);
       lastActive = Date.now();
+      if (rec) {
+        rec.mic(mic.stream);
+        rec.raw(samples);
+      }
       const faceReady = mode === "avatar" && face === "live" && Boolean(faceInput);
       if (turn !== rtItem) {
         rtItem = turn;
@@ -1146,6 +1157,9 @@ if (window.top === window && platform && !window.__ava) {
 
     async end() {
       hearing = false;
+      if (rec && window.__avaRecording) {
+        await rec.save((...a) => window.__avaRecording!(...a)).catch((e) => log(`recording not saved: ${e}`));
+      }
       if (mode !== "avatar") return;
       faceRetryAt = Number.POSITIVE_INFINITY; // nothing may reconnect it now
       const c = client;

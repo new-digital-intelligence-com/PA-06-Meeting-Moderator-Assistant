@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
-import { BRAIN, DISPLAY_NAME, FACE, MODE, STATE_DIR, platformArgs, profileFor, requireChrome, root } from "./config.mjs";
+import { BRAIN, DISPLAY_NAME, FACE, MODE, RECORD, STATE_DIR, platformArgs, profileFor, requireChrome, root } from "./config.mjs";
 import { DELEGATE, EFFORT, connectLive } from "./live.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
@@ -464,8 +464,38 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       log(`  could not keep her idle clip: ${e.message}`);
     }
   });
+  if (RECORD) {
+    // A test call's recording of her voice (inject/record.ts), in pieces, made a WAV at the end.
+    const dir = path.join(STATE_DIR, "recordings");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    await context.exposeBinding("__avaRecording", (_src, kind, part, base64, last, rate) => {
+      fs.mkdirSync(dir, { recursive: true });
+      const pcmFile = path.join(dir, `${stamp}-${kind}.pcm`);
+      if (part === 0) fs.writeFileSync(pcmFile, Buffer.alloc(0));
+      fs.appendFileSync(pcmFile, Buffer.from(base64, "base64"));
+      if (!last) return;
+      const data = fs.readFileSync(pcmFile);
+      const head = Buffer.alloc(44);
+      head.write("RIFF", 0);
+      head.writeUInt32LE(36 + data.length, 4);
+      head.write("WAVEfmt ", 8);
+      head.writeUInt32LE(16, 16);
+      head.writeUInt16LE(1, 20);
+      head.writeUInt16LE(1, 22);
+      head.writeUInt32LE(rate, 24);
+      head.writeUInt32LE(rate * 2, 28);
+      head.writeUInt16LE(2, 32);
+      head.writeUInt16LE(16, 34);
+      head.write("data", 36);
+      head.writeUInt32LE(data.length, 40);
+      const wav = pcmFile.replace(/\.pcm$/, ".wav");
+      fs.writeFileSync(wav, Buffer.concat([head, data]));
+      fs.rmSync(pcmFile, { force: true });
+      log(`  recording kept: recordings/${path.basename(wav)}`);
+    });
+  }
   await context.addInitScript({
-    content: `window.__AVA_MODE = ${JSON.stringify(mode)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? FACE.pcmRate : 16000 })};`,
+    content: `window.__AVA_MODE = ${JSON.stringify(mode)}; window.__AVA_FACE = ${JSON.stringify({ ...FACE, name: DISPLAY_NAME, pcmRate: BRAIN === "live" ? FACE.pcmRate : 16000, record: RECORD })};`,
   });
   await context.addInitScript({ path: path.join(root, "dist", "ava.js") });
 

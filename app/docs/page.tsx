@@ -981,6 +981,7 @@ export default function Docs() {
                       [<C key="v">ANAM_SESSION_SECONDS</C>, "Your Anam plan’s session limit (180)"],
                       [<C key="v">AVA_FACE_IDLE_SECONDS</C>, "Quiet seconds before the face rests (45)"],
                       [<C key="v">AVA_FACE_SIZE · AVA_FACE_FPS</C>, "Her camera's size and frames a second (960x540, 20): drawn and encoded in software on her server, so lighter on a small one"],
+                      [<C key="v">AVA_RECORD_VOICE</C>, "1 records a test call: her voice as GPT-Live sends it and as her microphone gives it to Meet — hers only — and Meet's numbers for the sound it sends, into /data/recordings. Off unless set"],
                       [<C key="v">ANAM_API_KEY · ANAM_AVATAR_ID</C>, "Her face — she asks Anam herself (else the app does). A persona ID works too: she uses its avatar"],
                       [<C key="v">ANAM_API_KEY_2 … _5 · ANAM_AVATAR_ID_2 … _5</C>, "More Anam accounts, used in order when one runs out of minutes. The avatar ID can be left out: she finds that account’s own avatar with the same name"],
                       [<C key="v">ANAM_PCM_RATE</C>, "The rate her voice is sent to the face at (16000; 24000 untouched)"],
