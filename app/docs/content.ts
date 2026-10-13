@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her voice: no gaps — her face given a head start",
+    points: [
+      "Recorded in a test call (AVA_RECORD_VOICE): GPT-Live's voice arrived clean; what her microphone gave Meet had gaps of silence inside her words — 42 in 44 seconds of speech, up to 86 ms each, every one a dropout and two clicks. Meet's side was clean (0 packets lost, 33 to 50 kbps).",
+      "Her face plays each piece of her voice the moment it has it, after its lag; fed piece by piece as GPT-Live sends them, it paused whenever one came a little late, and her voice paused with it to keep her lips in step. Played straight through instead, her voice had no gaps but drifted off her lips. Now the first quarter-second of each stretch is held and sent to the face at once, so it has a little queued and does not pause, and her voice follows it: modelled first (0 gaps, 0 ms off her lips), then a recorded call — 3 gaps in 120 seconds of speech, against 42 in 44. She starts speaking a quarter of a second later.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-13",
     title: "Her voice: clean, not a crackle",
     points: [
       "Her voice still had noise once her server had CPU to spare. GPT-Live sends it at 24 kHz in small pieces; her page played each piece on its own into an audio engine at Chrome's default rate (44.1 kHz on her server), and Chrome converted each one crudely. Measured with a test tone played the same way and recorded as Meet takes it: 41 dB of signal over noise at best, down to 7 dB at the joins — the crackle.",

@@ -926,7 +926,95 @@ if (window.top === window && platform && !window.__ava) {
     for (let i = 0; i < samples.length; i++) if (samples[i] > 0.025 || samples[i] < -0.025) return false;
     return true;
   };
+  /** A piece of her voice as it came, on its way to her lips and her microphone. */
+  type Piece = { samples: Float32Array; base64: string; turn: string };
+  /**
+   * The face's head start: the first quarter-second of each stretch of her voice — a reply, or
+   * after the face ran dry — held, then sent to the face at once. The face plays each piece the
+   * moment it has it (after its lag), so fed piece by piece as GPT-Live sends them it paused
+   * whenever one came a little late — and her voice either paused with it (a gap of silence:
+   * the noise on her voice) or ran on without it (her lips falling behind). With a quarter of
+   * a second queued it does not pause, and her voice follows it exactly. Modelled first with
+   * pieces arriving unevenly: 200 ms left one gap in 300 pieces; 250 ms none, 0 ms off her lips.
+   */
+  const HEAD_START_MS = 250;
+  let held: Piece[] | null = null;
+  let heldMs = 0;
+  let heldTimer: number | null = null;
+
+  const ahead = (s: number, turn: string) => {
+    if (s > 1.5 && rtAheadSaid !== turn) {
+      rtAheadSaid = turn;
+      log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
+    }
+  };
+
+  /** Into her microphone at `at` on the audio clock, doubled to its 48 kHz. */
+  const play = (samples: Float32Array, at: number) => {
+    const { audio, mic } = ensureAudio();
+    const doubled = up2(samples);
+    const buffer = audio.createBuffer(1, Math.max(1, doubled.length), MIC_RATE);
+    buffer.getChannelData(0).set(doubled);
+    const source = audio.createBufferSource();
+    source.buffer = buffer;
+    source.connect(mic);
+    source.start(at);
+    rtNext = at + buffer.duration;
+    rtSources.push(source);
+    source.onended = () => {
+      rtSources = rtSources.filter((s) => s !== source);
+    };
+  };
+
+  /** To her face, and her voice as the face plays it: after what it has, its lag from now. */
+  const toFace = (p: Piece) => {
+    const { audio } = ensureAudio();
+    faceInput!.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? p.base64 : to16k(p.samples));
+    const now = Date.now();
+    rtFaceEnd = Math.max(rtFaceEnd, now + faceLagMs) + (p.samples.length / RT_RATE) * 1000;
+    if (options.faceAudio === "anam") {
+      // Heard through the face, from now (so no word's start is cut) to a margin after.
+      openFaceSound(rtFaceEnd + FACE_TAIL_MS);
+      ahead((rtFaceEnd - now - faceLagMs) / 1000, p.turn);
+      return;
+    }
+    // Heard straight from GPT-Live, held back by the face's lag so her lips match. The face's
+    // own copy of her voice has been cut to 16 kHz, through Anam's servers and through one
+    // more codec: that was the noise on her voice.
+    if (lagProbedTurn !== p.turn && !quiet(p.samples)) {
+      lagProbedTurn = p.turn;
+      lagProbe = { sentAt: performance.now() };
+    }
+    const t = audio.currentTime;
+    const lead = faceLagMs / 1000;
+    play(p.samples, Math.max(t + lead, rtNext));
+    ahead(rtNext - t - lead, p.turn);
+  };
+
+  /** No face: into her microphone, each piece after the last, starting 150 ms ahead. */
+  const toMic = (p: Piece) => {
+    const { audio } = ensureAudio();
+    const t = audio.currentTime;
+    play(p.samples, rtNext > t + 0.02 ? rtNext : t + 0.15);
+    ahead(rtNext - t - 0.15, p.turn);
+  };
+
+  /** The head start, sent: to her face if it is still up, else into her microphone. */
+  const release = () => {
+    if (heldTimer !== null) window.clearTimeout(heldTimer);
+    heldTimer = null;
+    const pieces = held ?? [];
+    held = null;
+    heldMs = 0;
+    const faceUp = mode === "avatar" && face === "live" && Boolean(faceInput);
+    for (const p of pieces) (faceUp ? toFace : toMic)(p);
+  };
+
   const stopStream = () => {
+    if (heldTimer !== null) window.clearTimeout(heldTimer);
+    heldTimer = null;
+    held = null;
+    heldMs = 0;
     for (const s of rtSources) {
       try {
         s.stop();
@@ -1078,9 +1166,8 @@ if (window.top === window && platform && !window.__ava) {
     },
 
     feed(base64, turn) {
-      const { audio, mic, faceGain } = ensureAudio();
-      const bytes = bytesOf(base64);
-      const samples = pcm24(bytes);
+      const { mic } = ensureAudio();
+      const samples = pcm24(bytesOf(base64));
       lastActive = Date.now();
       if (rec) {
         rec.mic(mic.stream);
@@ -1088,70 +1175,45 @@ if (window.top === window && platform && !window.__ava) {
       }
       const faceReady = mode === "avatar" && face === "live" && Boolean(faceInput);
       if (turn !== rtItem) {
+        // The last reply's head start, if still held, goes first.
+        if (held) release();
         rtItem = turn;
         rtVia = faceReady ? "face" : "mic";
         resetResampler();
         up2.reset();
-        // A little ahead, so a piece arriving late does not leave a click in the middle.
-        rtNext = Math.max(rtNext, audio.currentTime + 0.15);
       } else if (rtVia === "mic" && faceReady && quiet(samples)) {
-        // The face came up while she was talking: it takes over at this pause.
+        // The face came up while she was talking: it takes over at this pause, with a head
+        // start of its own (below), her voice held back by its lag from here — in the pause.
         rtVia = "face";
         resetResampler();
       } else if (rtVia === "face" && !faceReady) {
-        // The face went away mid-reply (renewing, or lost): carry on through the microphone.
+        // The face went away mid-reply (renewing, or lost): on through the microphone.
         rtVia = "mic";
+        if (held) release();
       }
-      const ms = (samples.length / RT_RATE) * 1000;
-      const ahead = (s: number) => {
-        if (s > 1.5 && rtAheadSaid !== turn) {
-          rtAheadSaid = turn;
-          log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
-        }
-      };
-      /** Into her microphone, each piece after the last, at least `lead` seconds from now. */
-      const schedule = (lead: number) => {
-        const doubled = up2(samples);
-        const buffer = audio.createBuffer(1, Math.max(1, doubled.length), MIC_RATE);
-        buffer.getChannelData(0).set(doubled);
-        const source = audio.createBufferSource();
-        source.buffer = buffer;
-        source.connect(mic);
-        const at = Math.max(audio.currentTime + lead, rtNext);
-        source.start(at);
-        rtNext = at + buffer.duration;
-        ahead(rtNext - audio.currentTime - lead);
-        rtSources.push(source);
-        source.onended = () => {
-          rtSources = rtSources.filter((s) => s !== source);
-        };
-      };
+      const piece: Piece = { samples, base64, turn };
       if (rtVia === "face" && faceInput) {
-        // Her lips: the face is sent her voice and moves them to it, faceLagMs later.
-        faceInput.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? base64 : to16k(samples));
-        const now = Date.now();
-        rtFaceEnd = Math.max(rtFaceEnd, now + faceLagMs) + ms;
-        if (options.faceAudio === "anam") {
-          // Heard through the face, from now (so no word's start is cut) to a margin after.
-          openFaceSound(rtFaceEnd + FACE_TAIL_MS);
-          ahead((rtFaceEnd - now - faceLagMs) / 1000);
+        // The face has nothing queued — a new stretch: hold its head start (see HEAD_START_MS).
+        const faceIdle = Date.now() >= rtFaceEnd - faceLagMs - 20;
+        if (held || faceIdle) {
+          if (!held) {
+            held = [];
+            heldTimer = window.setTimeout(release, HEAD_START_MS);
+          }
+          held.push(piece);
+          heldMs += (samples.length / RT_RATE) * 1000;
+          if (heldMs >= HEAD_START_MS) release();
           return;
         }
-        // Heard straight from GPT-Live, held back by the face's lag so her lips match. The
-        // face's own copy of her voice has been cut to 16 kHz, through Anam's servers and
-        // through one more codec: that was the noise on her voice.
-        if (lagProbedTurn !== turn && !quiet(samples)) {
-          lagProbedTurn = turn;
-          lagProbe = { sentAt: performance.now() };
-        }
-        schedule(faceLagMs / 1000);
+        toFace(piece);
         return;
       }
-      // No face (or voice mode): straight into her microphone.
-      schedule(0.05);
+      toMic(piece);
     },
 
     feedDone() {
+      // A reply shorter than the head start: out now.
+      if (held) release();
       if (mode === "avatar" && face === "live" && faceInput && Date.now() < rtFaceEnd) faceInput.endSequence();
     },
 
