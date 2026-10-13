@@ -11,7 +11,7 @@ export const UPDATED = "2026-10-13";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "Three accounts, each with its own Elena: two free ones, then NDI's subscription (250 minutes a month) last; the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
+  { label: "Anam", value: "One account: NDI's subscription (250 minutes a month), its NDI Elena, 10-minute face sessions; out of minutes she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "Google Cloud VM (Compute Engine e2-medium: 2 vCPU, 4 GB, Frankfurt), always on since 13 October — two seats: two clients' meetings at once", tone: "emerald" },
@@ -30,6 +30,15 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-13",
+    title: "Her face: NDI's subscription only, 10-minute sessions",
+    points: [
+      "The free Anam accounts are taken off: her face comes from NDI's subscription account alone (250 minutes a month), its NDI Elena set by ID. Its plan allows 10-minute sessions, so ANAM_SESSION_SECONDS is 600 — her face renews every nine and a half minutes instead of every two and a half, a third as many reconnects. Checked on her server: one account, 600-second sessions, Anam gives her the face.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-10-13",
     title: "Her face: NDI's subscription account last",
@@ -54,7 +63,7 @@ export const CHANGELOG: Change[] = [
     title: "Her server moved to Google Cloud",
     points: [
       "From the AWS EC2 server to a Google Cloud VM — Compute Engine e2-medium (2 vCPU, 4 GB, the same as before), Frankfurt, Ubuntu 24.04, a static address, ports 80 and 443 open for her screen. The same container, built from the same code, with the same settings — only her screen's address (AVA_SCREEN_HOST) changed — and her data carried over: both seats' Chrome profiles, the meetings she attended, her logs.",
-      "Moved while she was free, the AWS one stopped first so two of her never walk into the same meeting. Google asked for her sign-in again on the new machine, once, through her screen. The AWS server stays stopped a few days as a fallback, then goes.",
+      "Moved while she was free, the AWS one stopped first so two of her never walk into the same meeting. Google asked for her sign-in again on the new machine, once, through her screen. The AWS server, silent since, was then retired the same day.",
     ],
     commits: [],
     tone: "sky",
