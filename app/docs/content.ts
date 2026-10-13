@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Meet sends her camera in HD",
+    points: [
+      "A test call measured it: her server drew her camera at 1280x720, 25 frames a second, with 35 to 45% of its CPU busy — and Meet sent it at 640x360, 11 frames a second, held back by nothing: Meet's send resolution was on Auto. In each call she now sets it to its highest (720p), as she turns off Meet's audio processing; if Meet's settings look different, she keeps a picture of them for NDI.",
+      "Her log now says, 20, 45 and 75 seconds into a call and every two minutes after, what her camera draws (size, frames a second), what Meet sends of it (each layer's size, frames a second, bitrate), what holds it back, and how much the connection carries.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-13",
     title: "Her camera sharper again, and what Meet sends of it in her log",
     points: [
       "On the 4-vCPU server her camera is back to 1280x720 at 25 frames a second (AVA_FACE_SIZE, AVA_FACE_FPS). Why the meeting looks less sharp than Anam's own demo: there, the avatar is decoded once, by the viewer's own computer; in a meeting her server must be her webcam — decode Anam's video, draw it, compress it again in software — and Meet compresses it once more for each viewer.",

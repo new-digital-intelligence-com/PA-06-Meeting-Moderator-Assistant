@@ -251,6 +251,10 @@ export const meet = {
    * already clean and synthetic: processed again it came out watery, with an echo, and not
    * the voice GPT-Live made. Meet's tips cover the buttons, so they are clicked from inside
    * the page or forced.
+   *
+   * And her camera sent at Meet's highest resolution rather than "Auto": with Auto, Meet sent
+   * it at 640x360, 11 frames a second, with nothing holding it back — her server draws it at
+   * 1280x720, 25 a second.
    */
   async cleanAudio(page, log) {
     try {
@@ -276,6 +280,34 @@ export const meet = {
         found.push((await toggle.getAttribute("aria-checked")) === "false" ? `${name}: turned off` : `${name}: COULD NOT turn off`);
       }
       log(`  Meet's own audio processing — ${found.join(", ")}`);
+
+      await page.getByRole("tab", { name: /video/i }).first().click({ force: true, timeout: 3000 }).catch(() => {});
+      await sleep(800);
+      let send = page.getByRole("combobox", { name: /send resolution/i }).first();
+      if (!(await send.isVisible({ timeout: 1500 }).catch(() => false))) send = page.getByRole("button", { name: /send resolution/i }).first();
+      if (!(await send.isVisible({ timeout: 1500 }).catch(() => false))) {
+        await keepEvidence(page, "meet-video-settings", log);
+        log("  Meet's send resolution: not offered");
+      } else {
+        const was = (await send.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+        if (/720p|1080p/i.test(was)) {
+          log(`  Meet's send resolution: already ${was}`);
+        } else {
+          await send.click({ force: true });
+          await sleep(700);
+          const hd = page.getByRole("option", { name: /1080p|720p/i }).first();
+          if (await hd.isVisible({ timeout: 1500 }).catch(() => false)) {
+            const label = (await hd.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+            await hd.click({ force: true });
+            await sleep(700);
+            log(`  Meet's send resolution: ${was || "?"} → ${label}`);
+          } else {
+            await keepEvidence(page, "meet-send-resolution", log);
+            await page.keyboard.press("Escape").catch(() => {});
+            log(`  Meet's send resolution: ${was || "?"} — no 720p among its choices`);
+          }
+        }
+      }
     } catch (e) {
       log(`  could not open Meet's audio settings: ${e.message.split("\n")[0]}`);
     } finally {
