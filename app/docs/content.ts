@@ -14,7 +14,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Anam", value: "One account: NDI's subscription (250 minutes a month), its NDI Elena, 10-minute face sessions; out of minutes she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
-  { label: "Runner", value: "Google Cloud VM (Compute Engine e2-standard-2: 2 vCPU, 8 GB, Frankfurt), always on since 13 October — two seats: two clients' meetings at once", tone: "emerald" },
+  { label: "Runner", value: "Google Cloud VM (Compute Engine e2-standard-4: 4 vCPU, 16 GB, Frankfurt), always on since 13 October — one call uses about two of its cores; two seats", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
   { label: "Email & Chat", value: "Live: she answers her email and Google Chat (first answers 9 October) — chats and spaces from NDI's people accepted automatically, for her account alone", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-13",
+    title: "Her server: 4 vCPU — a smooth face and a clear voice",
+    points: [
+      "Even with her lighter camera, a call kept 2 vCPUs 85 to 97% busy, and her lips' delay jumped (817 to 1125 ms). Measured every 3 seconds during the call: Meet's tab alone used more than a core, Chrome's GPU process a third of one more.",
+      "On e2-standard-4 (4 vCPU, 16 GB) the same call kept them 41 to 60% busy, her lips ran 739 to 795 ms behind, as steady as they were on AWS, and the face and voice felt smooth. She came back by herself after the restart. Two meetings at once would use most of the four cores.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
   {
     date: "2026-10-13",
     title: "Her camera: lighter, for a smoother face and a clean voice",
