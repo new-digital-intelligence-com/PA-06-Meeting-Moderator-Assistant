@@ -11,7 +11,7 @@ export const UPDATED = "2026-10-13";
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
-  { label: "Anam", value: "Three accounts, each with its own Elena: the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
+  { label: "Anam", value: "Three accounts, each with its own Elena: two free ones, then NDI's subscription (250 minutes a month) last; the next takes over when one runs out of minutes; with none left she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "Google Cloud VM (Compute Engine e2-medium: 2 vCPU, 4 GB, Frankfurt), always on since 13 October — two seats: two clients' meetings at once", tone: "emerald" },
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-13",
+    title: "Her face: NDI's subscription account last",
+    points: [
+      "Her first Anam account ran out of minutes in today's call — Anam refused it mid-call and her face moved to the next, as designed. It is taken off; the two free accounts after it move up, and NDI's account with a subscription (250 minutes a month) comes last, so its paid minutes go only when the free ones are spent.",
+      "That account has two Elenas of its own (NDI's and Grand Automotive's), so hers is set by its ID (ANAM_AVATAR_ID_3) rather than found by name, which would have taken the newer one. Checked on her server: each of the three gives her a face with its own Elena. The accounts' rest days were cleared for the new order.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-10-13",
     title: "Her screen: capitals with Caps Lock",
