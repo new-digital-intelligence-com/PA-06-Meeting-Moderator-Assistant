@@ -30,7 +30,6 @@ import type { AgentAudioInputStream, AnamClient } from "@anam-ai/js-sdk";
 import { nextLag, type Lag } from "./lag";
 import { makeUp2 } from "./upsample";
 import { makeRecorder } from "./record";
-import { makeFollower } from "./follow";
 
 type FaceOptions = {
   /** Her name, for the card shown when there is no picture of her at all. */
@@ -339,22 +338,41 @@ if (window.top === window && platform && !window.__ava) {
     gateFace();
   };
   /**
-   * How far her face's lips run behind the voice it is sent — measured on each stretch as her
-   * voice follows them (follow.ts), and kept as a typical figure (lag.ts: a one-off left out)
-   * for what needs one ahead of time: when the face will have nothing queued, when she is
-   * still speaking. Starts at FACE_LAG_MS.
+   * How far her face's lips run behind the voice it is sent, measured: from sending the
+   * first sound of a reply to that sound coming back out of the face. Her own voice is
+   * held back by the same amount, so the lips match it. Starts at FACE_LAG_MS; a one-off
+   * reading far from the rest is left out (lag.ts).
    */
   let faceLagMs = FACE_LAG_MS;
   let lag: Lag = { ms: FACE_LAG_MS, readings: 0, odd: null };
+  let lagProbe: { sentAt: number } | null = null;
+  let lagProbedTurn = "";
   let lagMeasured = 0;
-  /** How loud the face is now, over its last 10 ms (dBFS); null with no face. */
-  const faceDb = () => {
-    if (!faceMeter) return null;
+  let lagOddSaid = 0;
+  const probeFaceLag = () => {
+    if (!lagProbe || !faceMeter) return;
+    const waited = performance.now() - lagProbe.sentAt;
+    if (waited > 2500) {
+      lagProbe = null;
+      return;
+    }
     const samples = new Float32Array(faceMeter.fftSize);
     faceMeter.getFloatTimeDomainData(samples);
     let sum = 0;
     for (let i = samples.length - 480; i < samples.length; i++) sum += samples[i] * samples[i];
-    return 10 * Math.log10(sum / 480 + 1e-12);
+    if (10 * Math.log10(sum / 480 + 1e-12) < -45) return;
+    lagProbe = null;
+    if (waited < 150 || waited > 2000) return;
+    const step = nextLag(lag, waited);
+    lag = step;
+    faceLagMs = step.ms;
+    if (step.said === "hiccup") {
+      if (lagOddSaid++ < 3) log(`her lips ran ${Math.round(waited)} ms behind once — left out as a hiccup; her voice stays held back ${faceLagMs} ms`);
+    } else if (step.said === "changed") {
+      log(`her lips ran ${Math.round(waited)} ms behind again — the lag has changed: her voice is now held back ${faceLagMs} ms`);
+    } else if (lagMeasured++ < 3) {
+      log(`her lips run ${Math.round(waited)} ms behind — her voice is held back ${faceLagMs} ms to match`);
+    }
   };
 
   const noteFaceLevel = () => {
@@ -516,13 +534,14 @@ if (window.top === window && platform && !window.__ava) {
     return opening;
   };
 
-  // Her face's sound: shut when she is not speaking through it (see gateFace). Her voice
-  // follows its lips from it too (see follower).
+  // Her face's sound: shut when she is not speaking through it (see gateFace); and how far
+  // its lips run behind (see probeFaceLag), checked often enough to be accurate.
   if (mode === "avatar") {
     setInterval(() => {
       gateFace();
       noteFaceLevel();
     }, 50);
+    setInterval(probeFaceLag, 10);
   }
 
   // Close when the conversation has gone quiet (minutes are billed), and reconnect ahead
@@ -947,40 +966,7 @@ if (window.top === window && platform && !window.__ava) {
     };
   };
 
-  /** Her voice following her face (follow.ts): each stretch from when the face starts sounding it. */
-  let followQuietSaid = 0;
-  const follower = makeFollower({
-    rate: RT_RATE,
-    nowMs: () => performance.now(),
-    play: (samples) => {
-      const { audio } = ensureAudio();
-      const t = audio.currentTime;
-      if (rtNext > t + 0.02) {
-        play(samples, rtNext);
-        return;
-      }
-      // A new stretch: nothing of hers playing before it.
-      up2.reset();
-      play(samples, t + 0.005);
-    },
-    followed: (ms) => {
-      lag = nextLag(lag, ms);
-      faceLagMs = lag.ms;
-      if (lagMeasured++ < 3) log(`her lips ran ${Math.round(ms)} ms behind — her voice followed them`);
-    },
-    gaveUp: () => {
-      if (followQuietSaid++ < 3) log("her face stayed quiet — her voice went on without waiting for it");
-    },
-  });
-  setInterval(() => {
-    if (!follower.holding()) return;
-    const db = faceDb();
-    // No face to follow any more: what is held goes out now.
-    if (db === null || face !== "live") follower.flush();
-    else follower.tick(db);
-  }, 10);
-
-  /** To her face, and her voice after it (follower). */
+  /** To her face, and her voice as the face plays it: after what it has, its lag from now. */
   const toFace = (p: Piece) => {
     const { audio } = ensureAudio();
     faceInput!.sendAudioChunk((options.pcmRate ?? PCM_RATE) === RT_RATE ? p.base64 : to16k(p.samples));
@@ -992,11 +978,17 @@ if (window.top === window && platform && !window.__ava) {
       ahead((rtFaceEnd - now - faceLagMs) / 1000, p.turn);
       return;
     }
-    // Heard straight from GPT-Live, following the face's lips. The face's own copy of her
-    // voice has been cut to 16 kHz, through Anam's servers and through one more codec: that
-    // was the noise on her voice.
-    follower.add(p.samples, rtNext > audio.currentTime + 0.02);
-    ahead((rtFaceEnd - now - faceLagMs) / 1000, p.turn);
+    // Heard straight from GPT-Live, held back by the face's lag so her lips match. The face's
+    // own copy of her voice has been cut to 16 kHz, through Anam's servers and through one
+    // more codec: that was the noise on her voice.
+    if (lagProbedTurn !== p.turn && !quiet(p.samples)) {
+      lagProbedTurn = p.turn;
+      lagProbe = { sentAt: performance.now() };
+    }
+    const t = audio.currentTime;
+    const lead = faceLagMs / 1000;
+    play(p.samples, Math.max(t + lead, rtNext));
+    ahead(rtNext - t - lead, p.turn);
   };
 
   /** No face: into her microphone, each piece after the last, starting 150 ms ahead. */
@@ -1019,7 +1011,6 @@ if (window.top === window && platform && !window.__ava) {
   };
 
   const stopStream = () => {
-    follower.drop();
     if (heldTimer !== null) window.clearTimeout(heldTimer);
     heldTimer = null;
     held = null;

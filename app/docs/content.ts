@@ -32,6 +32,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Back to her voice held back by the measured figure",
+    points: [
+      "Following the face's sound (the entry below) did well against a pretend face, but not in a real call: two screen recordings, measured the same way, put her voice about 30 ms from her lips on average when held back by the measured figure, and about 230 ms behind them when following the face's sound. The face's sound reaches her page a quarter of a second after its picture, so waiting for the sound made her late. And the call felt worse. Back to the figure — with one-off slow readings left out — and bot/inject/follow.ts removed; the noise fixes stay.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
+  {
+    date: "2026-10-13",
     title: "Her voice follows her lips — every reply",
     points: [
       "Measured in a screen recording of a test call — how open her mouth was in each frame against the sound — her voice matched her lips on most replies but ran up to a third of a second ahead on one and half a second behind on another. Her face's delay changes from reply to reply (432 to 915 ms in that call), and her voice was held back by one figure for all of them.",
