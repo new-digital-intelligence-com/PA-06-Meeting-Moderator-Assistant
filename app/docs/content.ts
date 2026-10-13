@@ -14,7 +14,7 @@ export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Anam", value: "One account: NDI's subscription (250 minutes a month), its NDI Elena, 10-minute face sessions; out of minutes she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
   { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
-  { label: "Runner", value: "Google Cloud VM (Compute Engine e2-medium: 2 vCPU, 4 GB, Frankfurt), always on since 13 October — two seats: two clients' meetings at once", tone: "emerald" },
+  { label: "Runner", value: "Google Cloud VM (Compute Engine e2-standard-2: 2 vCPU, 8 GB, Frankfurt), always on since 13 October — two seats: two clients' meetings at once", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
   { label: "Email & Chat", value: "Live: she answers her email and Google Chat (first answers 9 October) — chats and spaces from NDI's people accepted automatically, for her account alone", tone: "emerald" },
   { label: "Clients", value: "Built: NDI at /admin, each client at /client with their documents and preparation — first test with one client", tone: "sky" },
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-13",
+    title: "Her server: twice the memory, and back by herself after a restart",
+    points: [
+      "Her VM went from e2-medium to e2-standard-2: the same 2 vCPU, dedicated rather than shared, and 8 GB instead of 4 — room for two seats with her face. Her address, disk, sign-in and settings stayed.",
+      "Starting it again showed a fault no restart had before: her container came back as it was, with the last screen's lock still in /tmp, so her screen refused to start (\"Server is already active for display 99\"), no Chrome could open, and every sign-in check failed — she said she was signed out while she was not. start.sh now clears that stale lock first, as it does Chrome's. Checked by restarting the same container, as a reboot does: she comes back signed in, both seats ready.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
   {
     date: "2026-10-13",
     title: "Her face: NDI's subscription only, 10-minute sessions",

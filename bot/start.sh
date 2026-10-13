@@ -16,7 +16,11 @@ for dir in "$AVA_PROFILE_DIR" "$AVA_PROFILE_DIR"-*; do
   rm -f "$dir/SingletonLock" "$dir/SingletonSocket" "$dir/SingletonCookie" 2>/dev/null || true
 done
 
-# Her screen.
+# Her screen. A container restarted as it was — the server rebooted, Docker restarted it — still
+# has the last screen's lock in /tmp, and the new screen then refuses to start ("Server is
+# already active for display 99"): no Chrome can open, and every sign-in check fails. Nothing
+# is running yet, so that lock is stale.
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
 Xvfb :99 -screen 0 1280x800x24 -nolisten tcp &
 sleep 1
 fluxbox >/dev/null 2>&1 &
