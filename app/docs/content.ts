@@ -32,6 +32,16 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her voice follows her lips — every reply",
+    points: [
+      "Measured in a screen recording of a test call — how open her mouth was in each frame against the sound — her voice matched her lips on most replies but ran up to a third of a second ahead on one and half a second behind on another. Her face's delay changes from reply to reply (432 to 915 ms in that call), and her voice was held back by one figure for all of them.",
+      "Now each stretch of her voice waits for the face to start sounding it — heard in the face's own sound, checked every 10 ms — and plays from there (bot/inject/follow.ts). Tested against a pretend face whose delay changed between replies from 430 to 920 ms: her voice came 32 to 35 ms after her lips every time, too little to see; held back by a fixed figure it was 320 ms early to 170 ms late.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-13",
     title: "Her voice: no gaps — her face given a head start",
     points: [
       "Recorded in a test call (AVA_RECORD_VOICE): GPT-Live's voice arrived clean; what her microphone gave Meet had gaps of silence inside her words — 42 in 44 seconds of speech, up to 86 ms each, every one a dropout and two clicks. Meet's side was clean (0 packets lost, 33 to 50 kbps).",
