@@ -27,6 +27,7 @@
 
 import { AnamEvent, createClient } from "@anam-ai/js-sdk";
 import type { AgentAudioInputStream, AnamClient } from "@anam-ai/js-sdk";
+import { nextLag, type Lag } from "./lag";
 
 type FaceOptions = {
   /** Her name, for the card shown when there is no picture of her at all. */
@@ -326,12 +327,15 @@ if (window.top === window && platform && !window.__ava) {
   /**
    * How far her face's lips run behind the voice it is sent, measured: from sending the
    * first sound of a reply to that sound coming back out of the face. Her own voice is
-   * held back by the same amount, so the lips match it. Starts at FACE_LAG_MS.
+   * held back by the same amount, so the lips match it. Starts at FACE_LAG_MS; a one-off
+   * reading far from the rest is left out (lag.ts).
    */
   let faceLagMs = FACE_LAG_MS;
+  let lag: Lag = { ms: FACE_LAG_MS, readings: 0, odd: null };
   let lagProbe: { sentAt: number } | null = null;
   let lagProbedTurn = "";
   let lagMeasured = 0;
+  let lagOddSaid = 0;
   const probeFaceLag = () => {
     if (!lagProbe || !faceMeter) return;
     const waited = performance.now() - lagProbe.sentAt;
@@ -346,8 +350,16 @@ if (window.top === window && platform && !window.__ava) {
     if (10 * Math.log10(sum / 480 + 1e-12) < -45) return;
     lagProbe = null;
     if (waited < 150 || waited > 2000) return;
-    faceLagMs = lagMeasured ? Math.round(faceLagMs * 0.6 + waited * 0.4) : Math.round(waited);
-    if (lagMeasured++ < 3) log(`her lips run ${Math.round(waited)} ms behind — her voice is held back ${faceLagMs} ms to match`);
+    const step = nextLag(lag, waited);
+    lag = step;
+    faceLagMs = step.ms;
+    if (step.said === "hiccup") {
+      if (lagOddSaid++ < 3) log(`her lips ran ${Math.round(waited)} ms behind once — left out as a hiccup; her voice stays held back ${faceLagMs} ms`);
+    } else if (step.said === "changed") {
+      log(`her lips ran ${Math.round(waited)} ms behind again — the lag has changed: her voice is now held back ${faceLagMs} ms`);
+    } else if (lagMeasured++ < 3) {
+      log(`her lips run ${Math.round(waited)} ms behind — her voice is held back ${faceLagMs} ms to match`);
+    }
   };
 
   const noteFaceLevel = () => {

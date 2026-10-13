@@ -32,6 +32,15 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-13",
+    title: "Her lips: a one-off slow reading left out",
+    points: [
+      "Her voice is held back by however long her face takes to move its lips, measured on her replies and averaged. One slow reading in a call (1368 ms among 739 and 795) pulled the hold-back to 1004 ms, and her voice trailed her lips by a quarter of a second for the rest of it. A reading far from the rest is now left out as a hiccup; two in a row that agree mean the lag really changed, and she follows. Tested on its own (bot/inject/lag.ts), with that call's readings among others.",
+    ],
+    commits: [],
+    tone: "slate",
+  },
+  {
+    date: "2026-10-13",
     title: "Her server: 4 vCPU — a smooth face and a clear voice",
     points: [
       "Even with her lighter camera, a call kept 2 vCPUs 85 to 97% busy, and her lips' delay jumped (817 to 1125 ms). Measured every 3 seconds during the call: Meet's tab alone used more than a core, Chrome's GPU process a third of one more.",
