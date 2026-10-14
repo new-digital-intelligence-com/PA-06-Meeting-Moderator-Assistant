@@ -258,10 +258,24 @@ export const meet = {
    */
   async cleanAudio(page, log) {
     try {
+      // From her microphone's menu; in a five-person call that menu's Settings never appeared
+      // ("Timeout 5000ms") and nothing was set — then from "More options".
+      const open = () => page.getByRole("tab", { name: /audio/i }).first().isVisible({ timeout: 1500 }).catch(() => false);
       await page.evaluate(() => document.querySelector('[aria-label="Audio settings"]')?.click());
       await sleep(1200);
-      await page.getByRole("button", { name: "Settings", exact: true }).last().click({ force: true, timeout: 5000 });
+      await page.getByRole("button", { name: "Settings", exact: true }).last().click({ force: true, timeout: 3000 }).catch(() => {});
       await sleep(1500);
+      if (!(await open())) {
+        await page.keyboard.press("Escape").catch(() => {});
+        await page.evaluate(() => document.querySelector('[aria-label="More options"]')?.click());
+        await sleep(1000);
+        await page.getByRole("menuitem", { name: /settings/i }).first().click({ force: true, timeout: 3000 }).catch(() => {});
+        await sleep(1500);
+      }
+      if (!(await open())) {
+        await keepEvidence(page, "meet-settings", log);
+        throw new Error("neither her microphone's menu nor More options opened Meet's settings");
+      }
       await page.getByRole("tab", { name: /audio/i }).first().click({ force: true, timeout: 3000 }).catch(() => {});
       await sleep(800);
       const found = [];

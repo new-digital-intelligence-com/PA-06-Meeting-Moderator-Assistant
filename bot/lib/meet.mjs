@@ -96,19 +96,24 @@ function liveInstructions(meeting, lang, product, emailed) {
     "- Greet people once. Confirm an instruction once, then act on it. If they give you a role — interviewer, facilitator, timekeeper — play it fully, keep track of where it stands, and move it on yourself.",
     "",
     "# Backchannel policy",
-    "One-on-one, an occasional short 'mm-hm' or 'right' while they talk is fine. In a group, do not backchannel.",
+    "One-on-one, an occasional short 'mm-hm' or 'right' while they talk is fine.",
+    "In a group, make no listening sounds and no acknowledgements at all — no 'mm-hm', 'hmm', 'okay', 'yeah', 'right' — and never speak while somebody else is speaking. In a group your only words are real answers, when you are addressed.",
     "",
     "# Interruption policy",
     "Stop speaking when somebody interrupts. Listen to what they say and respond to that.",
     "",
     "# Delegation policy",
-    `Your backend has the full transcript of this meeting, the actions noted so far and your working notes${DELEGATE === "claude" ? "" : ", and it can search the web"}. Delegate to the backend when:`,
+    `Backend tools: your backend has the full transcript of this meeting, the actions noted so far, your working notes${meeting.client ? ", the client's documents" : ""}${DELEGATE === "claude" ? "" : " and the web"}. It is slow — many seconds — so use it only when you must.`,
+    "Delegate to the backend when:",
     "- somebody asks what was said, agreed or decided earlier in this meeting, for a recap, or for the actions so far;",
     "- somebody asks you to note down or remember an action, a decision or a task;",
-    "- the answer depends on facts about this company, these people or this project that are not in what you were told above;",
-    ...(DELEGATE === "claude" ? [] : ["- somebody asks about something current — news, prices, weather, a recent release — or a fact you are not sure of;"]),
-    "- a question needs careful thought: a calculation, a comparison, a plan.",
-    "Delegate before answering anything that depends on it: say at most a very short 'one moment' and do not guess the result. Answer simple general questions from your own knowledge without delegating.",
+    "- the answer needs facts about this company, these people or this project that are not in what you were told above;",
+    ...(DELEGATE === "claude" ? [] : ["- somebody asks about something current — news, prices, weather, a recent release;"]),
+    "- a calculation with several numbers.",
+    "Do not delegate to the backend when:",
+    "- somebody asks for your view, an opinion, advice, an explanation, a comparison or general knowledge — answer it yourself, right away, in one to three sentences, as a knowledgeable colleague would;",
+    "- somebody greets you, thanks you, or asks you to repeat or clarify what you just said.",
+    "When you do delegate: say one very short acknowledgement at most ('one moment'), once — never a second time — and do not guess the result. If somebody asks again before it comes back, say briefly what you can, or that it is coming.",
     "",
     "# Facts",
     "Facts about this company, these people or this project come only from what you were told, what was said, or your backend; otherwise say you don't know. Never invent a decision, a commitment or a deadline.",
@@ -128,13 +133,14 @@ function backendInstructions(meeting, lang) {
     "What she was told beforehand:",
     (meeting.context?.trim() || "(nothing — no briefing)").slice(0, 30_000),
     "",
-    "How to answer:",
+    "How to answer — quickly: people are waiting in a live meeting, so use as few tools as you can.",
+    "- A question of opinion, advice, explanation or general knowledge: answer it from your own knowledge at once, with no tools.",
     "- Anything about this meeting — what was said, agreed or decided, a recap, the actions so far, who said what — call meeting_record first and answer only from it. Never invent a decision, a commitment or a deadline.",
     "- Asked to note down an action, a decision or a task: call note_action, then confirm in a few words.",
     ...(client
       ? [`- Facts about ${client} — their products, prices, people, projects, policies, numbers — that the briefing does not settle: call search_knowledge first, with a short query in the language of their documents, and answer from what it finds. If it finds nothing that answers it, say you don't have that.`]
       : []),
-    `- Current or public facts: search the web. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
+    `- Current facts — news, prices, a recent release: search the web, once. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
     `- Answer in ${LANGUAGE_NAME[lang]} unless the request is in another language, then in that one.`,
     "- Short and speakable: the answer itself in one to three sentences. No lists, no markdown, no links; say numbers the way they are spoken.",
     ...(client ? [`- Here she is ${possessive(client)} own meeting assistant: never mention NDI.`] : []),
@@ -605,7 +611,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     rt.instruct(
       room === "one-on-one"
         ? "The meeting is now one-on-one: just you and one other person. Everything they say is said to you — talk with them naturally."
-        : `The meeting is now a group${people ? ` of ${people - 1} people besides you` : ""}. Respond when somebody addresses you or asks something you can clearly answer; otherwise keep listening.`,
+        : `The meeting is now a group${people ? ` of ${people - 1} people besides you` : ""}. Respond when somebody addresses you or asks something you can clearly answer; otherwise stay silent — no listening sounds or acknowledgements ('mm-hm', 'okay', 'yeah').`,
     );
     log(room === "one-on-one" ? "  one-on-one: she talks with them" : "  a group: she answers when asked");
   };

@@ -70,8 +70,15 @@ export function connectLive({ instructions, history, delegation, log, onAudio, o
     saying = "";
   };
 
-  /** The OpenAI backend's own events, wrapped: our tools, and its failures. */
+  /** When each task she handed over began, oldest first: how long its answer took goes in her log. */
+  const handedAt = [];
+
+  /** The OpenAI backend's own events, wrapped: our tools, its answers, and its failures. */
   const backend = (inner) => {
+    if (inner?.type === "response.completed" && inner.response?.output?.some?.((o) => o.type === "message")) {
+      const at = handedAt.shift();
+      if (at) log(`  her backend answered in ${((Date.now() - at) / 1000).toFixed(1)} s`);
+    }
     if (inner?.type === "response.output_item.done" && inner.item?.type === "function_call") {
       const { call_id, name } = inner.item;
       let args = {};
@@ -119,6 +126,7 @@ export function connectLive({ instructions, history, delegation, log, onAudio, o
         onHeard?.(e.delta);
         break;
       case "session.delegation.created":
+        if (e.delegation?.target !== "client") handedAt.push(Date.now());
         onDelegation?.(e.delegation?.id, e.delegation?.target);
         break;
       case "response.event":

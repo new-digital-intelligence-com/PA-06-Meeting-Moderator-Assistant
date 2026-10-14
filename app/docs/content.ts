@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-13";
+export const UPDATED = "2026-10-14";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-14",
+    title: "She answers instead of 'one moment'",
+    points: [
+      "In a client call she kept saying 'one moment' and often never answered: questions asking her view — how close an AI is to being a consultant in a call — were handed to her backend, which searched the client's documents and the web and took up to two minutes, or did not come back before the call ended. And in a group she still said 'mm-hm', 'okay' and 'yeah' about fifteen times.",
+      "Now she answers her view, advice, explanations and general knowledge herself, at once, as a colleague would; she hands over only the meeting's record, notes, the client's documents, current facts and calculations, says 'one moment' once at most, and her log says how long each answer took. Her backend thinks at its fastest (OPENAI_DELEGATION_EFFORT minimal) and is told people are waiting. In a group she makes no listening sounds at all. And Meet's settings — its audio processing off, her camera in HD — are reached through More options when her microphone's menu does not open them, as in that five-person call.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
   {
     date: "2026-10-13",
     title: "Meet sends her camera in HD",
