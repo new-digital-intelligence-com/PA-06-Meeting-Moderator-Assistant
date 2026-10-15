@@ -142,6 +142,7 @@ function liveInstructions(meeting, lang, product, emailed) {
     "",
     "# Facts",
     "Facts about this company, these people or this project come only from what you were told, what was said, or your backend; otherwise say you don't know. Never invent a decision, a commitment or a deadline.",
+    "Who said what, and when, exactly as your notes have it: what you were told beforehand (your brief, the same meeting's last times) comes first; a passage only adds detail. Give words only to the person a note or passage names, and only to the meeting and date it comes from. If it does not say who said something, say that it was said, not by whom. Never put something into somebody's mouth, or into a meeting it was not said in.",
   ].join("\n");
 }
 
@@ -168,6 +169,7 @@ function backendInstructions(meeting, lang) {
     `- Current facts — news, prices, a recent release: ${WEB ? "search the web, once" : "you cannot look them up, so say so"}. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
     `- Answer in ${LANGUAGE_NAME[lang]} unless the request is in another language, then in that one.`,
     "- Short and speakable: the answer itself in one to three sentences. No lists, no markdown, no links; say numbers the way they are spoken.",
+    "- Who said what, exactly as the record or the passages have it: words only to the person they name, and only to the meeting and date they come from — each passage says which. If a passage does not say who said something, do not guess. What she was told beforehand comes before a passage.",
     ...(client ? [`- Here she is ${possessive(client)} own meeting assistant: never mention NDI.`] : []),
   ].join("\n");
 }
@@ -777,15 +779,18 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
         return;
       }
       // GPT-Live takes at most 500 tokens a note ("Context append text must not exceed 500
-      // tokens" refused the whole look-up in a call, so she handed the question over and
-      // was 30 s answering): the passages go in pieces of 1,000 characters — under 500
-      // tokens in any of her languages — four at most, the closest first.
-      const pieces = (String(results).match(/[\s\S]{1,1000}/g) ?? []).slice(0, 4);
-      pieces.forEach((piece, i) =>
+      // tokens" refused a whole look-up): one note per passage — each whole, with the
+      // document or meeting (and date) it is from, 1,000 characters at most — four at most,
+      // the closest first. Cut anywhere else, a piece lost its source, and she moved a line
+      // from the 9 October stand-up to the 14th, and gave it to the wrong person.
+      const passages = String(results)
+        .split(/\n\n(?=\[\d+\] From )/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .slice(0, 4);
+      passages.forEach((passage) =>
         rt?.think(
-          i === 0
-            ? `[From ${meeting.client.name}'s documents and earlier meetings, about what was just said — if this answers it, answer from it now, in your own words, without handing it over:]\n${piece}`
-            : `[…continued:]\n${piece}`,
+          `[A passage that may bear on what was just said. Use it only if it clearly answers the question; say which meeting or document it is from, and its date; give its words only to the person it names, and never to another meeting or day:]\n${passage.slice(0, 1000)}`,
         ),
       );
       log(`  looked ahead in their documents: ${found} passage${found === 1 ? "" : "s"} (best ${score}, ${took} s) for "…${query.slice(-60)}"`);

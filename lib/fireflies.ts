@@ -18,7 +18,7 @@ import { asMeeting, db, hasDb, isoNow, rows, type MeetingRow } from "./db";
 import { getClient } from "./clients";
 import { rememberPeople } from "./contacts";
 import { record } from "./history";
-import { addMeetingRecord } from "./knowledge";
+import { addMeetingRecord, writeMeetingPassages } from "./knowledge";
 
 const URL = "https://api.fireflies.ai/graphql";
 
@@ -422,4 +422,30 @@ async function keep(m: MeetingRow, f: FirefliesMeeting): Promise<void> {
   // Who was there, by name, on the client's Who's who — there to be written about.
   await rememberPeople(client.id, fireflies.attendees).catch(() => undefined);
   console.log(`[fireflies] kept ${m.title} (${day(f)})${knowledgeId ? ", transcript searchable" : ""}`);
+}
+
+/**
+ * The meeting records already kept, cut again into whole turns with their speakers
+ * (chunkTranscript): they were cut by length, so a passage could start mid-turn without its
+ * speaker, and she gave a line from the 9 October stand-up to Oleg, on the 14th. Each is read
+ * from Fireflies again and rewritten in place. Run once; new records are cut this way already.
+ */
+export async function rewriteKeptRecords(): Promise<{ title: string; passages: number }[]> {
+  const kept = await rows<{ id: string; client_id: string; title: string; source: string | null }[]>(
+    db().from("knowledge").select("id, client_id, title, source").eq("kind", "meeting"),
+  );
+  const done: { title: string; passages: number }[] = [];
+  for (const k of kept) {
+    // Fireflies' link ends with the recording's id: …/view/<title>::<id>, or …/view/<id>.
+    const id = (k.source ?? "").split("/").pop()?.split("::").pop()?.trim();
+    if (!id) continue;
+    const f = await fullRecording(id);
+    const overview = (f.summary?.overview ?? "").trim();
+    const actions = (f.summary?.action_items ?? "").trim();
+    const text = [`Meeting: ${f.title}, ${day(f)}`, overview && `Summary: ${overview}`, actions && `Action items:\n${actions}`, "", transcriptText(f)]
+      .filter(Boolean)
+      .join("\n");
+    done.push({ title: k.title, passages: await writeMeetingPassages(k.id, k.client_id, k.title, text) });
+  }
+  return done;
 }

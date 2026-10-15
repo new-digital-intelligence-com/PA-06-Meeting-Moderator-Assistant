@@ -42,6 +42,69 @@ export function chunk(text: string, size = 1200, overlap = 200): string[] {
   return out;
 }
 
+/** The longest part of `text` up to `max` characters that ends at a sentence, else a word. */
+function cutAt(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const window = text.slice(0, max);
+  const sentence = Math.max(window.lastIndexOf(". "), window.lastIndexOf("? "), window.lastIndexOf("! "));
+  if (sentence > max * 0.5) return window.slice(0, sentence + 1);
+  const space = window.lastIndexOf(" ");
+  return space > max * 0.5 ? window.slice(0, space) : window;
+}
+
+/**
+ * A meeting's record — "Name: what they said", a line per turn — cut into passages of whole
+ * turns, so none starts in the middle of somebody's turn without their name: one did
+ * ("…mobile front end… let's just go with the anthropic mobile app"), and she gave the
+ * words to the wrong person, and the wrong meeting. A turn longer than a passage is cut,
+ * every piece with its speaker: "Name (continued): …". No overlap: each turn once.
+ */
+export function chunkTranscript(text: string, size = 1200): string[] {
+  const out: string[] = [];
+  let current = "";
+  /** Whose action items are being listed ("**Name**"): carried into the next passage with them. */
+  let owner: string | null = null;
+  const push = () => {
+    if (current.trim()) out.push(current.trim());
+    current = "";
+  };
+  for (const line of text.replace(/\r/g, "").split("\n")) {
+    if (!line.trim()) continue;
+    const turn = line.match(/^([^:\n]{1,80}):\s+(.*)$/);
+    if (!turn) {
+      const heading = /^\*\*[^*]+\*\*$/.test(line.trim());
+      if (heading) owner = line.trim();
+      if (current && current.length + line.length + 1 > size) {
+        push();
+        // An action item cut from its owner's name would be nobody's — or the wrong person's.
+        if (!heading && owner) current += `${owner.replace(/\*\*$/, " (continued)**")}\n`;
+      }
+      current += `${line}\n`;
+      continue;
+    }
+    owner = null;
+    const [, who, said] = turn;
+    let rest = said.trim();
+    let first = true;
+    while (rest) {
+      const label = first ? `${who}: ` : `${who} (continued): `;
+      const room = size - current.length - label.length - 1;
+      // Not enough room left here for a useful piece of this turn: a new passage.
+      if (current && room < Math.min(300, rest.length)) {
+        push();
+        continue;
+      }
+      const piece = cutAt(rest, Math.max(room, 300));
+      current += `${label}${piece}\n`;
+      rest = rest.slice(piece.length).trim();
+      first = false;
+      if (rest) push();
+    }
+  }
+  push();
+  return out;
+}
+
 export type Source =
   | { kind: "upload"; name: string; mime: string; data: Buffer }
   | { kind: "drive"; name: string; mime: string; data: Buffer; convertTo?: string; link?: string }
@@ -75,6 +138,33 @@ export async function addDocument(input: {
 }
 
 /**
+ * A meeting record's passages, written — in place of any it had: cut into whole turns
+ * (chunkTranscript), each turn with its speaker, and made searchable.
+ */
+export async function writeMeetingPassages(knowledgeId: string, clientId: string, title: string, text: string): Promise<number> {
+  const passages = chunkTranscript(text.replace(/\u0000/g, "").trim().slice(0, MAX_CHARS));
+  const vectors = await embed(passages.map((p) => `${title}\n\n${p}`));
+  await rows(db().from("chunks").delete().eq("knowledge_id", knowledgeId));
+  for (let i = 0; i < passages.length; i += 50) {
+    await rows(
+      db()
+        .from("chunks")
+        .insert(
+          passages.slice(i, i + 50).map((content, j) => ({
+            knowledge_id: knowledgeId,
+            client_id: clientId,
+            meeting_id: null,
+            position: i + j,
+            content,
+            embedding: vectorLiteral(vectors[i + j]),
+          })),
+        ),
+    );
+  }
+  return passages.length;
+}
+
+/**
  * A finished meeting's record — Fireflies' transcript, who said what (lib/fireflies.ts) —
  * kept as passages she searches in the client's later meetings. Kind "meeting": not one of
  * their documents (not listed with them, not counted against MAX_DOCUMENTS, not in her
@@ -93,24 +183,7 @@ export async function addMeetingRecord(input: { client: Client; title: string; s
     ),
   );
   try {
-    const passages = chunk(text);
-    const vectors = await embed(passages.map((p) => `${title}\n\n${p}`));
-    for (let i = 0; i < passages.length; i += 50) {
-      await rows(
-        db()
-          .from("chunks")
-          .insert(
-            passages.slice(i, i + 50).map((content, j) => ({
-              knowledge_id: row.id,
-              client_id: client.id,
-              meeting_id: null,
-              position: i + j,
-              content,
-              embedding: vectorLiteral(vectors[i + j]),
-            })),
-          ),
-      );
-    }
+    await writeMeetingPassages(row.id, client.id, title, text);
     return asKnowledge(
       await rows<Record<string, unknown>>(
         db().from("knowledge").update({ status: "ready", chars: text.length, summary }).eq("id", row.id).select("*").single(),
