@@ -174,7 +174,10 @@ async function documentCounts(meetings: MeetingRow[]): Promise<Map<string, numbe
  *     if Fireflies has a meeting newer than the brief, or if the brief is over three hours
  *     old and Fireflies has anything: tomorrow's stand-up knows today's.
  */
-/** Meetings whose earlier transcripts were already kept searchable this run. */
+/**
+ * Which last times each meeting's transcripts were kept for, this run: looked at again when a
+ * new one appears — today's stand-up, for tomorrow's — and not otherwise.
+ */
 const keptFor = new Set<string>();
 
 async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client>) {
@@ -187,10 +190,11 @@ async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client
       const earlier = hasFireflies() ? await earlierFromFireflies(m).catch(() => null) : null;
       const recorded = earlier?.series ?? [];
       // Those last times' transcripts, searchable for her in the meeting — once each.
-      if (earlier && recorded.length && !keptFor.has(m.id)) {
-        keptFor.add(m.id);
+      const seen = `${m.id}:${recorded.map((f) => f.id).join(",")}`;
+      if (earlier && recorded.length && !keptFor.has(seen)) {
+        keptFor.add(seen);
         const added = await keepEarlier(m, earlier).catch((e) => {
-          keptFor.delete(m.id);
+          keptFor.delete(seen);
           console.warn(`[fireflies] transcripts for ${m.title}:`, e instanceof Error ? e.message : e);
           return 0;
         });
