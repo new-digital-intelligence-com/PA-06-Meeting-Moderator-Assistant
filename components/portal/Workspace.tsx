@@ -156,7 +156,7 @@ export default function Workspace({
 
   if (!data) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
+      <div className="w-full space-y-5 px-4 pt-4 sm:px-6 lg:px-8">
         {error ? (
           <Notice tone="error">{error}</Notice>
         ) : (
@@ -200,7 +200,7 @@ export default function Workspace({
 
   return (
     <PickerContext.Provider value={picker}>
-    <div className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-24 sm:p-6">
+    <div className="w-full space-y-5 px-4 pb-24 pt-4 sm:px-6 lg:px-8">
       <header className="relative overflow-hidden rounded-3xl bg-linear-to-br from-blue-600 via-blue-600 to-indigo-700 p-6 text-white shadow-xl shadow-blue-900/15 sm:p-8">
         <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-28 size-80 rounded-full bg-sky-300/25 blur-3xl" />
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-36 left-1/4 size-80 rounded-full bg-indigo-400/30 blur-3xl" />
@@ -363,7 +363,7 @@ export default function Workspace({
       </Section>
       </div>
 
-      <div role="tabpanel" hidden={tab !== "knowledge"} className="space-y-5">
+      <div role="tabpanel" hidden={tab !== "knowledge"} className="grid items-start gap-5 2xl:grid-cols-2">
       <Section
         title="Her documents"
         icon={<BookIcon />}
@@ -1593,7 +1593,7 @@ function WhosWho({ q, ava, onError }: { q: string; ava: string; onError: (messag
               Nobody yet. The people invited to your meetings appear here by themselves; or add somebody below.
             </p>
           )}
-          <ul className="space-y-2">
+          <ul className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
             {shown.map((c) => (
               <ContactRow
                 key={c.email}
@@ -1675,7 +1675,7 @@ function ContactRow({
   }
 
   return (
-    <li className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+    <li className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3">
       <div className="min-w-0 space-y-1">
         <input className={`${field} py-1.5`} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} aria-label={`Name of ${contact.email}`} />
         <p className="truncate px-1 text-xs text-slate-500" title={contact.email}>

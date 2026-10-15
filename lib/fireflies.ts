@@ -76,34 +76,21 @@ function sameSeries(m: MeetingRow, f: FirefliesMeeting): boolean {
   return norm(f.title) === norm(m.title);
 }
 
-/** Whose account the key is (Michael's): in every meeting it recorded, so no sign of the same people. */
-let owner: Promise<string> | null = null;
-const ownerEmail = () =>
-  (owner ??= gql<{ user: { email: string | null } }>(`{ user { email } }`, {})
-    .then((d) => (d.user.email ?? "").toLowerCase())
-    .catch(() => {
-      owner = null;
-      return "";
-    }));
+/** What Fireflies has from before a meeting: the same meeting's latest times, newest first. */
+export type Earlier = { series: FirefliesMeeting[] };
 
-/** Who to look for: the invite's people — not her, not rooms, not the account's owner. */
-async function peopleOf(m: MeetingRow): Promise<string[]> {
-  const mine = await ownerEmail();
-  return [...new Set([m.organizer, ...(m.guests ?? []).map((g) => g.email)].map((e) => (e ?? "").trim().toLowerCase()))]
-    .filter((e) => e.includes("@") && e !== mine && !e.startsWith("ava@") && !e.includes("resource.calendar.google.com"))
-    .slice(0, 25);
-}
-
-export type Earlier = { series: FirefliesMeeting[]; withPeople: FirefliesMeeting[] };
+/** How many of the same meeting's last times: the latest — the 14th, 13th, 12th for the 15th. */
+const SERIES = 5;
 
 const earlierCache = new Map<string, { at: number; value: Earlier }>();
 
 /**
- * What Fireflies has from before this meeting: the last three of its series, and the last
- * three other meetings in the past month with any of its people. Kept a quarter of an hour.
+ * The same meeting before — its calendar series, or its exact title — the latest five that
+ * Fireflies wrote up, in the past month. Only the same meeting: other meetings with the same
+ * people are other topics. Kept a quarter of an hour.
  */
 export async function earlierFromFireflies(m: MeetingRow): Promise<Earlier> {
-  const empty = { series: [], withPeople: [] };
+  const empty = { series: [] };
   if (!hasFireflies()) return empty;
   const cached = earlierCache.get(m.id);
   if (cached && Date.now() - cached.at < 15 * 60_000) return cached.value;
@@ -119,25 +106,72 @@ export async function earlierFromFireflies(m: MeetingRow): Promise<Earlier> {
   const series = titled
     .filter((f) => sameSeries(m, f) && at(f) < m.starts_at.getTime() - 10 * 60_000 && f.summary?.overview)
     .sort((a, b) => at(b) - at(a))
-    .slice(0, 3);
+    .slice(0, SERIES);
 
-  let withPeople: FirefliesMeeting[] = [];
-  const people = await peopleOf(m);
-  if (people.length) {
-    const { transcripts } = await gql<{ transcripts: FirefliesMeeting[] }>(
-      `query ($participants: [String!], $fromDate: DateTime, $toDate: DateTime) { transcripts(participants: $participants, fromDate: $fromDate, toDate: $toDate, limit: 15) { ${FIELDS} } }`,
-      { participants: people, fromDate: new Date(m.starts_at.getTime() - 30 * 86_400_000).toISOString(), toDate: before },
-    );
-    const taken = new Set(series.map((s) => s.id));
-    withPeople = transcripts
-      .filter((f) => !taken.has(f.id) && !sameSeries(m, f) && f.summary?.overview)
-      .sort((a, b) => at(b) - at(a))
-      .slice(0, 3);
-  }
-
-  const value = { series, withPeople };
+  const value = { series };
   earlierCache.set(m.id, { at: Date.now(), value });
   return value;
+}
+
+/** One line of a transcript: who, when (seconds from the start), what. */
+export type TranscriptLine = { speaker: string; at: number; text: string };
+
+/**
+ * A recording's transcript, through the API: one line per turn — a speaker's consecutive
+ * sentences joined — with when it began.
+ */
+export async function transcriptOf(id: string): Promise<{ title: string; date: string; lines: TranscriptLine[] }> {
+  const { transcript } = await gql<{
+    transcript: { title: string; dateString: string; sentences: { speaker_name: string | null; text: string | null; start_time: number | null }[] | null } | null;
+  }>(`query ($id: String!) { transcript(id: $id) { title dateString sentences { speaker_name text start_time } } }`, { id });
+  if (!transcript) throw new Error("Fireflies has no such recording.");
+  const lines: TranscriptLine[] = [];
+  for (const s of transcript.sentences ?? []) {
+    const speaker = (s.speaker_name || "Someone").trim();
+    const text = (s.text || "").trim();
+    if (!text) continue;
+    const last = lines[lines.length - 1];
+    if (last && last.speaker === speaker) last.text += ` ${text}`;
+    else lines.push({ speaker, at: Math.max(0, Math.round(s.start_time ?? 0)), text });
+  }
+  return { title: transcript.title, date: transcript.dateString, lines };
+}
+
+/**
+ * The same meeting's last times, kept searchable for her: each transcript, once, as passages
+ * of the client's (kind "meeting", lib/knowledge.ts) — so in the meeting she can say what
+ * was said yesterday. Recordings already kept (by their Fireflies link) are skipped.
+ */
+export async function keepEarlier(m: MeetingRow, earlier: Earlier): Promise<number> {
+  if (!m.client_id || !earlier.series.length) return 0;
+  const client = await getClient(m.client_id);
+  if (!client) return 0;
+  const urls = earlier.series.map((f) => f.transcript_url).filter((u): u is string => Boolean(u));
+  const kept = new Set(
+    urls.length
+      ? (await rows<{ source: string | null }[]>(db().from("knowledge").select("source").eq("client_id", client.id).eq("kind", "meeting").in("source", urls))).map(
+          (k) => k.source,
+        )
+      : [],
+  );
+  let added = 0;
+  for (const f of earlier.series) {
+    if (!f.transcript_url || kept.has(f.transcript_url)) continue;
+    const full = await fullRecording(f.id);
+    const text = transcriptText(full);
+    if (text.length <= 200) continue;
+    const overview = (f.summary?.overview ?? "").trim();
+    const actions = (f.summary?.action_items ?? "").trim();
+    await addMeetingRecord({
+      client,
+      title: `${f.title} — ${day(f)} (Fireflies)`,
+      source: f.transcript_url,
+      text: [`Meeting: ${f.title}, ${day(f)}`, overview && `Summary: ${overview}`, actions && `Action items:\n${actions}`, "", text].filter(Boolean).join("\n"),
+      summary: [overview, actions && `Action items:\n${actions}`].filter(Boolean).join("\n\n").slice(0, 4000),
+    });
+    added++;
+  }
+  return added;
 }
 
 const day = (f: FirefliesMeeting) => new Date(f.dateString).toUTCString().slice(0, 16);
@@ -154,15 +188,10 @@ function oneMeeting(f: FirefliesMeeting): string {
     .join("\n");
 }
 
-/** For her brief: what Fireflies has from before, as text. Empty when it has nothing. */
+/** For her brief: the same meeting's last times, as text. Empty when Fireflies has none. */
 export function earlierText(e: Earlier | null | undefined): string {
-  if (!e || (!e.series.length && !e.withPeople.length)) return "";
-  return [
-    e.series.length ? `The same meeting before, newest first:\n${e.series.map(oneMeeting).join("\n\n")}` : "",
-    e.withPeople.length ? `Other recent meetings with the same people:\n${e.withPeople.map(oneMeeting).join("\n\n")}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  if (!e?.series.length) return "";
+  return `The same meeting before, newest first:\n${e.series.map(oneMeeting).join("\n\n")}`;
 }
 
 /* ------------------------------------------------------------------ after */

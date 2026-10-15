@@ -13,11 +13,12 @@
 
 import { useEffect, useState } from "react";
 import Markdown from "./Markdown";
+import Transcript from "./Transcript";
 import { api, ago } from "./ui";
 
 type Prep = { goal?: string; agenda?: string; people?: string; avoid?: string; notes?: string };
 /** What Fireflies made of the meeting, brought in once it had written it up (lib/fireflies.ts). */
-type Fireflies = { url: string | null; overview: string; actions: string; attendees: { name: string | null; email: string | null }[]; knowledgeId: string | null; importedAt: string };
+type Fireflies = { id?: string; url: string | null; overview: string; actions: string; attendees: { name: string | null; email: string | null }[]; knowledgeId: string | null; importedAt: string };
 type Notes = {
   to?: string;
   subject?: string;
@@ -100,16 +101,16 @@ export default function MeetingRecord({ meetingId, q, views, start, bare = false
           ))}
         </div>
       )}
-      {view === "notes" && <NotesView record={data} />}
+      {view === "notes" && <NotesView record={data} meetingId={meetingId} q={q} />}
       {view === "prep" && <PrepView record={data} />}
       {view === "history" && <History items={data.history} />}
     </div>
   );
 }
 
-function NotesView({ record }: { record: Kept }) {
+function NotesView({ record, meetingId, q }: { record: Kept; meetingId: string; q: string }) {
   const notes = record.meeting.notes;
-  if (!notes?.summary && !notes?.body && notes?.fireflies) return <FirefliesNotes ff={notes.fireflies} />;
+  if (!notes?.summary && !notes?.body && notes?.fireflies) return <FirefliesNotes ff={notes.fireflies} meetingId={meetingId} q={q} />;
   if (!notes?.summary && !notes?.body) {
     return (
       <p className="text-sm text-slate-500">
@@ -167,31 +168,31 @@ function NotesView({ record }: { record: Kept }) {
           <pre className="whitespace-pre-wrap break-words border-t border-slate-200 px-4 py-3 font-sans text-sm leading-relaxed text-slate-700">{notes.body}</pre>
         </details>
       )}
-      {notes.fireflies && <FirefliesNotes ff={notes.fireflies} />}
+      {notes.fireflies && <FirefliesNotes ff={notes.fireflies} meetingId={meetingId} q={q} />}
     </div>
   );
 }
 
-/** Fireflies' own write-up of the meeting, and where its full transcript is. */
-function FirefliesNotes({ ff }: { ff: Fireflies }) {
+/** Fireflies' own write-up of the meeting, and its transcript — read through the API, here. */
+function FirefliesNotes({ ff, meetingId, q }: { ff: Fireflies; meetingId: string; q: string }) {
   const people = ff.attendees.map((a) => a.name || a.email).filter(Boolean);
   return (
     <div className="space-y-3 rounded-xl bg-orange-50/50 p-4 ring-1 ring-inset ring-orange-200">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">From Fireflies</p>
-        {ff.url && (
-          <a href={ff.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-orange-700 underline-offset-2 hover:underline">
-            Full transcript in Fireflies ↗
-          </a>
-        )}
-      </div>
-      {ff.overview && <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{ff.overview}</p>}
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">From Fireflies</p>
+      {ff.overview && (
+        <div className="text-sm">
+          <Markdown>{ff.overview}</Markdown>
+        </div>
+      )}
       {ff.actions && (
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Action items</p>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{ff.actions}</p>
+          <div className="text-sm">
+            <Markdown>{ff.actions}</Markdown>
+          </div>
         </div>
       )}
+      {ff.id && <Transcript meetingId={meetingId} transcriptId={ff.id} q={q} />}
       <p className="text-xs text-slate-500">
         {people.length ? `${people.join(", ")}. ` : ""}
         {ff.knowledgeId ? "Ava can look up what was said in this meeting in your later meetings." : ""}

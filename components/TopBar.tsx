@@ -23,7 +23,7 @@ export default function TopBar({ user, active, clientName }: { user: PortalUser;
   const initial = (user.name || user.email).trim().charAt(0).toUpperCase();
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-lg">
-      <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+      <div className="flex h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3 sm:gap-6">
           <Link href={user.role === "admin" ? "/" : "/client"} className="flex shrink-0 items-center gap-2.5 transition hover:opacity-90">
             <Logo className="size-8 drop-shadow-sm" />

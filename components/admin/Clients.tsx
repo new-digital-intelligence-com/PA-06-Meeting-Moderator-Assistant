@@ -152,7 +152,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
     setForm((f) => ({ ...f, [k]: k === "invite" ? e.target.checked : e.target.value }));
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-24 sm:p-6">
+    <div className="w-full space-y-5 px-4 pb-24 pt-4 sm:px-6 lg:px-8">
       <header className="flex flex-wrap items-end justify-between gap-4 pt-2">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
@@ -282,7 +282,7 @@ export default function Clients({ ava, screen = null }: { ava: string | null; sc
         {!data ? (
           <p className="text-sm text-slate-500">Loading…</p>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {data.clients.map((c) => (
               // The whole card opens the client (its name's link is stretched over it); her log is a link of its own on top.
               <li

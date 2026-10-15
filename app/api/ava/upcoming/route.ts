@@ -3,7 +3,7 @@ import { avaEmail, avaGoogle, isRunner, noteScreen, noteSeats } from "@/lib/ava"
 import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
 import { answerInbox } from "@/lib/inbox";
 import { contactsFor, meetingPeople, rememberPeople, type Contact } from "@/lib/contacts";
-import { earlierFromFireflies, hasFireflies, importFinished } from "@/lib/fireflies";
+import { earlierFromFireflies, hasFireflies, importFinished, keepEarlier } from "@/lib/fireflies";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
 import { avaInvites, type Invite } from "@/lib/workspace";
@@ -152,6 +152,9 @@ async function documentCounts(meetings: MeetingRow[]): Promise<Map<string, numbe
  *     if Fireflies has a meeting newer than the brief, or if the brief is over three hours
  *     old and Fireflies has anything: tomorrow's stand-up knows today's.
  */
+/** Meetings whose earlier transcripts were already kept searchable this run. */
+const keptFor = new Set<string>();
+
 async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client>) {
   let written = 0;
   for (const m of [...meetings].sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime())) {
@@ -160,7 +163,17 @@ async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client
       const client = clients.get(m.client_id!)!;
       const soon = m.starts_at.getTime() - Date.now() < BRIEF_AHEAD_MS;
       const earlier = hasFireflies() ? await earlierFromFireflies(m).catch(() => null) : null;
-      const recorded = earlier ? [...earlier.series, ...earlier.withPeople] : [];
+      const recorded = earlier?.series ?? [];
+      // Those last times' transcripts, searchable for her in the meeting — once each.
+      if (earlier && recorded.length && !keptFor.has(m.id)) {
+        keptFor.add(m.id);
+        const added = await keepEarlier(m, earlier).catch((e) => {
+          keptFor.delete(m.id);
+          console.warn(`[fireflies] transcripts for ${m.title}:`, e instanceof Error ? e.message : e);
+          return 0;
+        });
+        if (added) console.log(`[fireflies] ${added} earlier transcript${added === 1 ? "" : "s"} of ${m.title} made searchable`);
+      }
       const briefAt = m.brief_at?.getTime() ?? 0;
       // Not one written in the last half hour: a brief that came out without the heading
       // would otherwise be rewritten every minute.

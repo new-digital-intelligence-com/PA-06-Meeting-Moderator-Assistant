@@ -208,7 +208,7 @@ export async function writeBrief(meetingId: string, earlier?: Earlier | null): P
       "Write her brief for this meeting, addressed to her as “you”:",
       "- the purpose, and what a good outcome looks like;",
       ...(before
-        ? ["- last time: what was decided in the same meeting before, and the action items still open, with their owners — and from the other recent meetings with these people only what bears on this one;"]
+        ? ["- last time: what was decided in the same meeting before — the latest first — and the action items still open, with their owners;"]
         : []),
       "- the agenda, as she should follow or run it;",
       "- who is attending and what to know about each, where known;",
@@ -228,7 +228,7 @@ export async function writeBrief(meetingId: string, earlier?: Earlier | null): P
     meeting_id: meetingId,
     kind: "brief",
     by: "Ava",
-    detail: { words: brief.split(/\s+/).filter(Boolean).length, fireflies: (earlier?.series.length ?? 0) + (earlier?.withPeople.length ?? 0) },
+    detail: { words: brief.split(/\s+/).filter(Boolean).length, fireflies: earlier?.series.length ?? 0 },
   });
   return written;
 }

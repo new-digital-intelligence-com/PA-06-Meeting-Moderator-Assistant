@@ -18,14 +18,15 @@ import type { PickerConfig } from "./drivePicker";
 import { BookIcon, ClockIcon, HistoryIcon, LockIcon, SparkIcon, UsersIcon } from "./icons";
 import Markdown from "./Markdown";
 import MeetingRecord from "./MeetingRecord";
+import Transcript from "./Transcript";
 import { Notice, Section, ago, api } from "./ui";
 import { EarlierMeetings, PickerContext, PrepPanel, briefState, initialsOf, nameOf, peopleOf, type Meeting } from "./Workspace";
 
 type Loaded = { meeting: Omit<Meeting, "documents">; documents: { id: string }[] };
 
 /** One earlier meeting as Fireflies has it (/api/portal/meetings/[id]/fireflies). */
-type Earlier = { id: string; title: string; date: string; minutes: number | null; url: string | null; overview: string; actions: string; people: string[] };
-type FromFireflies = { configured: boolean; series: Earlier[]; withPeople: Earlier[]; error?: string };
+type Earlier = { id: string; title: string; date: string; minutes: number | null; overview: string; actions: string };
+type FromFireflies = { configured: boolean; series: Earlier[]; error?: string };
 
 const PLATFORMS: [RegExp, string][] = [
   [/meet\.google\.com/i, "Google Meet"],
@@ -305,8 +306,9 @@ function Brief({ meeting }: { meeting: Meeting }) {
 }
 
 /**
- * Last time, from Fireflies: the same meeting before and recent meetings with the same
- * people — what her brief's "Last time" is written from, as Fireflies wrote it up.
+ * Last time, from Fireflies: the same meeting's latest times, newest first — what her
+ * brief's "Last time" is written from — each with Fireflies' summary, its action items and
+ * its transcript, read through the API on the page itself.
  */
 function LastTime({ meetingId, q }: { meetingId: string; q: string }) {
   const [data, setData] = useState<FromFireflies | null>(null);
@@ -315,7 +317,7 @@ function LastTime({ meetingId, q }: { meetingId: string; q: string }) {
     let alive = true;
     api<FromFireflies>(`/api/portal/meetings/${meetingId}/fireflies${q}`)
       .then((d) => alive && setData(d))
-      .catch((e) => alive && setData({ configured: true, series: [], withPeople: [], error: e instanceof Error ? e.message : "Fireflies did not answer." }));
+      .catch((e) => alive && setData({ configured: true, series: [], error: e instanceof Error ? e.message : "Fireflies did not answer." }));
     return () => {
       alive = false;
     };
@@ -323,79 +325,57 @@ function LastTime({ meetingId, q }: { meetingId: string; q: string }) {
 
   if (data && !data.configured) return null;
   return (
-    <Section title="Last time" icon={<HistoryIcon />} tone="amber" description="From Fireflies: the same meeting before, and recent meetings with the same people.">
+    <Section title="Last time" icon={<HistoryIcon />} tone="amber" description="From Fireflies: the same meeting's latest times, newest first.">
       {!data ? (
         <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
       ) : data.error ? (
         <p className="text-sm text-rose-700">Fireflies did not answer: {data.error}</p>
-      ) : !data.series.length && !data.withPeople.length ? (
-        <p className="text-sm text-slate-500">Fireflies has nothing from before: no earlier meeting of this one, and none with these people this past month.</p>
+      ) : !data.series.length ? (
+        <p className="text-sm text-slate-500">Fireflies has nothing from before: no earlier time of this meeting this past month.</p>
       ) : (
-        <div className="space-y-4">
-          {data.series.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">The same meeting before</h4>
-              <ul className="space-y-2">
-                {data.series.map((e, i) => (
-                  <EarlierItem key={e.id} item={e} open={i === 0} />
-                ))}
-              </ul>
-            </div>
-          )}
-          {data.withPeople.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">With the same people</h4>
-              <ul className="space-y-2">
-                {data.withPeople.map((e) => (
-                  <EarlierItem key={e.id} item={e} open={false} />
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+        <ul className="space-y-2">
+          {data.series.map((e, i) => (
+            <EarlierItem key={e.id} item={e} open={i === 0} meetingId={meetingId} q={q} />
+          ))}
+        </ul>
       )}
     </Section>
   );
 }
 
-function EarlierItem({ item, open }: { item: Earlier; open: boolean }) {
+function EarlierItem({ item, open, meetingId, q }: { item: Earlier; open: boolean; meetingId: string; q: string }) {
   const date = new Date(item.date);
   return (
     <li>
       <details open={open} className="group rounded-xl border border-slate-200 bg-white">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5">
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-slate-800" title={item.title}>
-              {item.title}
+            <span className="block text-sm font-medium text-slate-800">
+              {date.toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}, {time(date)}
             </span>
-            <span className="text-xs text-slate-500">
-              {date.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}, {time(date)}
-              {item.minutes ? ` · ${item.minutes} min` : ""}
-            </span>
+            <span className="text-xs text-slate-500">{item.minutes ? `${item.minutes} min` : item.title}</span>
           </span>
           <span className="text-xs text-slate-400 transition group-open:rotate-180" aria-hidden="true">
             ▾
           </span>
         </summary>
-        <div className="max-h-[28rem] space-y-3 overflow-y-auto border-t border-slate-100 px-3 py-3">
-          {item.overview && (
-            <div className="text-sm">
-              <Markdown>{item.overview}</Markdown>
-            </div>
-          )}
-          {item.actions && (
-            <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Action items</p>
+        <div className="space-y-3 border-t border-slate-100 px-3 py-3">
+          <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+            {item.overview && (
               <div className="text-sm">
-                <Markdown>{item.actions}</Markdown>
+                <Markdown>{item.overview}</Markdown>
               </div>
-            </div>
-          )}
-          {item.url && (
-            <a href={item.url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-orange-700 underline-offset-2 hover:underline">
-              Full transcript in Fireflies ↗
-            </a>
-          )}
+            )}
+            {item.actions && (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Action items</p>
+                <div className="text-sm">
+                  <Markdown>{item.actions}</Markdown>
+                </div>
+              </div>
+            )}
+          </div>
+          <Transcript meetingId={meetingId} transcriptId={item.id} q={q} />
         </div>
       </details>
     </li>

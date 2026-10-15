@@ -152,7 +152,7 @@ export default function ControlRoom({ config, now, oauthError }: { config: Confi
   const followable = busy.filter((s): s is Now & { client: { id: string; name: string } } => Boolean(s.client));
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-24 pt-6 sm:px-6">
+    <div className="w-full space-y-6 px-4 pb-24 pt-6 sm:px-6 lg:px-8">
       <header className="pt-2">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Control room</h1>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
