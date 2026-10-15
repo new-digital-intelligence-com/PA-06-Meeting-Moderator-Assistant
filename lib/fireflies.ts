@@ -355,6 +355,19 @@ export async function importFinished(limit = 2): Promise<void> {
   }
 }
 
+/**
+ * Import from Fireflies, when somebody asks for it on a meeting that is over: its summary,
+ * action items, attendees and transcript, brought in as for a meeting that has just
+ * finished. "none": Fireflies has no recording of it; "pending": not written up yet.
+ */
+export async function importOne(m: MeetingRow): Promise<"kept" | "none" | "pending"> {
+  const recording = await recordingOf(m);
+  if (!recording) return "none";
+  if (!recording.summary?.overview) return "pending";
+  await keep(m, await fullRecording(recording.id));
+  return "kept";
+}
+
 async function keep(m: MeetingRow, f: FirefliesMeeting): Promise<void> {
   const client = m.client_id ? await getClient(m.client_id) : null;
   if (!client) return;
@@ -362,9 +375,16 @@ async function keep(m: MeetingRow, f: FirefliesMeeting): Promise<void> {
   const overview = (f.summary?.overview ?? "").trim();
   const actions = (f.summary?.action_items ?? "").trim();
 
-  // Her later meetings with this client can search who said what in this one.
+  // Her later meetings with this client can search who said what in this one — once: it may
+  // already be kept as one of another meeting's last times.
   let knowledgeId: string | null = null;
-  if (text.length > 200) {
+  if (f.transcript_url) {
+    const kept = await rows<{ id: string }[]>(
+      db().from("knowledge").select("id").eq("client_id", client.id).eq("kind", "meeting").eq("source", f.transcript_url).limit(1),
+    );
+    knowledgeId = kept[0]?.id ?? null;
+  }
+  if (!knowledgeId && text.length > 200) {
     try {
       const doc = await addMeetingRecord({
         client,

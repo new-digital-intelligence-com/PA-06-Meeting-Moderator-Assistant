@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import Markdown from "./Markdown";
 import Transcript from "./Transcript";
-import { api, ago } from "./ui";
+import { api, ago, quiet } from "./ui";
 
 type Prep = { goal?: string; agenda?: string; people?: string; avoid?: string; notes?: string };
 /** What Fireflies made of the meeting, brought in once it had written it up (lib/fireflies.ts). */
@@ -47,6 +47,10 @@ type Kept = {
   };
   documents: { id: string; title: string; kind: string; status: string }[];
   history: HistoryItem[];
+  /** Fireflies is connected: a meeting that is over can have its notes brought in from it. */
+  fireflies?: boolean;
+  /** When it was read (the page): whether the meeting is over is judged against it. */
+  loadedAt?: number;
 };
 export type HistoryItem = { id: number; at: string; kind: string; by: string | null; detail: { [k: string]: unknown } };
 
@@ -64,21 +68,39 @@ const PREP_LABEL: { [k in keyof Prep]-?: string } = {
 const stamp = (iso: string | number | null | undefined) =>
   iso ? new Date(iso).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
-/** `bare`: on a meeting's own page, inside its section — no frame of its own. */
-export default function MeetingRecord({ meetingId, q, views, start, bare = false }: { meetingId: string; q: string; views: View[]; start?: View; bare?: boolean }) {
+/**
+ * `bare`: on a meeting's own page, inside its section — no frame of its own.
+ * `onChanged`: its notes were brought in from Fireflies — for a list that shows them.
+ */
+export default function MeetingRecord({
+  meetingId,
+  q,
+  views,
+  start,
+  bare = false,
+  onChanged,
+}: {
+  meetingId: string;
+  q: string;
+  views: View[];
+  start?: View;
+  bare?: boolean;
+  onChanged?: () => void;
+}) {
   const [data, setData] = useState<Kept | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(start ?? views[0]);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let alive = true;
     api<Kept>(`/api/portal/meetings/${meetingId}${q}`)
-      .then((d) => alive && setData(d))
+      .then((d) => alive && setData({ ...d, loadedAt: Date.now() }))
       .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load it."));
     return () => {
       alive = false;
     };
-  }, [meetingId, q]);
+  }, [meetingId, q, version]);
 
   if (error) return <p className={`${bare ? "" : "p-4 "}text-sm text-rose-700`}>{error}</p>;
   if (!data) return <div className={`${bare ? "" : "m-4 "}h-24 animate-pulse rounded-xl bg-slate-100`} />;
@@ -101,29 +123,48 @@ export default function MeetingRecord({ meetingId, q, views, start, bare = false
           ))}
         </div>
       )}
-      {view === "notes" && <NotesView record={data} meetingId={meetingId} q={q} />}
+      {view === "notes" && (
+        <NotesView
+          record={data}
+          meetingId={meetingId}
+          q={q}
+          onImported={() => {
+            setVersion((v) => v + 1);
+            onChanged?.();
+          }}
+        />
+      )}
       {view === "prep" && <PrepView record={data} />}
       {view === "history" && <History items={data.history} />}
     </div>
   );
 }
 
-function NotesView({ record, meetingId, q }: { record: Kept; meetingId: string; q: string }) {
+function NotesView({ record, meetingId, q, onImported }: { record: Kept; meetingId: string; q: string; onImported: () => void }) {
   const notes = record.meeting.notes;
+  const m = record.meeting;
+  // Its notes can be brought in from Fireflies: connected, over, and not brought in yet.
+  const over = m.status === "ended" || Boolean(m.ended_at) || new Date(m.ends_at ?? m.starts_at).getTime() <= (record.loadedAt ?? 0);
+  const importable = Boolean(record.fireflies) && over && m.status !== "cancelled" && m.status !== "declined" && !notes?.fireflies;
+  const importer = importable ? <ImportFireflies meetingId={meetingId} q={q} onDone={onImported} /> : null;
   if (!notes?.summary && !notes?.body && notes?.fireflies) return <FirefliesNotes ff={notes.fireflies} meetingId={meetingId} q={q} />;
   if (!notes?.summary && !notes?.body) {
     return (
-      <p className="text-sm text-slate-500">
-        {record.meeting.status === "cancelled"
-          ? "It was called off — no notes."
-          : record.meeting.status === "declined"
-            ? "She declined it — she was already booked for another meeting at that time — so there are no notes."
-            : "No notes for this meeting: nothing was written up — usually because nothing was said while she was there."}
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">
+          {m.status === "cancelled"
+            ? "It was called off — no notes."
+            : m.status === "declined"
+              ? "She declined it — she was already booked for another meeting at that time — so there are no notes."
+              : "No notes for this meeting: nothing was written up — usually because nothing was said while she was there."}
+        </p>
+        {importer}
+      </div>
     );
   }
   return (
     <div className="space-y-4">
+      {importer}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {notes.sentAt ? (
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/15">
@@ -169,6 +210,39 @@ function NotesView({ record, meetingId, q }: { record: Kept; meetingId: string; 
         </details>
       )}
       {notes.fireflies && <FirefliesNotes ff={notes.fireflies} meetingId={meetingId} q={q} />}
+    </div>
+  );
+}
+
+/**
+ * Import from Fireflies, on request: its summary, action items and transcript for this
+ * meeting, if it recorded it. Says so when it did not, or has not written it up yet.
+ */
+function ImportFireflies({ meetingId, q, onDone }: { meetingId: string; q: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await api(`/api/portal/meetings/${meetingId}/fireflies${q}`, { method: "POST" });
+      onDone();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Fireflies did not answer.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-orange-200 bg-orange-50/40 px-4 py-3">
+      <button className={quiet} onClick={() => void run()} disabled={busy}>
+        {busy ? "Importing…" : "Import from Fireflies"}
+      </button>
+      <span className={`text-xs ${message ? "text-amber-800" : "text-slate-500"}`}>
+        {message ?? "Brings in Fireflies' summary, action items and transcript, if it recorded this meeting."}
+      </span>
     </div>
   );
 }

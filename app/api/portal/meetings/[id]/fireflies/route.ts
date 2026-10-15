@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError, isUuid, portalClient } from "@/lib/auth";
-import { earlierFromFireflies, hasFireflies, transcriptOf, type FirefliesMeeting } from "@/lib/fireflies";
+import { earlierFromFireflies, hasFireflies, importOne, transcriptOf, type FirefliesMeeting } from "@/lib/fireflies";
 import { clientMeeting } from "@/lib/schedule";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -53,5 +53,25 @@ export async function GET(request: Request, { params }: Params) {
     } catch (e) {
       return NextResponse.json({ configured: true, series: [], error: e instanceof Error ? e.message : "Fireflies did not answer." });
     }
+  });
+}
+
+/**
+ * Import from Fireflies: one of their meetings that is over, brought in when somebody asks —
+ * its summary, action items, attendees and transcript (searchable in later meetings).
+ */
+export async function POST(request: Request, { params }: Params) {
+  return handle(async () => {
+    const { clientId } = await portalClient(request);
+    const { id } = await params;
+    if (!isUuid(id)) throw new HttpError(400, "Which meeting?");
+    const meeting = await clientMeeting(clientId, id);
+    if (!meeting) throw new HttpError(404, "That meeting is not one of yours.");
+    if (!hasFireflies()) throw new HttpError(503, "Fireflies is not connected.");
+    if (meeting.starts_at.getTime() > Date.now()) throw new HttpError(400, "It has not happened yet.");
+    const outcome = await importOne(meeting);
+    if (outcome === "none") throw new HttpError(404, "Fireflies has no recording of this meeting — it was not in it.");
+    if (outcome === "pending") throw new HttpError(409, "Fireflies recorded it but has not written it up yet — try again in a few minutes.");
+    return NextResponse.json({ ok: true });
   });
 }

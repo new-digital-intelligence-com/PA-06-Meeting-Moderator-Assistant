@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handle, HttpError, isUuid, portalClient } from "@/lib/auth";
 import type { MeetingRow } from "@/lib/db";
 import { meetingHistory, record, type HistoryRow } from "@/lib/history";
+import { hasFireflies } from "@/lib/fireflies";
 import { listDocuments } from "@/lib/knowledge";
 import { hasPreparation, writeBrief } from "@/lib/prepare";
 import { cleanPrep, clientMeeting, prepLocked, savePrep } from "@/lib/schedule";
@@ -44,7 +45,8 @@ export async function GET(request: Request, { params }: Params) {
   return handle(async () => {
     const { clientId, meeting } = await mine(request, params);
     const [documents, kept] = await Promise.all([listDocuments(clientId, meeting.id), meetingHistory(meeting.id)]);
-    return NextResponse.json({ meeting, documents, history: kept.length ? kept : remembered(meeting) });
+    // `fireflies`: whether its notes can be brought in from Fireflies (Import from Fireflies).
+    return NextResponse.json({ meeting, documents, history: kept.length ? kept : remembered(meeting), fireflies: hasFireflies() });
   });
 }
 

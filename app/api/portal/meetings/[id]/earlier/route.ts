@@ -10,6 +10,11 @@ type Params = { params: Promise<{ id: string }> };
 /** A recurring meeting's instances share the event id before "_20261006T183500Z". */
 const series = (eventId: string) => (eventId.startsWith("now-") ? eventId : eventId.replace(/_\d{8}(T\d{6}Z?)?$/, ""));
 const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/** What Fireflies wrote up for a meeting, if it was brought in. */
+const fireflies = (m: MeetingRow) => {
+  const f = (m.notes as { fireflies?: { overview?: string; actions?: string } } | null)?.fireflies;
+  return f ? { overview: f.overview ?? "", actions: f.actions ?? "" } : null;
+};
 
 /**
  * The client's earlier meetings, for a preparation to look back on: each one's outcome —
@@ -48,7 +53,14 @@ export async function GET(request: Request, { params }: Params) {
           starts_at: m.starts_at,
           status: m.status,
           notes: m.notes
-            ? { summary: m.notes.summary ?? null, sentAt: m.notes.sentAt ?? null, to: m.notes.to ?? null, actions: m.notes.actions ?? [] }
+            ? {
+                summary: m.notes.summary ?? null,
+                sentAt: m.notes.sentAt ?? null,
+                to: m.notes.to ?? null,
+                actions: m.notes.actions ?? [],
+                // Fireflies' notes, brought in for it (lib/fireflies.ts): handed to her with hers.
+                fireflies: fireflies(m),
+              }
             : null,
           prepared: filled(m) || Boolean(m.brief),
           documents: docs.filter((d) => d.meeting_id === m.id).length,

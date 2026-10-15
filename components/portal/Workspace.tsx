@@ -1290,7 +1290,14 @@ type Earlier = {
   title: string;
   starts_at: string;
   status: string;
-  notes: { summary: string | null; sentAt: number | null; to: string | null; actions: { text: string; owner?: string; due?: string }[] } | null;
+  notes: {
+    summary: string | null;
+    sentAt: number | null;
+    to: string | null;
+    actions: { text: string; owner?: string; due?: string }[];
+    /** Fireflies' notes, when brought in (Import from Fireflies, or after the meeting). */
+    fireflies?: { overview: string; actions: string } | null;
+  } | null;
   prepared: boolean;
   documents: number;
   /** The same meeting before: its recurring series, or its title. */
@@ -1340,6 +1347,7 @@ export function EarlierMeetings({
     try {
       const date = new Date(m.starts_at).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
       const actions = m.notes?.actions ?? [];
+      const ff = m.notes?.fireflies;
       const text = [
         `Notes from an earlier meeting, “${m.title}”, on ${date}.`,
         "",
@@ -1347,6 +1355,9 @@ export function EarlierMeetings({
         ...(actions.length
           ? ["", "Actions agreed:", ...actions.map((a) => `- ${a.text}${a.owner ? ` — ${a.owner}` : ""}${a.due ? `, due ${a.due}` : ""}`)]
           : []),
+        // Fireflies' notes of it too, when it recorded it.
+        ...(ff?.overview ? ["", "Fireflies' summary:", ff.overview] : []),
+        ...(ff?.actions ? ["", "Fireflies' action items:", ff.actions] : []),
       ].join("\n");
       const { document } = await api<{ document: Doc }>(`/api/portal/knowledge${q}`, {
         method: "POST",
@@ -1387,15 +1398,17 @@ export function EarlierMeetings({
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{m.title}</span>
                     {m.same && <Chip tone="info">Same meeting</Chip>}
                     <span className="text-xs text-slate-400">{when(m.starts_at)}</span>
-                    {m.notes?.summary ? <Chip tone="good">Notes</Chip> : <Chip>No notes</Chip>}
+                    {m.notes?.summary ? <Chip tone="good">Notes</Chip> : !m.notes?.fireflies && <Chip>No notes</Chip>}
+                    {m.notes?.fireflies && <Chip tone="info">Fireflies</Chip>}
                     <span className={`text-xs text-slate-400 transition ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">
                       ▾
                     </span>
                   </button>
                   {isOpen && (
                     <>
-                      <MeetingRecord meetingId={m.id} q={q} views={["notes", "prep", "history"]} />
-                      {m.notes?.summary && (
+                      {/* Imported from Fireflies in there: the list reads again, to offer its notes to her. */}
+                      <MeetingRecord meetingId={m.id} q={q} views={["notes", "prep", "history"]} onChanged={() => setList(null)} />
+                      {(m.notes?.summary || m.notes?.fireflies) && (
                         <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/70 px-4 py-3">
                           <button className={quiet} disabled={adding === m.id || given.includes(m.id)} onClick={() => void give(m)}>
                             {given.includes(m.id) ? "Given to her for this meeting" : adding === m.id ? "Adding…" : "Give her these notes for this meeting"}
