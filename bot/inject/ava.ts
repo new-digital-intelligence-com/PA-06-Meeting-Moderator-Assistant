@@ -885,30 +885,51 @@ if (window.top === window && platform && !window.__ava) {
    * ahead), and over a WebSocket says nothing when somebody cuts in: OpenAI's voice guide
    * leaves it to the client to throw away what is queued. So the room's own sound decides.
    * Somebody speaking through most of the last ¾ second while her voice still plays: she
-   * stops, her lips with her, and the runner drops the rest of that reply. A word or a laugh
-   * over her is too short to count; so is the tail of the sentence she answered.
+   * stops and the runner drops the rest of that reply. A word or a laugh over her is too
+   * short to count; so is the tail of the sentence she answered — and so, by its level, is
+   * her own voice coming back faintly from somebody's speakers.
    */
-  const ROOM_SPEECH_RMS = 0.012; // about -38 dBFS: a voice, well above a quiet line
-  const TALK_FRAMES = 9; // the hearing tap's pieces: 2048 samples at 24 kHz, 85 ms each
-  const TALK_OVER = 7; // of them with somebody speaking: about 0.6 s
-  const roomTalk: boolean[] = [];
+  const ROOM_SPEECH_RMS = 0.025; // about -32 dBFS: a voice in the call, above an echo of hers
+  const TALK_FRAMES = 11; // the hearing tap's pieces: 2048 samples at 24 kHz, 85 ms each
+  const TALK_OVER = 9; // of them with somebody speaking: about 0.8 s
+  const roomTalk: number[] = [];
   /** When somebody in the room was last heard speaking (wall clock). */
   let roomSpokeAt = 0;
   roomFrame = (rms) => {
-    const talking = rms >= ROOM_SPEECH_RMS;
-    if (talking) roomSpokeAt = Date.now();
-    roomTalk.push(talking);
+    if (rms >= ROOM_SPEECH_RMS) roomSpokeAt = Date.now();
+    roomTalk.push(rms);
     if (roomTalk.length > TALK_FRAMES) roomTalk.shift();
     const voicePlaying = rtSources.length > 0 || Date.now() < rtFaceEnd;
-    if (!voicePlaying || roomTalk.filter(Boolean).length < TALK_OVER) return;
+    const loud = roomTalk.filter((r) => r >= ROOM_SPEECH_RMS);
+    if (!voicePlaying || loud.length < TALK_OVER) return;
+    const level = Math.round(20 * Math.log10(loud.sort((a, b) => a - b)[loud.length >> 1]));
     roomTalk.length = 0;
-    log("talked over — she stops");
+    log(`talked over (the room at ${level} dBFS) — she stops`);
     rtCutTurn = rtItem;
-    api.interrupt();
+    cutVoice();
     try {
       window.__avaCut?.();
     } catch {
       /* runner not listening */
+    }
+  };
+
+  /**
+   * Her voice stopped where it is, and the face's sequence ended as at the end of any reply —
+   * not Anam's interrupt: in a call that refused the rest of the sequence, and with it every
+   * reply after, so her voice went on with lips that never moved again. The face plays out
+   * the second or so it already has, silently.
+   */
+  const cutVoice = () => {
+    const toFace = mode === "avatar" && face === "live" && faceInput && Date.now() < rtFaceEnd;
+    stopStream();
+    muteFaceSound();
+    if (toFace) {
+      try {
+        faceInput!.endSequence();
+      } catch {
+        /* the face went away */
+      }
     }
   };
 
