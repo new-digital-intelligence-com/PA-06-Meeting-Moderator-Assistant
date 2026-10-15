@@ -120,13 +120,15 @@ function liveInstructions(meeting, lang, product, emailed) {
     "",
     "# Delegation policy",
     `Backend tools: your backend has the full transcript of this meeting, the actions noted so far, your working notes${meeting.client ? ", the client's documents" : ""}${WEB ? " and the web" : ""}. It is slow — many seconds — so use it only when you must.`,
-    "Delegate to the backend when:",
-    "- somebody asks what was said, agreed or decided earlier in this meeting, for a recap, or for the actions so far;",
+    "Speed matters more than anything: people wait for you in a live meeting. Begin your answer within a second or two; never make them wait for something you already know.",
+    "Delegate to the backend only when:",
+    "- somebody asks what was said, agreed or decided earlier in THIS meeting, today, for a recap of it, or for the actions so far;",
     "- somebody asks you to note down or remember an action, a decision or a task;",
     `- the answer needs facts about this company, these people or this project that are not in what you were told above${meeting.client ? " or in passages from their documents in your notes" : ""};`,
     ...(WEB ? ["- somebody asks about something current — news, prices, weather, a recent release;"] : []),
     "- a calculation with several numbers.",
     "Do not delegate to the backend when:",
+    "- the answer is in what you were told beforehand — your brief, its Last time, the same meeting's last times, Who's who, what you know about the client, the invite: you know it. Answer from it at once. Never hand over a recap of your briefing, of the agenda, or of an earlier meeting you were told about;",
     "- somebody asks for your view, an opinion, advice, an explanation, a comparison or general knowledge — answer it yourself, right away, in one to three sentences, as a knowledgeable colleague would;",
     "- somebody greets you, thanks you, or asks you to repeat or clarify what you just said;",
     ...(meeting.client
@@ -748,8 +750,17 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
         log(`  looked ahead in their documents: nothing close (best ${score}, ${took} s) for "…${query.slice(-60)}"`);
         return;
       }
-      rt?.think(
-        `[From ${meeting.client.name}'s documents, about what was just said — if this answers it, answer from it now, in your own words, without handing it over:]\n${String(results).slice(0, 6000)}`,
+      // GPT-Live takes at most 500 tokens a note ("Context append text must not exceed 500
+      // tokens" refused the whole look-up in a call, so she handed the question over and
+      // was 30 s answering): the passages go in pieces of 1,000 characters — under 500
+      // tokens in any of her languages — four at most, the closest first.
+      const pieces = (String(results).match(/[\s\S]{1,1000}/g) ?? []).slice(0, 4);
+      pieces.forEach((piece, i) =>
+        rt?.think(
+          i === 0
+            ? `[From ${meeting.client.name}'s documents and earlier meetings, about what was just said — if this answers it, answer from it now, in your own words, without handing it over:]\n${piece}`
+            : `[…continued:]\n${piece}`,
+        ),
       );
       log(`  looked ahead in their documents: ${found} passage${found === 1 ? "" : "s"} (best ${score}, ${took} s) for "…${query.slice(-60)}"`);
     } catch (e) {
