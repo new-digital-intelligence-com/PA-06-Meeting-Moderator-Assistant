@@ -840,10 +840,15 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       rtGreeted = true;
       // Her hello is hers to say: nobody names her before she has introduced herself.
       openUntil = Date.now() + 20_000;
+      // Joined well after the start — late, or back after dropping out: no full introduction
+      // in the middle of a meeting, only a word that she is (back) here.
+      const underWay = meeting.startsAt && Date.now() - meeting.startsAt > 3 * 60_000;
       rt.say(
-        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant; you will follow along and take notes${emailsNotes() ? " and send everyone a summary with the actions afterwards" : ""}${
-          askForEmails() ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
-        }. In a group, say that people can ask you anything by saying your name.`,
+        underWay
+          ? `You have just joined a meeting that is already under way (you may have dropped out and come back). Say only, in ${LANGUAGE_NAME[lang]} and in a few words, that you are here — for example "${DISPLAY_NAME} here, back with you" — then listen. Do not introduce yourself at length, and do not interrupt anybody: say it at the first pause.`
+          : `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant; you will follow along and take notes${emailsNotes() ? " and send everyone a summary with the actions afterwards" : ""}${
+              askForEmails() ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
+            }. In a group, say that people can ask you anything by saying your name.`,
       );
     }
     log(`  GPT-Live is her ears and voice${resume ? " again" : ""}; ${DELEGATE === "claude" ? "Claude" : `${DELEGATE} (${EFFORT} effort${WEB ? "" : ", no web search"})`} does the thinking`);
