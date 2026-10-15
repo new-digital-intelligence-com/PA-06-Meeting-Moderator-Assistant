@@ -3,7 +3,7 @@ import { avaEmail, avaGoogle, isRunner, noteScreen, noteSeats } from "@/lib/ava"
 import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
 import { answerInbox } from "@/lib/inbox";
 import { contactsFor, meetingPeople, rememberPeople, type Contact } from "@/lib/contacts";
-import { earlierFromFireflies, hasFireflies, importFinished, keepEarlier } from "@/lib/fireflies";
+import { earlierFromFireflies, hasFireflies, importFinished, keepEarlier, type Earlier } from "@/lib/fireflies";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
 import { avaInvites, type Invite } from "@/lib/workspace";
@@ -60,12 +60,13 @@ export async function GET(request: Request) {
 
     const counts = await documentCounts(due);
     const who = await whoIsWho(due);
+    const lastTimes = await lastTimesOf(due);
     const invites = due.map((m) => {
       const client = byId.get(m.client_id!)!;
       return {
         ...inviteOf(m),
         client: { id: client.id, name: client.name, meetingId: m.id },
-        briefing: briefingFor(m, client, counts.get(m.id) ?? 0, who.get(m.id) ?? []),
+        briefing: briefingFor(m, client, counts.get(m.id) ?? 0, who.get(m.id) ?? [], lastTimes.get(m.id) ?? null),
       };
     });
     // The invites' people, by name, on each client's Who's who — there to be written about.
@@ -99,6 +100,27 @@ function inviteOf(m: MeetingRow): Invite {
     organizerEmail: m.organizer ?? "",
     guests: m.guests ?? [],
   };
+}
+
+/**
+ * The same meeting's last times from Fireflies, for the briefing of each meeting starting
+ * within two hours — what she walks in with. Mostly from the quarter-hour cache her briefs
+ * fill; never more than eight seconds' wait, so her runner is not held up.
+ */
+async function lastTimesOf(meetings: MeetingRow[]): Promise<Map<string, Earlier | null>> {
+  const out = new Map<string, Earlier | null>();
+  if (!hasFireflies()) return out;
+  const soon = meetings.filter((m) => m.starts_at.getTime() - Date.now() < 2 * 3_600_000);
+  await Promise.all(
+    soon.map(async (m) => {
+      const earlier = await Promise.race([
+        earlierFromFireflies(m).catch(() => null),
+        new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+      ]);
+      out.set(m.id, earlier);
+    }),
+  );
+  return out;
 }
 
 /** Each meeting's people as the client wrote about them (Who's who), one read per client. */

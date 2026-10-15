@@ -194,6 +194,28 @@ export function earlierText(e: Earlier | null | undefined): string {
   return `The same meeting before, newest first:\n${e.series.map(oneMeeting).join("\n\n")}`;
 }
 
+/**
+ * For her briefing, in her head from the first second: each of the same meeting's last
+ * times as Fireflies wrote it up — its summary and action items, shortened — so she knows
+ * all five, not only the latest her brief dwells on. About 1,600 characters each at most.
+ */
+export function earlierBriefing(e: Earlier | null | undefined): string {
+  if (!e?.series.length) return "";
+  return e.series
+    .map((f) => {
+      const overview = (f.summary?.overview || f.summary?.short_summary || "").trim().replace(/\n{2,}/g, "\n");
+      const actions = (f.summary?.action_items ?? "").trim().replace(/\n{2,}/g, "\n");
+      return [
+        `### ${new Date(f.dateString).toUTCString().slice(0, 16)}`,
+        overview && `What was said: ${overview.slice(0, 900)}${overview.length > 900 ? "…" : ""}`,
+        actions && `Action items:\n${actions.slice(0, 700)}${actions.length > 700 ? "…" : ""}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .join("\n\n");
+}
+
 /* ------------------------------------------------------------------ after */
 
 /** Fireflies' recording of this meeting, if it was there: its calendar event first, then its link, then its title. */

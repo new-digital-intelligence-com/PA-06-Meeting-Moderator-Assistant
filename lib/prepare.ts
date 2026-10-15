@@ -14,7 +14,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { asMeeting, count, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
 import { getClient } from "./clients";
 import { contactsFor, contactsText, meetingPeople, type Contact } from "./contacts";
-import { earlierFromFireflies, earlierText, hasFireflies, type Earlier } from "./fireflies";
+import { earlierBriefing, earlierFromFireflies, earlierText, hasFireflies, type Earlier } from "./fireflies";
 import { record } from "./history";
 import { FAST, WRITER } from "./moderator";
 
@@ -267,7 +267,7 @@ export function briefingNow(client: Client, note: string, documents: number): st
  * The brief when there is one, their preparation otherwise, and always the invite and
  * what she knows about the client.
  */
-export function briefingFor(m: MeetingRow, client: Client, documents: number, contacts: Contact[] = []): string {
+export function briefingFor(m: MeetingRow, client: Client, documents: number, contacts: Contact[] = [], earlier: Earlier | null = null): string {
   const sections = [`You are attending this meeting for ${client.name}.`];
   if (client.instructions.trim()) sections.push(`How ${client.name} wants you to work:\n${client.instructions.trim()}`);
   if (m.brief?.trim()) sections.push(`Your brief for this meeting:\n${m.brief.trim()}`);
@@ -275,6 +275,11 @@ export function briefingFor(m: MeetingRow, client: Client, documents: number, co
   sections.push(`From the invite:\n${inviteText(m)}`);
   const who = contactsText(contacts);
   if (who) sections.push(`Who's who — what you were told about the people invited:\n${who}`);
+  // Each of the same meeting's last times, not only the latest the brief dwells on: what
+  // was said and the action items, as Fireflies wrote them up. The full transcripts can be
+  // searched for anything more exact.
+  const before = earlierBriefing(earlier);
+  if (before) sections.push(`The same meeting's last times, from Fireflies — newest first (their full transcripts can be searched):\n${before}`);
   if (client.digest.trim()) sections.push(`What you know about ${client.name}:\n${client.digest.trim()}`);
   if (documents) {
     sections.push(
