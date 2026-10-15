@@ -300,7 +300,7 @@ const MIN_SCORE = 0.2;
  * goes into her notes only from this close (cosine similarity). Her log says the best of
  * each look-up, to tune it from real calls.
  */
-export const AHEAD_MIN_SCORE = 0.35;
+export const AHEAD_MIN_SCORE = 0.3;
 
 export function passagesText(passages: Passage[]): string {
   if (!passages.length) return "Nothing in their documents matches that.";
