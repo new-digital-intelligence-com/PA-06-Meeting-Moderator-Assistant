@@ -238,7 +238,8 @@ export default function Workspace({
         </p>
       </header>
 
-      {live.live && <LivePanel live={live.live} at={live.at} q={q} onChanged={live.refresh} />}
+      {/* Only while it is on: once it has ended, its notes are on its own page, under Past. */}
+      {live.live && live.live.phase !== "ended" && <LivePanel live={live.live} at={live.at} q={q} onChanged={live.refresh} />}
       {sendingNow && (
         <SendNow q={q} clientName={client.name} busy={live.busy && !mine} onClose={() => setSendingNow(false)} onSent={live.refresh} />
       )}
