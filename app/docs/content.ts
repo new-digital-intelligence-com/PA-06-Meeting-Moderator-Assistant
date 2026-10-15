@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-14";
+export const UPDATED = "2026-10-15";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-10-15",
+    title: "Her look-ups work again",
+    points: [
+      "From the evening of 14 October every task she handed to her backend failed: OpenAI does not allow web search at the fastest effort (minimal) the entry below set, and refused each task whole. In the next call all five of her look-ups came back with nothing — she said 'one moment', and nothing was noted or searched in the client's documents.",
+      "Her backend is back at low effort, with web search. Set to minimal, web search is now left out — she is told she cannot look up current facts — instead of every task failing, so her notes and the client's documents keep working.",
+    ],
+    commits: [],
+    tone: "rose",
+  },
   {
     date: "2026-10-14",
     title: "She answers instead of 'one moment'",

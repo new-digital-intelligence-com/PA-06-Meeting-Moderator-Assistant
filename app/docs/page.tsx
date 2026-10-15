@@ -970,7 +970,7 @@ export default function Docs() {
                       [<C key="v">AVA_BRAIN</C>, "live (in use) or claude — who hears and speaks for her"],
                       [<C key="v">OPENAI_API_KEY</C>, "For AVA_BRAIN=live"],
                       [<C key="v">OPENAI_LIVE_MODEL · OPENAI_VOICE</C>, "Optional: gpt-live-1, gleam"],
-                      [<C key="v">OPENAI_DELEGATION_MODEL · _EFFORT</C>, "Who answers what GPT-Live hands over — an OpenAI model or claude — and how hard it thinks (gpt-6-luna, low; minimal is the fastest)"],
+                      [<C key="v">OPENAI_DELEGATION_MODEL · _EFFORT</C>, "Who answers what GPT-Live hands over — an OpenAI model or claude — and how hard it thinks (gpt-6-luna, low; minimal is faster but cannot search the web, so web search is then left out)"],
                       [<C key="v">AVA_DISPLAY_NAME</C>, "Her name as a Teams guest (Ava)"],
                       [<C key="v">ELEVENLABS_VOICE_ID_DE · _AR</C>, "Optional: a voice of her own per language"],
                       [<C key="v">AVA_ARABIC_CAPTIONS</C>, "Which Arabic Meet listens for (Maghrebi)"],

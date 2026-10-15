@@ -14,6 +14,12 @@ export const VOICE = process.env.OPENAI_VOICE || "gleam";
 export const DELEGATE = (process.env.OPENAI_DELEGATION_MODEL || "gpt-6-luna").trim();
 /** How hard the OpenAI backend thinks: none, minimal, low, medium, high, xhigh. */
 export const EFFORT = (process.env.OPENAI_DELEGATION_EFFORT || "low").trim();
+/**
+ * Whether the OpenAI backend can search the web. Not at minimal effort: OpenAI refuses
+ * web_search there ("cannot be used with reasoning.effort 'minimal'"), and with it every
+ * task she hands over — her notes and the client's documents included.
+ */
+export const WEB = DELEGATE !== "claude" && EFFORT !== "minimal";
 /** What she said is transcribed in pieces with no end marker: a pause this long ends a line. */
 const LINE_GAP_MS = 1200;
 

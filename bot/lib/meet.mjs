@@ -6,7 +6,7 @@ import path from "node:path";
 import { chromium } from "playwright-core";
 import * as app from "./app.mjs";
 import { BRAIN, DISPLAY_NAME, FACE, MODE, RECORD, STATE_DIR, platformArgs, profileFor, requireChrome, root } from "./config.mjs";
-import { DELEGATE, EFFORT, connectLive } from "./live.mjs";
+import { DELEGATE, EFFORT, WEB, connectLive } from "./live.mjs";
 import { speech } from "./voice.mjs";
 import { PEOPLE, keepEvidence, platformOf } from "./platforms.mjs";
 import { CHAT_ASK, detectLanguage, langOf, possessive } from "./language.mjs";
@@ -103,12 +103,12 @@ function liveInstructions(meeting, lang, product, emailed) {
     "Stop speaking when somebody interrupts. Listen to what they say and respond to that.",
     "",
     "# Delegation policy",
-    `Backend tools: your backend has the full transcript of this meeting, the actions noted so far, your working notes${meeting.client ? ", the client's documents" : ""}${DELEGATE === "claude" ? "" : " and the web"}. It is slow — many seconds — so use it only when you must.`,
+    `Backend tools: your backend has the full transcript of this meeting, the actions noted so far, your working notes${meeting.client ? ", the client's documents" : ""}${WEB ? " and the web" : ""}. It is slow — many seconds — so use it only when you must.`,
     "Delegate to the backend when:",
     "- somebody asks what was said, agreed or decided earlier in this meeting, for a recap, or for the actions so far;",
     "- somebody asks you to note down or remember an action, a decision or a task;",
     "- the answer needs facts about this company, these people or this project that are not in what you were told above;",
-    ...(DELEGATE === "claude" ? [] : ["- somebody asks about something current — news, prices, weather, a recent release;"]),
+    ...(WEB ? ["- somebody asks about something current — news, prices, weather, a recent release;"] : []),
     "- a calculation with several numbers.",
     "Do not delegate to the backend when:",
     "- somebody asks for your view, an opinion, advice, an explanation, a comparison or general knowledge — answer it yourself, right away, in one to three sentences, as a knowledgeable colleague would;",
@@ -127,7 +127,7 @@ function liveInstructions(meeting, lang, product, emailed) {
 function backendInstructions(meeting, lang) {
   const client = meeting.client?.name;
   return [
-    `You are the backend of ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant, who is taking part in a live meeting by voice${client ? ` for ${client}` : ""}. Her voice model hands you what needs thought, the meeting's record${client ? `, ${client}'s documents` : ""} or the web; your answer is spoken aloud by her, in her own words.`,
+    `You are the backend of ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant, who is taking part in a live meeting by voice${client ? ` for ${client}` : ""}. Her voice model hands you what needs thought, the meeting's record${client ? `, ${client}'s documents` : ""}${WEB ? " or the web" : ""}; your answer is spoken aloud by her, in her own words.`,
     "",
     `Meeting: ${meeting.title || "Meeting"}`,
     "What she was told beforehand:",
@@ -140,7 +140,7 @@ function backendInstructions(meeting, lang) {
     ...(client
       ? [`- Facts about ${client} — their products, prices, people, projects, policies, numbers — that the briefing does not settle: call search_knowledge first, with a short query in the language of their documents, and answer from what it finds. If it finds nothing that answers it, say you don't have that.`]
       : []),
-    `- Current facts — news, prices, a recent release: search the web, once. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
+    `- Current facts — news, prices, a recent release: ${WEB ? "search the web, once" : "you cannot look them up, so say so"}. Facts about this company, these people or this project come only from the briefing${client ? ", their documents" : ""} and the record; if they are not there, say so.`,
     `- Answer in ${LANGUAGE_NAME[lang]} unless the request is in another language, then in that one.`,
     "- Short and speakable: the answer itself in one to three sentences. No lists, no markdown, no links; say numbers the way they are spoken.",
     ...(client ? [`- Here she is ${possessive(client)} own meeting assistant: never mention NDI.`] : []),
@@ -678,7 +678,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
         }.`,
       );
     }
-    log(`  GPT-Live is her ears and voice${resume ? " again" : ""}; ${DELEGATE === "claude" ? "Claude" : `${DELEGATE} (${EFFORT} effort)`} does the thinking`);
+    log(`  GPT-Live is her ears and voice${resume ? " again" : ""}; ${DELEGATE === "claude" ? "Claude" : `${DELEGATE} (${EFFORT} effort${WEB ? "" : ", no web search"})`} does the thinking`);
   };
 
   const openLive = (resume, recap, openedAt) => {
@@ -695,7 +695,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
                 instructions: backendInstructions(meeting, lang),
                 reasoning: { effort: EFFORT },
                 text: { verbosity: "low" },
-                tools: [{ type: "web_search" }, ...BACKEND_TOOLS, ...(meeting.client ? [SEARCH_TOOL] : [])],
+                tools: [...(WEB ? [{ type: "web_search" }] : []), ...BACKEND_TOOLS, ...(meeting.client ? [SEARCH_TOOL] : [])],
                 tool_choice: "auto",
                 parallel_tool_calls: false,
               },
