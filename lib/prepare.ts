@@ -20,18 +20,30 @@ import { FAST, WRITER } from "./moderator";
 
 const anthropic = () => new Anthropic();
 
+/**
+ * One piece of her homework, written by Claude. `maxTokens` is room, not length (the prompt
+ * says how long): a reply that reaches it is cut mid-sentence — a brief stopped at "KT-05
+ * (AI", its People, Facts and Avoid lost — so it has plenty, and one cut short is asked for
+ * again with twice the room. Only what is written is paid for.
+ */
 async function write(model: string, system: string, prompt: string, maxTokens: number): Promise<string> {
-  const response = await anthropic().messages.create({
-    model,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: prompt }],
-  });
-  return response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+  let text = "";
+  for (const room of [Math.max(maxTokens, 8000), Math.max(maxTokens, 8000) * 2]) {
+    const response = await anthropic().messages.create({
+      model,
+      max_tokens: room,
+      system,
+      messages: [{ role: "user", content: prompt }],
+    });
+    text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    if (response.stop_reason !== "max_tokens") return text;
+    console.warn(`[prepare] cut off at ${room} tokens (${response.usage.output_tokens} written) — asking again with more room`);
+  }
+  return text;
 }
 
 const ABOUT_AVA =
