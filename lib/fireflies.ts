@@ -109,9 +109,11 @@ export async function earlierFromFireflies(m: MeetingRow): Promise<Earlier> {
   if (cached && Date.now() - cached.at < 15 * 60_000) return cached.value;
 
   const before = new Date(m.starts_at.getTime() - 10 * 60_000).toISOString();
+  // A title search comes back in no particular order: the past month of it, all of it (a
+  // daily meeting is some twenty), sorted here — or the newest could be missing.
   const { transcripts: titled } = await gql<{ transcripts: FirefliesMeeting[] }>(
-    `query ($keyword: String, $toDate: DateTime) { transcripts(keyword: $keyword, scope: "title", toDate: $toDate, limit: 15) { ${FIELDS} } }`,
-    { keyword: m.title.slice(0, 250), toDate: before },
+    `query ($keyword: String, $fromDate: DateTime, $toDate: DateTime) { transcripts(keyword: $keyword, scope: "title", fromDate: $fromDate, toDate: $toDate, limit: 50) { ${FIELDS} } }`,
+    { keyword: m.title.slice(0, 250), fromDate: new Date(m.starts_at.getTime() - 30 * 86_400_000).toISOString(), toDate: before },
   );
   // Only those Fireflies wrote up: one too short to summarise says nothing.
   const series = titled

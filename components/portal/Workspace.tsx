@@ -1048,13 +1048,30 @@ function UpcomingMeeting({ meeting, now, href }: { meeting: Meeting; now: number
   );
 }
 
-const PREP_FIELDS: { key: keyof Prep; label: string; hint: string; rows: number }[] = [
-  { key: "goal", label: "What is this meeting for?", hint: "e.g. Agree the scope and price of phase 2 with Acme.", rows: 2 },
-  { key: "agenda", label: "Agenda", hint: "One point per line. She can keep time and move it on.", rows: 4 },
-  { key: "people", label: "Anything else about who is coming", hint: "e.g. Anna joins late; Tom stands in for Kai this time.", rows: 2 },
-  { key: "avoid", label: "What to avoid", hint: "e.g. Do not discuss the merger. No prices before Anna joins.", rows: 2 },
+const PREP_FIELDS: { key: keyof Prep; label: string; hint: string; rows: number; wide?: boolean }[] = [
+  { key: "goal", label: "What is this meeting for?", hint: "e.g. Agree the scope and price of phase 2 with Acme.", rows: 3 },
+  { key: "avoid", label: "What to avoid", hint: "e.g. Do not discuss the merger. No prices before Anna joins.", rows: 3 },
+  { key: "agenda", label: "Agenda", hint: "One point per line. She can keep time and move it on.", rows: 4, wide: true },
+  { key: "people", label: "Anything else about who is coming", hint: "e.g. Anna joins late; Tom stands in for Kai this time.", rows: 3 },
   { key: "notes", label: "Anything else", hint: "Her role, open questions, what a good outcome is…", rows: 3 },
 ];
+
+/** A readable name from an address with none: "michael.burian@…" → "Michael Burian". */
+export const nameOf = (email: string) =>
+  email
+    .replace(/@.*/, "")
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+
+export const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
 
 /**
  * Preparing her for one meeting, on its page: who is coming (their Who's who lines), what
@@ -1068,6 +1085,7 @@ export function PrepPanel({
   onSaved,
   onError,
   docsVersion = 0,
+  showBrief = true,
 }: {
   meeting: Meeting;
   now: number;
@@ -1075,6 +1093,8 @@ export function PrepPanel({
   onSaved: () => void;
   onError: (message: string) => void;
   docsVersion?: number;
+  /** Off where the page shows her brief beside the preparation. */
+  showBrief?: boolean;
 }) {
   const locksIn = prepLocksAt(meeting.starts_at) - now;
   const [prep, setPrep] = useState<Prep>(meeting.prep ?? {});
@@ -1153,20 +1173,26 @@ export function PrepPanel({
             <h4 className="text-xs font-medium text-slate-600">Who is coming — what she should know about each</h4>
             <span className="text-xs text-slate-400">Kept for every meeting with them (Who&apos;s who)</span>
           </div>
-          <ul className="space-y-2">
+          <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {people.map((p) => {
               const kept = known[p.email];
+              const name = kept?.name || p.name || nameOf(p.email);
               return (
-                <li key={p.email} className="grid gap-2 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
-                  <div className="min-w-0 pt-2">
-                    <p className="truncate text-sm font-medium text-slate-800">{kept?.name || p.name || p.email.split("@")[0]}</p>
-                    <p className="truncate text-xs text-slate-500" title={p.email}>
-                      {p.email}
-                    </p>
+                <li key={p.email} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                      {initialsOf(name)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-800">{name}</p>
+                      <p className="truncate text-xs text-slate-500" title={p.email}>
+                        {p.email}
+                      </p>
+                    </div>
                   </div>
                   <textarea
                     rows={2}
-                    className={field}
+                    className={`${field} bg-white`}
                     placeholder="Their role, what they care about, how to deal with them."
                     value={lines[p.email] ?? kept?.info ?? ""}
                     onChange={(e) => {
@@ -1182,9 +1208,9 @@ export function PrepPanel({
         </div>
       )}
 
-      <div className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-2">
         {PREP_FIELDS.map((f) => (
-          <label key={f.key} className="block space-y-1.5">
+          <label key={f.key} className={`block space-y-1.5 ${f.wide ? "md:col-span-2" : ""}`}>
             <span className="text-xs font-medium text-slate-600">{f.label}</span>
             <textarea
               rows={f.rows}
@@ -1228,7 +1254,8 @@ export function PrepPanel({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Kept in view at the bottom of the screen while the preparation is scrolled. */}
+      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-3 shadow-lg shadow-slate-900/5 backdrop-blur">
         <button className={primary} onClick={() => void save()} disabled={saving}>
           {saving ? "She is reading it…" : "Save and brief her"}
         </button>
@@ -1237,10 +1264,14 @@ export function PrepPanel({
             Rewrite her brief
           </button>
         )}
-        {changed && !saving && <span className="text-xs text-amber-700">Not saved yet</span>}
+        {changed && !saving ? (
+          <span className="text-xs font-medium text-amber-700">Not saved yet</span>
+        ) : (
+          <span className="text-xs text-slate-400">Saving writes her brief from all of this, and from Fireflies.</span>
+        )}
       </div>
 
-      {brief.text && (
+      {showBrief && brief.text && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className="text-sm font-medium text-emerald-800">What she will walk in with</h4>
