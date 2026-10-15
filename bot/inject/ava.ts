@@ -80,6 +80,8 @@ declare global {
     __avaFaceGone?: (why: string) => Promise<void>;
     /** GPT-Live: the meeting's sound, 24 kHz 16-bit PCM, base64, every ~85 ms. */
     __avaHear?: (base64: string) => void;
+    /** Somebody talked over her and her voice was stopped: the runner drops the rest of that reply. */
+    __avaCut?: () => void;
     /** A test call's recording of her voice, in pieces, for /data/recordings (record.ts). */
     __avaRecording?: (kind: string, part: number, base64: string, last: boolean, rate: number) => Promise<void>;
   }
@@ -226,6 +228,9 @@ if (window.top === window && platform && !window.__ava) {
     window.RTCPeerConnection = Watched;
   }
 
+  /** How loud each piece of the room's sound was (RMS): set where her voice is played. */
+  let roomFrame: (rms: number) => void = () => {};
+
   /** Mixes everybody else's audio at 24 kHz and hands it to the runner in small pieces. */
   const ensureHearing = () => {
     if (hearCtx) return;
@@ -238,10 +243,13 @@ if (window.top === window && platform && !window.__ava) {
       if (!hearing) return;
       const input = e.inputBuffer.getChannelData(0);
       const pcm = new Int16Array(input.length);
+      let energy = 0;
       for (let i = 0; i < input.length; i++) {
         const s = Math.max(-1, Math.min(1, input[i]));
+        energy += s * s;
         pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
+      roomFrame(Math.sqrt(energy / Math.max(1, input.length)));
       const bytes = new Uint8Array(pcm.buffer);
       let bin = "";
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -864,6 +872,61 @@ if (window.top === window && platform && !window.__ava) {
   let rtFaceEnd = 0;
   /** Live is meant to stream in step with the room; if it runs ahead, say so once a turn. */
   let rtAheadSaid = "";
+  /** When the reply being played first reached the page (wall clock), and which reply was timed. */
+  let rtFirstAt = 0;
+  let rtTimedTurn = "";
+  /** The reply somebody talked over: what of it is still on its way is not played. */
+  let rtCutTurn = "";
+
+  /* ── talked over: she stops, as a person would ───────────────────────── */
+
+  /**
+   * GPT-Live sends a reply faster than she speaks it (her log has seen 1.6 s of it queued
+   * ahead), and over a WebSocket says nothing when somebody cuts in: OpenAI's voice guide
+   * leaves it to the client to throw away what is queued. So the room's own sound decides.
+   * Somebody speaking through most of the last ¾ second while her voice still plays: she
+   * stops, her lips with her, and the runner drops the rest of that reply. A word or a laugh
+   * over her is too short to count; so is the tail of the sentence she answered.
+   */
+  const ROOM_SPEECH_RMS = 0.012; // about -38 dBFS: a voice, well above a quiet line
+  const TALK_FRAMES = 9; // the hearing tap's pieces: 2048 samples at 24 kHz, 85 ms each
+  const TALK_OVER = 7; // of them with somebody speaking: about 0.6 s
+  const roomTalk: boolean[] = [];
+  /** When somebody in the room was last heard speaking (wall clock). */
+  let roomSpokeAt = 0;
+  roomFrame = (rms) => {
+    const talking = rms >= ROOM_SPEECH_RMS;
+    if (talking) roomSpokeAt = Date.now();
+    roomTalk.push(talking);
+    if (roomTalk.length > TALK_FRAMES) roomTalk.shift();
+    const voicePlaying = rtSources.length > 0 || Date.now() < rtFaceEnd;
+    if (!voicePlaying || roomTalk.filter(Boolean).length < TALK_OVER) return;
+    roomTalk.length = 0;
+    log("talked over — she stops");
+    rtCutTurn = rtItem;
+    api.interrupt();
+    try {
+      window.__avaCut?.();
+    } catch {
+      /* runner not listening */
+    }
+  };
+
+  /**
+   * For her log, once a reply: how long after the room went quiet she was heard — the wait
+   * for GPT-Live's voice, then what the page added (her lips' head start and lag, or the
+   * microphone's lead).
+   */
+  const timeReply = (turn: string, at: number) => {
+    if (rtTimedTurn === turn || !audio) return;
+    rtTimedTurn = turn;
+    if (!roomSpokeAt || rtFirstAt - roomSpokeAt > 15_000) return; // not an answer to somebody
+    const came = Math.max(0, rtFirstAt - roomSpokeAt) / 1000;
+    const added = (Date.now() - rtFirstAt) / 1000 + Math.max(0, at - audio.currentTime);
+    log(
+      `answered ${(came + added).toFixed(1)} s after the room went quiet — GPT-Live's voice came after ${came.toFixed(1)} s, then ${added.toFixed(1)} s ${rtVia === "face" ? "for her lips" : "to her microphone"}`,
+    );
+  };
 
   const pcm24 = (bytes: Uint8Array) => {
     const n = bytes.length >> 1;
@@ -951,7 +1014,7 @@ if (window.top === window && platform && !window.__ava) {
   const ahead = (s: number, turn: string) => {
     if (s > 1.5 && rtAheadSaid !== turn) {
       rtAheadSaid = turn;
-      log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — an interruption would not stop it at once`);
+      log(`her voice is arriving ${s.toFixed(1)} s ahead of the room — queued, and dropped if somebody talks over her`);
     }
   };
 
@@ -993,7 +1056,9 @@ if (window.top === window && platform && !window.__ava) {
     }
     const t = audio.currentTime;
     const lead = faceLagMs / 1000;
-    play(p.samples, Math.max(t + lead, rtNext));
+    const at = Math.max(t + lead, rtNext);
+    play(p.samples, at);
+    timeReply(p.turn, at);
     ahead(rtNext - t - lead, p.turn);
   };
 
@@ -1001,7 +1066,9 @@ if (window.top === window && platform && !window.__ava) {
   const toMic = (p: Piece) => {
     const { audio } = ensureAudio();
     const t = audio.currentTime;
-    play(p.samples, rtNext > t + 0.02 ? rtNext : t + 0.15);
+    const at = rtNext > t + 0.02 ? rtNext : t + 0.15;
+    play(p.samples, at);
+    timeReply(p.turn, at);
     ahead(rtNext - t - 0.15, p.turn);
   };
 
@@ -1172,6 +1239,7 @@ if (window.top === window && platform && !window.__ava) {
     },
 
     feed(base64, turn) {
+      if (turn === rtCutTurn) return;
       const { mic } = ensureAudio();
       const samples = pcm24(bytesOf(base64));
       lastActive = Date.now();
@@ -1184,6 +1252,7 @@ if (window.top === window && platform && !window.__ava) {
         // The last reply's head start, if still held, goes first.
         if (held) release();
         rtItem = turn;
+        rtFirstAt = Date.now();
         rtVia = faceReady ? "face" : "mic";
         resetResampler();
         up2.reset();

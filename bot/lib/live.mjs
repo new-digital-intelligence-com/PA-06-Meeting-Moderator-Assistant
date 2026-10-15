@@ -29,11 +29,12 @@ const LINE_GAP_MS = 1200;
  *   onHeard(text)               a piece of what the room said, as she heard it
  *   onSaid(text, at)            one line of hers, once she has finished it
  *   onDelegation(id, target)    she handed something over; for "client", answer with say(text, id)
+ *   onAnswered()                the OpenAI backend has its answer, which she is about to say
  *   onFunctionCall(name, args)  the OpenAI backend calls one of our tools; resolves to its output
  *   onStarted(expiresAt)        the session is up (expiresAt in ms)
  *   onClose(reason, byUs)       the session ended
  */
-export function connectLive({ instructions, history, delegation, log, onAudio, onHeard, onSaid, onDelegation, onFunctionCall, onStarted, onClose }) {
+export function connectLive({ instructions, history, delegation, log, onAudio, onHeard, onSaid, onDelegation, onAnswered, onFunctionCall, onStarted, onClose }) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new Error("OPENAI_API_KEY is not set in bot/.env");
 
@@ -84,6 +85,7 @@ export function connectLive({ instructions, history, delegation, log, onAudio, o
     if (inner?.type === "response.completed" && inner.response?.output?.some?.((o) => o.type === "message")) {
       const at = handedAt.shift();
       if (at) log(`  her backend answered in ${((Date.now() - at) / 1000).toFixed(1)} s`);
+      onAnswered?.();
     }
     if (inner?.type === "response.output_item.done" && inner.item?.type === "function_call") {
       const { call_id, name } = inner.item;

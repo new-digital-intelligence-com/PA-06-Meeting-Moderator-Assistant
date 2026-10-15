@@ -32,6 +32,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-15",
+    title: "In a group she speaks only when named, and stops when talked over",
+    points: [
+      "In the 15 October Teams call she said 'hi', 'mm-hm', 'right' and 'I hear you' to a room of seven that had not asked her anything. Now, in a group, she speaks only when somebody has said her name — Ava, or Eva as it is often heard — in the last 30 seconds (and for her hello, and an answer she went to fetch). What GPT-Live says otherwise is never played, is left out of the notes, and she is told it went unheard. Her hello says to ask her by name.",
+      "She always finished her sentence when somebody cut in: GPT-Live sends a reply faster than she speaks it (1.6 s queued ahead in that call) and says nothing when it is interrupted. Her page now listens to the room while she speaks — somebody talking through most of ¾ s stops her voice and her lips, and the rest of the reply is dropped. Tested in Chrome: she stopped 0.6 s after somebody started; a 0.3 s word over her did not stop her.",
+      "Faster answers from the client's documents: the moment somebody stops asking, what they said is searched and the closest passages go into her notes before she answers, so she answers from them herself instead of handing it over. And her log times every answer, from the room going quiet to her voice.",
+      "With Fireflies in the call — most of NDI's own meetings — her notes are written and filed but not emailed: Fireflies sends its own. She neither promises a summary nor asks for addresses there.",
+    ],
+    commits: [],
+    tone: "emerald",
+  },
+  {
+    date: "2026-10-15",
     title: "Her look-ups work again",
     points: [
       "From the evening of 14 October every task she handed to her backend failed: OpenAI does not allow web search at the fastest effort (minimal) the entry below set, and refused each task whole. In the next call all five of her look-ups came back with nothing — she said 'one moment', and nothing was noted or searched in the client's documents.",

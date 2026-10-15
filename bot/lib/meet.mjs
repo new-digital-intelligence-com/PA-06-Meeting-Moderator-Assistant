@@ -28,6 +28,22 @@ const HUSH_MS = Number(process.env.AVA_HUSH_SECONDS || 180) * 1000;
 const SILENT_LEAVE_MS = Number(process.env.AVA_SILENT_LEAVE_MINUTES || 10) * 60_000;
 /** How long after the start time she waits for anybody to turn up. */
 const NOBODY_MS = 5 * 60_000;
+/**
+ * In a group she speaks only when somebody has said her name — at most this long ago, for a
+ * question that runs on after it ("Ava, about the pilot… what did we agree?") and a quick
+ * follow-up. What GPT-Live says otherwise is never played.
+ */
+const NAME_WINDOW_MS = 30_000;
+/** Her name as people say it and as captions and transcripts write it. */
+const NAMES = [...new Set([DISPLAY_NAME.toLowerCase(), "ava", "eva", "ewa", "éva", "إيفا", "ايفا", "آفا", "أفا"])];
+const NAME_RE = new RegExp(
+  `(?:^|[^\\p{L}])(?:${NAMES.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?=$|[^\\p{L}])`,
+  "giu",
+);
+/** How many times her name is in a piece of text. */
+const namesIn = (text) => (String(text ?? "").match(NAME_RE) ?? []).length;
+/** Somebody stopped talking for this long: what they said is looked up in the client's documents. */
+const LOOKAHEAD_PAUSE_MS = 450;
 /** The most tiles left in the call that "only silent strangers are left" is judged on. */
 const SILENT_OTHERS_MAX = 2;
 
@@ -91,7 +107,7 @@ function liveInstructions(meeting, lang, product, emailed) {
     "",
     "# When to speak",
     "- One-on-one (you and one other person): everything they say is said to you. Talk with them naturally — answer, react, engage with what they bring up.",
-    `- A group: respond when somebody addresses you — by name (${DISPLAY_NAME}; it may sound like Eva) or as "the assistant" — or asks the room something you can clearly answer. Otherwise keep listening while people talk to each other.`,
+    `- A group: speak only when somebody says your name (${DISPLAY_NAME}; it may sound like Eva) to you. Not for a question put to the room, not to greet somebody who joins, not to agree or react: if nobody has said your name, stay silent and keep listening while people talk to each other. Anything you say in a group without being named is not heard by anybody.`,
     "- You will be told when the meeting changes between one-on-one and a group.",
     "- Greet people once. Confirm an instruction once, then act on it. If they give you a role — interviewer, facilitator, timekeeper — play it fully, keep track of where it stands, and move it on yourself.",
     "",
@@ -100,19 +116,22 @@ function liveInstructions(meeting, lang, product, emailed) {
     "In a group, make no listening sounds and no acknowledgements at all — no 'mm-hm', 'hmm', 'okay', 'yeah', 'right' — and never speak while somebody else is speaking. In a group your only words are real answers, when you are addressed.",
     "",
     "# Interruption policy",
-    "Stop speaking when somebody interrupts. Listen to what they say and respond to that.",
+    "The moment somebody else starts talking while you speak, stop — mid-sentence if need be — and listen. Do not finish your sentence first, and do not repeat it afterwards unless they ask; respond to what they said.",
     "",
     "# Delegation policy",
     `Backend tools: your backend has the full transcript of this meeting, the actions noted so far, your working notes${meeting.client ? ", the client's documents" : ""}${WEB ? " and the web" : ""}. It is slow — many seconds — so use it only when you must.`,
     "Delegate to the backend when:",
     "- somebody asks what was said, agreed or decided earlier in this meeting, for a recap, or for the actions so far;",
     "- somebody asks you to note down or remember an action, a decision or a task;",
-    "- the answer needs facts about this company, these people or this project that are not in what you were told above;",
+    `- the answer needs facts about this company, these people or this project that are not in what you were told above${meeting.client ? " or in passages from their documents in your notes" : ""};`,
     ...(WEB ? ["- somebody asks about something current — news, prices, weather, a recent release;"] : []),
     "- a calculation with several numbers.",
     "Do not delegate to the backend when:",
     "- somebody asks for your view, an opinion, advice, an explanation, a comparison or general knowledge — answer it yourself, right away, in one to three sentences, as a knowledgeable colleague would;",
-    "- somebody greets you, thanks you, or asks you to repeat or clarify what you just said.",
+    "- somebody greets you, thanks you, or asks you to repeat or clarify what you just said;",
+    ...(meeting.client
+      ? [`- passages from ${meeting.client.name}'s documents in your notes ("[From ${meeting.client.name}'s documents …]", looked up as they finished asking) already answer it — answer from them at once.`]
+      : []),
     "When you do delegate: say one very short acknowledgement at most ('one moment'), once — never a second time — and do not guess the result. If somebody asks again before it comes back, say briefly what you can, or that it is coming.",
     "",
     "# Facts",
@@ -251,8 +270,11 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   // Only meetings she is invited to on her calendar have their notes emailed — to the
   // invite's guests. Those she is sent to from a client's page are not: their notes are filed
   // there. An invite with nobody on it but her, she asks in the chat instead.
-  const emailed = !briefed;
-  const askForEmails = emailed && !meeting.recipients?.length;
+  // And none whose call has Fireflies in it: it sends everybody its own notes (the site files
+  // hers without emailing them), so she neither promises a summary nor asks for addresses.
+  let firefliesHere = false;
+  const emailsNotes = () => !briefed && !firefliesHere;
+  const askForEmails = () => emailsNotes() && !meeting.recipients?.length;
 
   // 1 — brief her, and tell the server this is a real meeting she is attending in person.
   // A calendar meeting is new in this seat; one a page sent her to is already there.
@@ -375,6 +397,21 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   let langSwitchedAt = 0;
   /** Her lines as GPT-Live transcribes them — reported to the app one per heartbeat. */
   const said = [];
+  /** When somebody last said her name — in the captions or in what GPT-Live heard. */
+  let nameAt = 0;
+  /** Her name seen so far in each caption block (Meet rewrites a block as it goes): only a new one counts. */
+  const namesSeen = new Map();
+  /** Until when she may speak in a group without being named: her hello, an answer she is fetching. */
+  let openUntil = 0;
+  /**
+   * The rest of a reply being thrown away, up to its first pause, and why: "talked over"
+   * (somebody cut in — her page stopped her) or "unnamed" (a group, and nobody said her name).
+   */
+  let rtDrop = null;
+  let rtDropAt = 0;
+  /** When replies nobody named her for were kept quiet: their lines are not hers in the notes. */
+  const quietSpans = [];
+  let quietToldAt = 0;
   /** The conversation by caption block, to brief a new session after a reconnect. */
   const recent = new Map();
   /** Who has spoken lately, from the captions: two voices make a group. */
@@ -399,6 +436,11 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     wordsIn.set(id, Math.max(words, wordsIn.get(id) ?? 0));
 
     voices.set(speaker, Date.now());
+    // Her name, said to her: in a group, what lets her speak.
+    const named = namesIn(text);
+    if (named > (namesSeen.get(id) ?? 0)) nameAt = Date.now();
+    namesSeen.set(id, Math.max(named, namesSeen.get(id) ?? 0));
+    if (namesSeen.size > 300) namesSeen.delete(namesSeen.keys().next().value);
     if (live) {
       recent.set(id, `${speaker}: ${text}`);
       if (recent.size > 80) recent.delete(recent.keys().next().value);
@@ -453,6 +495,12 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   // The meeting's sound, from her page, straight on to OpenAI — only with somebody there.
   await context.exposeBinding("__avaHear", (_src, b64) => {
     if (rt && !alone) rt.appendAudio(b64);
+  });
+  // Somebody talked over her: her page has stopped her voice and her lips; what is still
+  // arriving of that reply is thrown away too.
+  await context.exposeBinding("__avaCut", () => {
+    rtDrop = "talked over";
+    rtDropAt = Date.now();
   });
   // No Anam account can give her a face any more in this meeting: her camera goes off, so
   // the room sees her profile photo rather than a face whose lips never move. Her voice is
@@ -611,18 +659,50 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     rt.instruct(
       room === "one-on-one"
         ? "The meeting is now one-on-one: just you and one other person. Everything they say is said to you — talk with them naturally."
-        : `The meeting is now a group${people ? ` of ${people - 1} people besides you` : ""}. Respond when somebody addresses you or asks something you can clearly answer; otherwise stay silent — no listening sounds or acknowledgements ('mm-hm', 'okay', 'yeah').`,
+        : `The meeting is now a group${people ? ` of ${people - 1} people besides you` : ""}. Speak only when somebody says your name (${DISPLAY_NAME}, or Eva) to you; otherwise stay silent — no greetings, listening sounds or acknowledgements ('mm-hm', 'okay', 'yeah', 'right').`,
     );
     log(room === "one-on-one" ? "  one-on-one: she talks with them" : "  a group: she answers when asked");
   };
 
-  /** Her voice, as GPT-Live makes it: played at once, the silence between turns skipped. */
+  /** Whether she may begin a reply now: one-on-one always; in a group only when named. */
+  const mayAnswer = () => roomNow() !== "group" || Date.now() - nameAt <= NAME_WINDOW_MS || Date.now() < openUntil;
+
+  /**
+   * Her voice, as GPT-Live makes it: played at once, the silence between turns skipped. In a
+   * group a reply nobody named her for is not played at all — GPT-Live still said "mm-hm",
+   * "right" and "hi" to a room that never asked — and a reply somebody talked over is
+   * dropped from where her page stopped it. Either way up to the reply's first pause.
+   */
   const playLive = (b64) => {
     const now = Date.now();
     const sound = voiced(b64);
+    if (rtDrop) {
+      if (now - rtDropAt < 700) {
+        if (sound) {
+          rtDropAt = now;
+          if (rtDrop === "unnamed" && quietSpans.length) quietSpans[quietSpans.length - 1].to = now;
+        }
+        return;
+      }
+      // A pause: what comes next is a new reply.
+      rtDrop = null;
+      rtInTurn = false;
+    }
     if (!sound && (!rtInTurn || now - rtVoicedAt > 700)) return;
     if (sound) rtVoicedAt = now;
     if (!rtInTurn) {
+      if (!mayAnswer()) {
+        rtDrop = "unnamed";
+        rtDropAt = now;
+        quietSpans.push({ from: now, to: now });
+        if (quietSpans.length > 20) quietSpans.shift();
+        // Once a minute at most, she learns that it went unheard, and why.
+        if (rt && now - quietToldAt > 60_000) {
+          quietToldAt = now;
+          rt.think("[Nobody heard that: in this group you speak only when somebody says your name. Stay silent until they do.]");
+        }
+        return;
+      }
       rtInTurn = true;
       rtTurn++;
       // Her face, for what she is about to say (it connects in about a second and a half).
@@ -637,6 +717,52 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     }, 800);
   };
 
+  /**
+   * The client's documents, looked up the moment somebody stops asking — not only once she
+   * has handed it over, seconds later: what answers it is in her notes before she replies,
+   * so she can answer at once (OpenAI's "speculative lookup"). In a group only when she was
+   * named; one-on-one whatever is said to her. Only passages close to it are passed on.
+   */
+  let askText = "";
+  let askTimer = null;
+  let lookedUpAt = 0;
+  let lookedUp = "";
+  const lookUp = async () => {
+    const query = askText
+      .replace(NAME_RE, " ")
+      .replace(/\s+/g, " ")
+      .replace(/^[\s,.;:!?،]+/, "")
+      .trim()
+      .slice(-300);
+    askText = "";
+    if (!rt || over || query.split(" ").length < 4 || query === lookedUp) return;
+    if (roomNow() === "group" && Date.now() - nameAt > NAME_WINDOW_MS) return;
+    if (Date.now() - lookedUpAt < 2500) return;
+    lookedUpAt = Date.now();
+    lookedUp = query;
+    try {
+      const { results, found, best } = await api.knowledgeAhead(query);
+      const took = ((Date.now() - lookedUpAt) / 1000).toFixed(1);
+      const score = Number(best ?? 0).toFixed(2);
+      if (!found) {
+        log(`  looked ahead in their documents: nothing close (best ${score}, ${took} s) for "…${query.slice(-60)}"`);
+        return;
+      }
+      rt?.think(
+        `[From ${meeting.client.name}'s documents, about what was just said — if this answers it, answer from it now, in your own words, without handing it over:]\n${String(results).slice(0, 6000)}`,
+      );
+      log(`  looked ahead in their documents: ${found} passage${found === 1 ? "" : "s"} (best ${score}, ${took} s) for "…${query.slice(-60)}"`);
+    } catch (e) {
+      log(`  looking ahead in their documents failed: ${e.message}`);
+    }
+  };
+  const lookAhead = (piece) => {
+    if (!meeting.client) return;
+    askText = (askText + piece).slice(-600);
+    clearTimeout(askTimer);
+    askTimer = setTimeout(() => void lookUp(), LOOKAHEAD_PAUSE_MS);
+  };
+
   /** GPT-Live handed something over: Claude answers from the whole meeting. */
   const answerDelegation = async (id) => {
     const asked = rtHeard.slice(-1500);
@@ -644,10 +770,13 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     try {
       const { say } = await api.ask(asked);
       if (!rt) return;
+      // The answer to what she was asked: hers to say, named or not.
+      openUntil = Date.now() + 15_000;
       if (say) rt.say(say, id);
       else rt.think("Nothing in the meeting or the briefing answers this.", id);
     } catch (e) {
       log(`  her memory did not answer: ${e.message}`);
+      openUntil = Date.now() + 15_000;
       rt?.think("The backend could not answer just now. Say you could not check it.", id);
     }
   };
@@ -672,10 +801,12 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
     void page.evaluate(() => window.__ava?.listen(true)).catch(() => {});
     if (!rtGreeted) {
       rtGreeted = true;
+      // Her hello is hers to say: nobody names her before she has introduced herself.
+      openUntil = Date.now() + 20_000;
       rt.say(
-        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant; you will follow along and take notes${emailed ? " and send everyone a summary with the actions afterwards" : ""}${
-          askForEmails ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
-        }.`,
+        `You have just joined. Introduce yourself to the room now, briefly, in ${LANGUAGE_NAME[lang]}: you are ${DISPLAY_NAME}, ${possessive(ownerOf(meeting))} meeting assistant; you will follow along and take notes${emailsNotes() ? " and send everyone a summary with the actions afterwards" : ""}${
+          askForEmails() ? ", and anyone who wants the notes can type their email in the meeting chat" : ""
+        }. In a group, say that people can ask you anything by saying your name.`,
       );
     }
     log(`  GPT-Live is her ears and voice${resume ? " again" : ""}; ${DELEGATE === "claude" ? "Claude" : `${DELEGATE} (${EFFORT} effort${WEB ? "" : ", no web search"})`} does the thinking`);
@@ -683,7 +814,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
 
   const openLive = (resume, recap, openedAt) => {
     const session = connectLive({
-      instructions: liveInstructions(meeting, lang, platform.name, emailed),
+      instructions: liveInstructions(meeting, lang, platform.name, emailsNotes()),
       // What she hands over: to Claude through the app, or to an OpenAI model OpenAI runs.
       delegation:
         DELEGATE === "claude"
@@ -722,11 +853,21 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       },
       onAudio: playLive,
       onHeard: (piece) => {
+        // Her name, as GPT-Live hears it — sooner than the captions write it. Only a new one:
+        // the end of what came before, joined to this piece, catches a name cut in two.
+        const before = rtHeard.slice(-16);
+        if (namesIn(before + piece) > namesIn(before)) nameAt = Date.now();
         rtHeard = (rtHeard + piece).slice(-4000);
         rtHeardTotal += piece.length;
         if (piece.trim()) rtHeardAt = Date.now();
+        lookAhead(piece);
       },
       onSaid: (text, at) => {
+        // A reply kept quiet because nobody named her: never heard, so not hers in the notes.
+        if (quietSpans.some((s) => at >= s.from - 1500 && at <= s.to + 1500)) {
+          log(`  (kept quiet — nobody said her name) ${text}`);
+          return;
+        }
         log(`  ▸ ${text}`);
         recent.set(`said:${at}`, `${DISPLAY_NAME}: ${text}`);
         said.push({ key: `live:${at.toString(36)}:${said.length}`, text, at });
@@ -734,6 +875,10 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       onDelegation: (id, target) => {
         if (target === "client") void answerDelegation(id);
         else log(`  she hands it to ${DELEGATE}`);
+      },
+      // Her backend's answer is ready: she says it, named or not.
+      onAnswered: () => {
+        openUntil = Math.max(openUntil, Date.now() + 15_000);
       },
       onClose: (why, byUs) => {
         // A session she replaced or closed herself: nothing to do.
@@ -883,6 +1028,12 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       if (seenBots.has(b)) continue;
       seenBots.add(b);
       log(`  not counting ${b} — a notetaker, not a person`);
+      // The site needs to know too: with Fireflies in the call her notes are not emailed.
+      if (/fireflies/i.test(b) && !firefliesHere) {
+        firefliesHere = true;
+        log("  Fireflies is here — it sends its own notes; hers will be filed, not emailed");
+      }
+      void api.update({ notetakers: [...seenBots] }).catch(() => {});
     }
     if (state.people !== people && state.people) {
       const how = [
@@ -944,7 +1095,7 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       log("  somebody is here");
       if (live && !rt) startLive();
       if (mode === "avatar") void page.evaluate(() => window.__ava?.warm()).catch(() => {});
-      if (platform.askForEmails && askForEmails) {
+      if (platform.askForEmails && askForEmails()) {
         await platform.askForEmails(
           page,
           log,
@@ -1093,7 +1244,9 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
       r.delivered?.sent
         ? `  notes sent to ${r.followUp?.to}`
         : r.notEmailed
-          ? "  notes written — filed on the client's page, not emailed"
+          ? r.why
+            ? `  notes written, not emailed — ${r.why}`
+            : "  notes written — filed on the client's page, not emailed"
           : "  notes written — nobody to send them to",
     );
   } catch (e) {

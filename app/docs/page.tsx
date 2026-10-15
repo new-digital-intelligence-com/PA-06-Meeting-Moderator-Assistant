@@ -162,7 +162,7 @@ export default function Docs() {
                   },
                   {
                     title: "The notes go out",
-                    body: "The transcript is written up — summary, decisions, actions with owners — and emailed to the guests from her own Gmail. Once per meeting.",
+                    body: "The transcript is written up — summary, decisions, actions with owners — and emailed to the guests from her own Gmail. Once per meeting. Not when Fireflies was in the call: it sends its own notes, and hers are filed only.",
                     tone: "violet",
                   },
                 ]}
@@ -421,13 +421,16 @@ export default function Docs() {
                     ["When it starts", "When somebody else is in the meeting; she introduces herself."],
                     ["Handed over", "Only what she cannot answer herself: what was said or decided earlier, a recap, the actions so far, something to note down, the client's documents, current facts, a calculation. Her view, advice, an explanation or general knowledge she answers herself, at once — handed over, such questions took up to two minutes. She says 'one moment' once at most; her log says how long each answer took. By default to an OpenAI model that OpenAI runs (gpt-6-luna), with web search and two tools of ours: the meeting’s record and noting an action (/api/moderator/record). Or to Claude through the app (/api/moderator/ask). Either way what she notes goes into the meeting’s actions."],
                     ["One-on-one", "She talks with the person naturally, backchannels included."],
-                    ["A group", "She responds when addressed — by name, or as “the assistant” — or asked something she can clearly answer; otherwise she listens, silent — no ‘mm-hm’, ‘okay’ or ‘yeah’. She is told each time the room changes."],
+                    ["A group", "She speaks only when somebody has said her name — Ava, or Eva as it is often heard — in the last 30 seconds, in the captions or in what GPT-Live hears; and for her hello, and an answer she went to fetch. Anything else GPT-Live says in a group is never played: her log shows it as “kept quiet — nobody said her name”, the notes leave it out, and she is told it went unheard. She is told each time the room changes, and her hello says to ask her by name."],
+                    ["Talked over", "GPT-Live sends a reply faster than she speaks it — up to 1.6 s queued ahead — and says nothing when somebody cuts in. So her page listens: somebody speaking through most of ¾ s while her voice plays stops it, her lips with it, and the rest of that reply is dropped. A word or a laugh over her does not (tested in Chrome: stopped 0.6 s after somebody started; a 0.3 s word did not)."],
+                    ["Their documents, ahead", "In a client’s meeting, the moment somebody stops asking — named, in a group — what they said is searched in the client’s documents and the closest passages go into her notes, before she answers: what is there she answers at once, without handing it over. Only close passages (similarity 0.35 and up); her log has each look-up, its best score and how long it took."],
+                    ["How long she took", "Her log times every answer: how long after the room went quiet she was heard — the wait for GPT-Live’s voice, then what her page added (her lips’ head start and lag, or the microphone’s lead)."],
                     ["Who is speaking", "Sound carries no names, so the captions tell her who is talking."],
                     ["Empty room", "Never open while she is alone (it is billed by the minute): it opens when somebody else arrives, closes within seconds of the room emptying, and reopens with the conversation so far when somebody is back."],
                     ["Silence", "Billed while open, even when nobody talks. After three minutes in which nobody — her included — has said anything, the session closes (AVA_HUSH_SECONDS); the first words anybody says open it again, with the conversation so far. After ten minutes of silence she leaves (AVA_SILENT_LEAVE_MINUTES)."],
                     ["Time limit", "A session runs out after a while; she renews it in a quiet moment beforehand, and reconnects with the conversation so far if it drops. After three quick failures she stays quiet."],
                     ["Language", "Whichever of English, German or Arabic she is spoken to in, by herself; the captions follow what is spoken (see Languages). German is native quality in GPT-Live; Arabic is understood in dialect (Tunisian, Maghrebi, Egyptian…) and answered in Modern Standard Arabic, where it is strongest."],
-                    ["Bots", "Notetakers (Fireflies, Otter, Read.ai…) are not counted as people and their captions are ignored: with only bots left she is alone, so her voice session and her face are closed."],
+                    ["Bots", "Notetakers (Fireflies, Otter, Read.ai…) are not counted as people and their captions are ignored: with only bots left she is alone, so her voice session and her face are closed. The site is told which were there: with Fireflies in the call her notes are filed, not emailed, and she neither promises a summary nor asks for addresses."],
                   ]}
                 />
               </div>
@@ -525,7 +528,8 @@ export default function Docs() {
                 <Card tone="emerald" title="Calendar meetings: emailed to the guests">
                   A meeting she is invited to on her calendar: when it ends the notes go out from Ava’s Gmail to every guest on the
                   invite, with nothing to press. Not meeting rooms, not herself; once per meeting. (An invite with nobody on it but
-                  her: she asks in the meeting chat for addresses.)
+                  her: she asks in the meeting chat for addresses.) Not when Fireflies was in the call — most of NDI’s own meetings:
+                  Fireflies sends everybody its notes, so hers are written and filed, not emailed as well.
                 </Card>
                 <Card tone="amber" title="Sent from a client’s page: filed, not emailed">
                   A meeting she was sent to with “Need Ava now?” — a Meet or Teams link pasted there: the notes

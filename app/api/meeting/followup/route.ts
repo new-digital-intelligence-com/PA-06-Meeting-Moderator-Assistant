@@ -125,6 +125,18 @@ export async function POST(request: Request) {
   if (meeting.attendedFrom === "dispatch") {
     return NextResponse.json({ summary: written.summary, followUp: meeting.followUp, delivered: null, notEmailed: true });
   }
+  // Fireflies was in the call: it sends everybody its own notes, so hers are written and
+  // filed — her memory of the meeting, the client's page — but not emailed as well.
+  const fireflies = meeting.notetakers?.find((n) => /fireflies/i.test(n));
+  if (fireflies) {
+    return NextResponse.json({
+      summary: written.summary,
+      followUp: meeting.followUp,
+      delivered: null,
+      notEmailed: true,
+      why: `${fireflies} was in the call and sends its own notes`,
+    });
+  }
 
   if (!google) return NextResponse.json({ error: "Google is not connected." }, { status: 401 });
   if (!to) {

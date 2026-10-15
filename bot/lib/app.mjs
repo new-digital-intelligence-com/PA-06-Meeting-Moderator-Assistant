@@ -70,6 +70,8 @@ export function seat(n) {
     record: (note) => call("POST", "/api/moderator/record", note ? { note } : {}, api.headers()),
     /** Passages from the client's documents about `query` — for the meeting she is in, decided by the app. */
     knowledge: async (query) => (await call("POST", "/api/moderator/knowledge", { query }, api.headers())).results,
+    /** Looked up before she is asked to: only passages close to it — { results, found, best }. */
+    knowledgeAhead: async (query) => call("POST", "/api/moderator/knowledge", { query, ahead: true }, api.headers()),
     /** She has left the call — and why, for the meeting's history. */
     stop: (reason) => call("POST", "/api/meeting/control", { command: "stop", ...(reason ? { reason } : {}) }, api.headers()),
     /** Write the notes and send them to the guests. */

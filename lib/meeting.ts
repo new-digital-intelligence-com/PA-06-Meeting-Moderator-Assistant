@@ -136,6 +136,11 @@ export type Meeting = {
    */
   attendedFrom?: "calendar" | "dispatch";
   /**
+   * Notetaker bots her runner saw in the call (Fireflies, Otter…). With Fireflies there — it
+   * sends everybody its own notes — hers are written and filed, but not emailed.
+   */
+  notetakers?: string[];
+  /**
    * The client she is attending for — from her calendar, or sent from the client's page:
    * whose documents she searches, and the meeting (in Postgres) her notes are filed under.
    */
@@ -270,6 +275,7 @@ function normalise(raw: unknown): Meeting {
     joinAt: typeof o.joinAt === "number" ? o.joinAt : undefined,
     attendedBy: o.attendedBy === "self" ? "self" : undefined,
     attendedFrom: o.attendedFrom === "calendar" || o.attendedFrom === "dispatch" ? o.attendedFrom : undefined,
+    notetakers: arr<unknown>(o.notetakers).filter((n): n is string => typeof n === "string").slice(0, 10),
     dispatch: o.dispatch && typeof o.dispatch === "object" ? (o.dispatch as Meeting["dispatch"]) : undefined,
     client: clientOf(o.client),
     attendedAt: typeof o.attendedAt === "number" ? o.attendedAt : undefined,

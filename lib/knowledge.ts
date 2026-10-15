@@ -246,6 +246,12 @@ export async function searchKnowledge(clientId: string, meetingId: string | null
 
 /** Below this, a passage shares little more than its language with the question. */
 const MIN_SCORE = 0.2;
+/**
+ * Looked up ahead — before she was asked to, the moment somebody stops talking — a passage
+ * goes into her notes only from this close (cosine similarity). Her log says the best of
+ * each look-up, to tune it from real calls.
+ */
+export const AHEAD_MIN_SCORE = 0.35;
 
 export function passagesText(passages: Passage[]): string {
   if (!passages.length) return "Nothing in their documents matches that.";

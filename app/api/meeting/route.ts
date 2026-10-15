@@ -31,6 +31,8 @@ type Patch = {
   client?: { id: string; name: string; meetingId: string } | null;
   /** Her runner, walking into a calendar meeting: a new meeting in its seat, not an edit of the last. */
   start?: boolean;
+  /** Her runner: the notetaker bots in the call (Fireflies there: her notes are not emailed). */
+  notetakers?: string[];
 };
 
 /**
@@ -64,6 +66,9 @@ export async function PUT(request: Request) {
     }
     // Only her runner says whose meeting it is: it decides whose documents she searches.
     if (patch.client !== undefined && runner) m.client = clientOf(patch.client);
+    if (Array.isArray(patch.notetakers) && runner) {
+      m.notetakers = [...new Set(patch.notetakers.filter((n) => typeof n === "string").map((n) => n.trim().slice(0, 80)))].slice(0, 10);
+    }
     if (patch.recipients) {
       m.recipients = Array.from(
         new Set(patch.recipients.map((p) => p.trim().toLowerCase()).filter((p) => p.includes("@"))),
