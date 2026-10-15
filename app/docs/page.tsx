@@ -637,7 +637,7 @@ export default function Docs() {
                   },
                   {
                     title: "They invite her to a meeting",
-                    body: "From their calendar, like a colleague. Within a minute it is on their page, marked Google Meet or Microsoft Teams, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only — with their earlier meetings to look back on. Saving writes her brief, which they read back. A minute before it starts, the preparation locks.",
+                    body: "From their calendar, like a colleague. Within a minute it is on their page — the Meetings tab shows Upcoming or Past, one list at a time — marked Google Meet or Microsoft Teams, where they can prepare her: what it is for, the agenda, who is coming, what to avoid, notes, and documents for that meeting only — with their earlier meetings to look back on. Saving writes her brief, which they read back. A minute before it starts, the preparation locks.",
                     tone: "emerald",
                   },
                   {
@@ -734,6 +734,16 @@ export default function Docs() {
                   Each document is summarised as it arrives (Haiku). From the summaries she writes “What Ava knows about
                   &lt;client&gt;” (Sonnet), again whenever documents are added or removed. Her brief for a meeting (Sonnet) is
                   written when they prepare her, and again in the 45 minutes before it starts if anything changed since.
+                </Card>
+                <Card tone="amber" title="Fireflies, before and after">
+                  Fireflies is in most of NDI’s own meetings, and its API (<C>FIREFLIES_API_KEY</C>, Michael Burian’s account)
+                  reads every meeting it recorded. Before a meeting: the last three of the same meeting (its calendar series, or
+                  its title) and the latest three in the past month with any of its people — Fireflies’ summaries and action items
+                  — go into her brief, under “Last time”, prepared or not; a meeting nobody prepared still gets a brief when
+                  Fireflies has one of these. After: once Fireflies has written a finished meeting up (looked for every ten
+                  minutes, for eight hours), its summary, action items, attendees and link are kept with the meeting (Past →
+                  Notes, “From Fireflies”), and its transcript — who said what — becomes passages she searches in that client’s
+                  later meetings: not one of their documents, not in her digest. Only what that account recorded.
                 </Card>
                 <Card tone="sky" title="Searching in the meeting">
                   Her backend calls <C>search_knowledge</C>; the app looks up the passages closest in meaning — from the
@@ -952,6 +962,7 @@ export default function Docs() {
                       [<C key="v">BOT_NAME</C>, "Her name"],
                       [<C key="v">SUPABASE_URL · SUPABASE_SCHEMA · SUPABASE_SERVICE_ROLE_KEY</C>, "Clients, documents, meetings — the team’s Supabase project, her schema (pa-06), and its secret key (server only)"],
                       [<C key="v">OPENAI_API_KEY · OPENAI_EMBEDDING_MODEL</C>, "Making clients’ documents searchable (text-embedding-3-small)"],
+                      [<C key="v">FIREFLIES_API_KEY</C>, "Fireflies (Michael Burian’s account): earlier meetings in her brief, and each finished meeting’s notes and transcript"],
                       [<C key="v">CLIENTS_DRIVE_FOLDER</C>, "The Drive folder clients’ files are kept in; Ava must be its Editor"],
                       [<C key="v">CLOUDINARY_CLOUD_NAME · CLOUDINARY_API_KEY · CLOUDINARY_API_SECRET</C>, "Clients’ logos, on Cloudinary — or the one line CLOUDINARY_URL instead; the secret stays on the server"],
                       [<C key="v">ADMIN_DOMAIN</C>, "Who is an admin (new-digital-intelligence.com)"],

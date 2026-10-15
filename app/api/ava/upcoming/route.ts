@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { avaEmail, avaGoogle, isRunner, noteScreen, noteSeats } from "@/lib/ava";
 import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
 import { answerInbox } from "@/lib/inbox";
+import { earlierFromFireflies, hasFireflies, importFinished } from "@/lib/fireflies";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
 import { avaInvites, type Invite } from "@/lib/workspace";
@@ -68,6 +69,8 @@ export async function GET(request: Request) {
     // after answering, so the runner is never kept waiting; the next poll carries it.
     const soon = due.filter((m) => m.starts_at.getTime() - Date.now() < BRIEF_AHEAD_MS);
     if (soon.length) after(() => refreshBriefs(soon, byId));
+    // What Fireflies made of the meetings that have just finished, as it writes them up.
+    after(() => importFinished().catch((e) => console.warn("[fireflies] import:", e instanceof Error ? e.message : e)));
 
     return NextResponse.json({ account: await avaEmail(), invites });
   } catch (e) {
@@ -104,13 +107,21 @@ async function documentCounts(meetings: MeetingRow[]): Promise<Map<string, numbe
   );
 }
 
+/**
+ * A brief for each meeting about to start whose preparation changed since the last — or,
+ * prepared or not, when Fireflies has the same meeting before or recent meetings with its
+ * people: she walks in knowing what was said and what is still open.
+ */
 async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client>) {
   for (const m of meetings.slice(0, 2)) {
     try {
       const client = clients.get(m.client_id!)!;
-      if ((await hasPreparation(m)) && (await briefIsStale(m, client))) {
-        await writeBrief(m.id);
-        console.log(`[upcoming] brief written for ${m.title}`);
+      if (!(await briefIsStale(m, client))) continue;
+      const earlier = hasFireflies() ? await earlierFromFireflies(m).catch(() => null) : null;
+      const fromFireflies = Boolean(earlier && (earlier.series.length || earlier.withPeople.length));
+      if (fromFireflies || (await hasPreparation(m))) {
+        await writeBrief(m.id, earlier);
+        console.log(`[upcoming] brief written for ${m.title}${fromFireflies ? " (with Fireflies)" : ""}`);
       }
     } catch (e) {
       console.warn(`[upcoming] brief for ${m.title} failed:`, e instanceof Error ? e.message : e);

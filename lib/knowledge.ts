@@ -74,9 +74,58 @@ export async function addDocument(input: {
   return added;
 }
 
+/**
+ * A finished meeting's record — Fireflies' transcript, who said what (lib/fireflies.ts) —
+ * kept as passages she searches in the client's later meetings. Kind "meeting": not one of
+ * their documents (not listed with them, not counted against MAX_DOCUMENTS, not in her
+ * digest), and its summary is the one Fireflies wrote.
+ */
+export async function addMeetingRecord(input: { client: Client; title: string; source: string | null; text: string; summary: string }): Promise<Knowledge> {
+  const { client, title, source, summary } = input;
+  const text = input.text.replace(/\u0000/g, "").trim().slice(0, MAX_CHARS);
+  const row = asKnowledge(
+    await rows<Record<string, unknown>>(
+      db()
+        .from("knowledge")
+        .insert({ client_id: client.id, meeting_id: null, kind: "meeting", title: title.slice(0, 300), mime: "text/plain", source, created_by: "Fireflies" })
+        .select("*")
+        .single(),
+    ),
+  );
+  try {
+    const passages = chunk(text);
+    const vectors = await embed(passages.map((p) => `${title}\n\n${p}`));
+    for (let i = 0; i < passages.length; i += 50) {
+      await rows(
+        db()
+          .from("chunks")
+          .insert(
+            passages.slice(i, i + 50).map((content, j) => ({
+              knowledge_id: row.id,
+              client_id: client.id,
+              meeting_id: null,
+              position: i + j,
+              content,
+              embedding: vectorLiteral(vectors[i + j]),
+            })),
+          ),
+      );
+    }
+    return asKnowledge(
+      await rows<Record<string, unknown>>(
+        db().from("knowledge").update({ status: "ready", chars: text.length, summary }).eq("id", row.id).select("*").single(),
+      ),
+    );
+  } catch (e) {
+    // Half-kept passages would be searched without their record: none at all instead.
+    await rows(db().from("knowledge").delete().eq("id", row.id)).catch(() => undefined);
+    throw e;
+  }
+}
+
 async function addAndRead(input: { client: Client; meeting?: MeetingRow | null; source: Source; by: string }): Promise<Knowledge> {
   const { client, meeting, source, by } = input;
-  const n = await count(db().from("knowledge").select("id", { count: "exact", head: true }).eq("client_id", client.id));
+  const n = await count(db().from("knowledge").select("id", { count: "exact", head: true }).eq("client_id", client.id).neq("kind", "meeting"));
   if (n >= MAX_DOCUMENTS) throw new Error(`${client.name} already has ${MAX_DOCUMENTS} documents. Remove some first.`);
 
   const title = source.kind === "link" ? source.url : source.kind === "text" ? source.title : source.name;
@@ -263,7 +312,8 @@ export function passagesText(passages: Passage[]): string {
 /* ------------------------------------------------------------- the list */
 
 export async function listDocuments(clientId: string, meetingId: string | null = null): Promise<Knowledge[]> {
-  const query = db().from("knowledge").select("*").eq("client_id", clientId);
+  // Their documents: not the records of their meetings that Fireflies wrote (kind "meeting").
+  const query = db().from("knowledge").select("*").eq("client_id", clientId).neq("kind", "meeting");
   const found = await rows<Record<string, unknown>[]>(
     (meetingId ? query.eq("meeting_id", meetingId) : query.is("meeting_id", null)).order("created_at", { ascending: false }),
   );

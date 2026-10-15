@@ -118,7 +118,7 @@ export type Knowledge = {
   id: string;
   client_id: string;
   meeting_id: string | null;
-  kind: "upload" | "drive" | "link" | "text";
+  kind: "upload" | "drive" | "link" | "text" | "meeting";
   title: string;
   mime: string | null;
   source: string | null;

@@ -32,7 +32,8 @@ export type HistoryKind =
   | "ended"
   | "notes"
   | "accepted"
-  | "declined";
+  | "declined"
+  | "fireflies";
 
 export type HistoryEntry = {
   meeting_id: string;

@@ -32,6 +32,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-15",
+    title: "Fireflies before and after her meetings; Meetings split into Upcoming and Past",
+    points: [
+      "Fireflies — in most of NDI's own meetings — is read through its API with Michael Burian's key (FIREFLIES_API_KEY): every meeting it recorded, matched to hers by its calendar event, its link or its title.",
+      "Before a meeting her brief now has a “Last time”: the last three of the same meeting and the latest three in the past month with any of its people, from Fireflies' summaries and action items — whether or not anybody prepared her. Tested on the 15 October stand-up: it found the three before it (9, 13 and 14 October).",
+      "After a meeting, once Fireflies has written it up, its summary, action items, attendees and link are kept with it (Past → Notes, “From Fireflies”), and its transcript becomes passages she searches in that client's later meetings — not listed with their documents, not in her digest.",
+      "A client's Meetings tab now shows Upcoming or Past, one list at a time, with a count on each.",
+    ],
+    commits: [],
+    tone: "amber",
+  },
+  {
+    date: "2026-10-15",
     title: "In a group she speaks only when named, and stops when talked over",
     points: [
       "In the 15 October Teams call she said 'hi', 'mm-hm', 'right' and 'I hear you' to a room of seven that had not asked her anything. Now, in a group, she speaks only when somebody has said her name — Ava, or Eva as it is often heard — in the last 30 seconds (and for her hello, and an answer she went to fetch). What GPT-Live says otherwise is never played, is left out of the notes, and she is told it went unheard. Her hello says to ask her by name.",

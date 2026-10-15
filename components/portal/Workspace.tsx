@@ -60,7 +60,7 @@ type Meeting = {
   prep_at: string | null;
   brief: string | null;
   brief_at: string | null;
-  notes: { to?: string; subject?: string; body?: string; summary?: string; sentAt?: number } | null;
+  notes: { to?: string; subject?: string; body?: string; summary?: string; sentAt?: number; fireflies?: { url: string | null } } | null;
   ended_at: string | null;
   documents: number;
 };
@@ -93,6 +93,8 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   const [error, setError] = useState<string | null>(null);
   const [digesting, setDigesting] = useState(false);
   const [tab, setTab] = useState<Tab>("meetings");
+  // The Meetings tab shows one list at a time: those coming up, or those that are over.
+  const [when_, setWhen] = useState<"upcoming" | "past">("upcoming");
   // Which meetings are past and which are about to start: read with the data, and each minute.
   const [now, setNow] = useState(() => Date.now());
   // Her meeting, if it is theirs, followed live; and "Need Ava now?" open or not.
@@ -269,9 +271,34 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
       <Section
         title="Meetings"
         icon={<CalendarIcon />}
-        description={upcoming.length ? `${upcoming.length} coming up — prepare her for each` : "Nothing coming up yet"}
+        description={
+          when_ === "past"
+            ? `${past.length} over — her notes, what she was given, and their history`
+            : upcoming.length
+              ? `${upcoming.length} coming up — prepare her for each`
+              : "Nothing coming up yet"
+        }
       >
-        {upcoming.length === 0 ? (
+        <div role="tablist" aria-label="Which meetings" className="mb-4 inline-flex rounded-xl bg-slate-100 p-1 text-sm font-semibold">
+          {(
+            [
+              ["upcoming", "Upcoming", upcoming.length],
+              ["past", "Past", past.length + cancelled.length],
+            ] as const
+          ).map(([id, label, n]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={when_ === id}
+              onClick={() => setWhen(id)}
+              className={`rounded-lg px-4 py-1.5 transition ${when_ === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+            >
+              {label}
+              <span className={`ml-1.5 ${when_ === id ? "text-blue-600" : "text-slate-400"}`}>{n}</span>
+            </button>
+          ))}
+        </div>
+        {when_ === "upcoming" && (upcoming.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center">
             <IconTile className="size-12">
               <CalendarIcon className="size-6" />
@@ -294,9 +321,14 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
               <UpcomingMeeting key={m.id} meeting={m} now={now} q={q} onChange={reload} onError={setError} />
             ))}
           </ul>
+        ))}
+        {when_ === "past" && past.length + cancelled.length === 0 && (
+          <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-8 text-center text-sm text-slate-500">
+            No meetings over yet in the last 30 days.
+          </p>
         )}
-        {past.length > 0 && (
-          <div className="mt-6 space-y-3">
+        {when_ === "past" && past.length > 0 && (
+          <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Past 30 days</h3>
             <ul className="space-y-2">
               {past.map((m) => (
@@ -305,7 +337,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
             </ul>
           </div>
         )}
-        {cancelled.length > 0 && (
+        {when_ === "past" && cancelled.length > 0 && (
           <div className="mt-6 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Called off — deleted or taken off her calendar</h3>
             <ul className="space-y-2">
@@ -1339,8 +1371,10 @@ function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
           <Chip tone="bad">Declined — she was booked</Chip>
         ) : notes?.sentAt ? (
           <Chip tone="good">Notes emailed</Chip>
-        ) : notes ? (
+        ) : notes?.summary || notes?.body ? (
           <Chip tone="info">Notes</Chip>
+        ) : notes?.fireflies ? (
+          <Chip tone="info">Fireflies notes</Chip>
         ) : (
           <Chip>No notes</Chip>
         )}

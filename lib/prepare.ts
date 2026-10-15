@@ -13,6 +13,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { asMeeting, count, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
 import { getClient } from "./clients";
+import { earlierFromFireflies, earlierText, hasFireflies, type Earlier } from "./fireflies";
 import { record } from "./history";
 import { FAST, WRITER } from "./moderator";
 
@@ -69,6 +70,8 @@ export async function rebuildDigest(clientId: string): Promise<string> {
       .eq("client_id", clientId)
       .is("meeting_id", null)
       .eq("status", "ready")
+      // Their documents only: the records of their meetings (Fireflies) would crowd them out.
+      .neq("kind", "meeting")
       .order("created_at", { ascending: false })
       .limit(200),
   );
@@ -155,7 +158,11 @@ export async function briefIsStale(m: MeetingRow, client: Client): Promise<boole
   return newer > 0;
 }
 
-export async function writeBrief(meetingId: string): Promise<MeetingRow> {
+/**
+ * Her brief for one meeting. `earlier` is what Fireflies has from before it (the same
+ * meeting's last times, recent meetings with its people): looked up here when not given.
+ */
+export async function writeBrief(meetingId: string, earlier?: Earlier | null): Promise<MeetingRow> {
   const found = await rows<Record<string, unknown> | null>(db().from("meetings").select("*").eq("id", meetingId).maybeSingle());
   const m = found ? asMeeting(found) : null;
   if (!m?.client_id) throw new Error("No such meeting.");
@@ -164,6 +171,13 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
   const docs = await rows<{ title: string; summary: string | null }[]>(
     db().from("knowledge").select("title, summary").eq("meeting_id", meetingId).eq("status", "ready").order("created_at"),
   );
+  if (earlier === undefined && hasFireflies()) {
+    earlier = await earlierFromFireflies(m).catch((e) => {
+      console.warn("[brief] Fireflies:", e instanceof Error ? e.message : e);
+      return null;
+    });
+  }
+  const before = earlierText(earlier);
 
   const brief = await write(
     WRITER,
@@ -185,15 +199,20 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
       "",
       docs.length ? `Documents for this meeting:\n${docs.map((d) => `### ${d.title}\n${d.summary ?? ""}`).join("\n\n")}` : "No documents for this meeting.",
       "",
+      before ? `From Fireflies, the notetaker in these meetings — what was said before:\n${before}` : "Nothing from Fireflies: no earlier meeting of this series, or with these people, was recorded.",
+      "",
       "Write her brief for this meeting, addressed to her as “you”:",
       "- the purpose, and what a good outcome looks like;",
+      ...(before
+        ? ["- last time: what was decided in the same meeting before, and the action items still open, with their owners — and from the other recent meetings with these people only what bears on this one;"]
+        : []),
       "- the agenda, as she should follow or run it;",
       "- who is attending and what to know about each, where known;",
       "- the facts she is most likely to need;",
       "- what to avoid.",
-      "Write it in Markdown, no title: ## Purpose, ## Agenda, ## People, ## Facts she may need, ## Avoid — short - bullet points, **bold** for names and numbers. At most 450 words, in the language their preparation is written in (English if there is none). Only what you were given; nothing invented.",
+      `Write it in Markdown, no title: ## Purpose,${before ? " ## Last time," : ""} ## Agenda, ## People, ## Facts she may need, ## Avoid — short - bullet points, **bold** for names, numbers and dates. At most ${before ? 600 : 450} words, in the language their preparation is written in (English if there is none). Only what you were given; nothing invented.`,
     ].join("\n"),
-    1500,
+    before ? 2000 : 1500,
   );
   const now = isoNow();
   const written = asMeeting(
@@ -201,7 +220,12 @@ export async function writeBrief(meetingId: string): Promise<MeetingRow> {
       db().from("meetings").update({ brief, brief_at: now, updated_at: now }).eq("id", meetingId).select("*").single(),
     ),
   );
-  await record({ meeting_id: meetingId, kind: "brief", by: "Ava", detail: { words: brief.split(/\s+/).filter(Boolean).length } });
+  await record({
+    meeting_id: meetingId,
+    kind: "brief",
+    by: "Ava",
+    detail: { words: brief.split(/\s+/).filter(Boolean).length, fireflies: (earlier?.series.length ?? 0) + (earlier?.withPeople.length ?? 0) },
+  });
   return written;
 }
 
