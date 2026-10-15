@@ -97,6 +97,20 @@ create table if not exists "pa-06".meeting_history (
 );
 create index if not exists meeting_history_meeting on "pa-06".meeting_history (meeting_id, at);
 
+-- Who's who: the people in a client's meetings, by address, and what Ava should know about
+-- each — written on the client's page (its Who's who tab, or a meeting's preparation), kept
+-- for every meeting they are in. Names also come from invites and Fireflies (lib/contacts.ts).
+create table if not exists "pa-06".contacts (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references "pa-06".clients(id) on delete cascade,
+  email text not null,
+  name text,
+  info text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by text,
+  unique (client_id, email)
+);
+
 -- A document, a link or a Drive file a client gave Ava. meeting_id set: only for that
 -- meeting's preparation.
 create table if not exists "pa-06".knowledge (
@@ -226,6 +240,7 @@ alter table "pa-06".knowledge enable row level security;
 alter table "pa-06".chunks enable row level security;
 alter table "pa-06".login_tokens enable row level security;
 alter table "pa-06".meeting_history enable row level security;
+alter table "pa-06".contacts enable row level security;
 
 revoke all on schema "pa-06" from public;
 revoke execute on all functions in schema "pa-06" from public;

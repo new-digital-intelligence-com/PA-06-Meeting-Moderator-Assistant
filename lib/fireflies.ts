@@ -16,6 +16,7 @@
  */
 import { asMeeting, db, hasDb, isoNow, rows, type MeetingRow } from "./db";
 import { getClient } from "./clients";
+import { rememberPeople } from "./contacts";
 import { record } from "./history";
 import { addMeetingRecord } from "./knowledge";
 
@@ -318,5 +319,7 @@ async function keep(m: MeetingRow, f: FirefliesMeeting): Promise<void> {
       .eq("id", m.id),
   );
   await record({ meeting_id: m.id, kind: "fireflies", by: "Ava", detail: { url: f.transcript_url, actions: actions ? actions.split("\n").filter(Boolean).length : 0, searchable: Boolean(knowledgeId) } });
+  // Who was there, by name, on the client's Who's who — there to be written about.
+  await rememberPeople(client.id, fireflies.attendees).catch(() => undefined);
   console.log(`[fireflies] kept ${m.title} (${day(f)})${knowledgeId ? ", transcript searchable" : ""}`);
 }

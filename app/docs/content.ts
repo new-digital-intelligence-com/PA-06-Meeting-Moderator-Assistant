@@ -32,6 +32,18 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-15",
+    title: "Who's who: what she should know about each person, kept across meetings",
+    points: [
+      "A new tab on a client's page, after How she works for you: everybody in their meetings, by email, each with a name and what she should know about them — editable, searchable, and anybody can be added or taken off.",
+      "In a meeting's preparation each guest has their line from Who's who, editable there: saved with the preparation, it is kept for every other meeting they are in. The old free-text field is now “Anything else about who is coming”.",
+      "Her brief and her briefing carry the lines of the people invited. People appear by themselves — from the invites, and from Fireflies' attendees — with their names; what to know about them only from people.",
+      "Needs one table, contacts (db/schema.sql): until it is added the tab says so and nothing is kept.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-15",
     title: "Fireflies before and after her meetings; Meetings split into Upcoming and Past",
     points: [
       "Fireflies — in most of NDI's own meetings — is read through its API with Michael Burian's key (FIREFLIES_API_KEY): every meeting it recorded, matched to hers by its calendar event, its link or its title.",

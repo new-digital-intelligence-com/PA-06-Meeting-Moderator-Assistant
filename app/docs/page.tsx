@@ -837,11 +837,17 @@ export default function Docs() {
                   and the search she uses in a meeting.
                 </FileRow>
                 <FileRow path="lib/prepare.ts">Her homework: each document’s summary, the client’s digest, a meeting’s brief, the briefing she is handed.</FileRow>
+                <FileRow path="lib/fireflies.ts">Fireflies: the earlier meetings in her brief, and each finished meeting’s notes and transcript brought in.</FileRow>
+                <FileRow path="lib/contacts.ts">
+                  Who’s who: each client’s people by address and what she should know about each (table <C>contacts</C>) — in
+                  her brief and briefing for every meeting they are invited to. Names come from invites and Fireflies.
+                </FileRow>
                 <FileRow path="components/portal · components/admin">
-                  The client’s page, in tabs — meetings and preparation, what she knows (documents, links and text they write, each
-                  with a preview, and her digest shown as a README), how she works for you, and Setup (portal/Setup.tsx: logo, name,
-                  who can use her) — and NDI’s (the clients, each card with her log; invites she skipped). Admins open any client’s
-                  page as the client sees it, under the whole of the same Setup.
+                  The client’s page, in tabs — meetings (Upcoming or Past) and preparation, what she knows (documents, links and
+                  text they write, each with a preview, and her digest shown as a README), how she works for you, Who’s who (each
+                  person by email, and what she should know about them — the same line as in a meeting’s preparation), and Setup
+                  (portal/Setup.tsx: logo, name, who can use her) — and NDI’s (the clients, each card with her log; invites she
+                  skipped). Admins open any client’s page as the client sees it, under the whole of the same Setup.
                 </FileRow>
                 <FileRow path="lib/cloudinary.ts">
                   Clients’ logos: up to Cloudinary (signed with the secret, on the server), one per client under a fixed name so a
@@ -936,6 +942,7 @@ export default function Docs() {
                   [<C key="r">/api/portal/meetings/[id]</C>, "Clients, admins", "One meeting with its documents and history; save its preparation (kept as a version) and write her brief — refused from a minute before it starts"],
                   [<C key="r">GET /api/portal/meetings/[id]/earlier</C>, "Clients, admins", "The client’s earlier meetings, the same meeting first — for a preparation to look back on"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
+                  [<C key="r">GET · PUT · DELETE /api/portal/contacts</C>, "Clients, admins", "Who’s who: their people by email, and one person’s line — read, written, taken off"],
                   [<C key="r">POST /api/meeting/start</C>, "Admins", "Send the Recall bot (older path, nothing calls it)"],
                 ]}
               />
@@ -1048,6 +1055,9 @@ notify pgrst, 'reload schema';
 
 # and, made before meetings had a history, its table — the
 # meeting_history lines of db/schema.sql, then the same notify
+
+# and, made before Who's who, its table — the contacts lines of
+# db/schema.sql (and its row level security line), then the same notify
 
 # then, signed in as anybody @new-digital-intelligence.com:
 /admin                         # set up a client, invite their people

@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { avaEmail, avaGoogle, isRunner, noteScreen, noteSeats } from "@/lib/ava";
 import { db, hasDb, rows, type Client, type MeetingRow } from "@/lib/db";
 import { answerInbox } from "@/lib/inbox";
+import { contactsFor, meetingPeople, rememberPeople, type Contact } from "@/lib/contacts";
 import { earlierFromFireflies, hasFireflies, importFinished } from "@/lib/fireflies";
 import { briefIsStale, briefingFor, hasPreparation, writeBrief } from "@/lib/prepare";
 import { syncCalendar } from "@/lib/schedule";
@@ -56,14 +57,17 @@ export async function GET(request: Request) {
     );
 
     const counts = await documentCounts(due);
+    const who = await whoIsWho(due);
     const invites = due.map((m) => {
       const client = byId.get(m.client_id!)!;
       return {
         ...inviteOf(m),
         client: { id: client.id, name: client.name, meetingId: m.id },
-        briefing: briefingFor(m, client, counts.get(m.id) ?? 0),
+        briefing: briefingFor(m, client, counts.get(m.id) ?? 0, who.get(m.id) ?? []),
       };
     });
+    // The invites' people, by name, on each client's Who's who — there to be written about.
+    after(() => rememberInvited(due));
 
     // Her brief for a meeting about to start, if its preparation changed since — written
     // after answering, so the runner is never kept waiting; the next poll carries it.
@@ -90,6 +94,31 @@ function inviteOf(m: MeetingRow): Invite {
     organizerEmail: m.organizer ?? "",
     guests: m.guests ?? [],
   };
+}
+
+/** Each meeting's people as the client wrote about them (Who's who), one read per client. */
+async function whoIsWho(meetings: MeetingRow[]): Promise<Map<string, Contact[]>> {
+  const out = new Map<string, Contact[]>();
+  const byClient = new Map<string, MeetingRow[]>();
+  for (const m of meetings) byClient.set(m.client_id!, [...(byClient.get(m.client_id!) ?? []), m]);
+  for (const [clientId, ms] of byClient) {
+    const contacts = await contactsFor(clientId, ms.flatMap((m) => meetingPeople(m).map((p) => p.email))).catch(() => []);
+    for (const m of ms) {
+      const here = new Set(meetingPeople(m).map((p) => p.email.trim().toLowerCase()));
+      out.set(m.id, contacts.filter((c) => here.has(c.email)));
+    }
+  }
+  return out;
+}
+
+/** Meetings whose people were already added this run: once is enough. */
+const remembered = new Set<string>();
+async function rememberInvited(meetings: MeetingRow[]) {
+  for (const m of meetings) {
+    if (remembered.has(m.id)) continue;
+    remembered.add(m.id);
+    await rememberPeople(m.client_id!, meetingPeople(m)).catch((e) => console.warn("[contacts]", e instanceof Error ? e.message : e));
+  }
 }
 
 /** Documents she can search in each meeting: the client's, and the meeting's own. */

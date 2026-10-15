@@ -22,6 +22,7 @@ import {
   SparkIcon,
   TextIcon,
   UploadIcon,
+  UsersIcon,
 } from "./icons";
 import { LivePanel, SendNow, useLive } from "./Live";
 import Markdown from "./Markdown";
@@ -173,6 +174,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
     { id: "meetings", label: "Meetings", icon: CalendarIcon, count: upcoming.length },
     { id: "knowledge", label: "What she knows", icon: BookIcon, count: data.documents.filter((d) => d.status === "ready").length },
     { id: "instructions", label: "How she works for you", icon: SparkIcon },
+    { id: "people", label: "Who's who", icon: UsersIcon },
     // Their logo, name and who can use her. NDI has the whole setup above this page instead.
     ...(clientId ? [] : [{ id: "setup" as const, label: "Setup", icon: SettingsIcon }]),
   ];
@@ -415,6 +417,10 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         <Instructions key={client.id} initial={client.instructions} name={client.name} q={q} onError={setError} />
       </div>
 
+      <div role="tabpanel" hidden={tab !== "people"}>
+        <WhosWho key={client.id} q={q} ava={ava} onError={setError} />
+      </div>
+
       {!clientId && (
         <div role="tabpanel" hidden={tab !== "setup"}>
           <Setup onChanged={reload} />
@@ -425,8 +431,8 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
   );
 }
 
-/** The page's parts, one shown at a time: three, and Setup for the client's own people. */
-type Tab = "meetings" | "knowledge" | "instructions" | "setup";
+/** The page's parts, one shown at a time: four, and Setup for the client's own people. */
+type Tab = "meetings" | "knowledge" | "instructions" | "people" | "setup";
 
 /* ------------------------------------------------------------ documents */
 
@@ -1057,7 +1063,7 @@ function UpcomingMeeting({
 const PREP_FIELDS: { key: keyof Prep; label: string; hint: string; rows: number }[] = [
   { key: "goal", label: "What is this meeting for?", hint: "e.g. Agree the scope and price of phase 2 with Acme.", rows: 2 },
   { key: "agenda", label: "Agenda", hint: "One point per line. She can keep time and move it on.", rows: 4 },
-  { key: "people", label: "Who is coming, and what she should know about them", hint: "e.g. Anna Weber, Acme's CFO: cares about cost, decides.", rows: 3 },
+  { key: "people", label: "Anything else about who is coming", hint: "e.g. Anna joins late; Tom stands in for Kai this time.", rows: 2 },
   { key: "avoid", label: "What to avoid", hint: "e.g. Do not discuss the merger. No prices before Anna joins.", rows: 2 },
   { key: "notes", label: "Anything else", hint: "Her role, open questions, what a good outcome is…", rows: 3 },
 ];
@@ -1082,20 +1088,41 @@ function PrepPanel({
   const [saving, setSaving] = useState(false);
   const [changed, setChanged] = useState(false);
   const sep = q ? "&" : "?";
+  // Who is coming: each guest's line from Who's who — the same line in every meeting they are in.
+  const people = peopleOf(meeting);
+  const [known, setKnown] = useState<Record<string, Contact> | null>(null);
+  const [lines, setLines] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let alive = true;
     api<{ documents: Doc[] }>(`/api/portal/knowledge${q}${sep}meeting=${meeting.id}`)
       .then((d) => alive && setDocs(d.documents))
       .catch(() => alive && setDocs([]));
+    api<{ ready: boolean; contacts: Contact[] }>(`/api/portal/contacts${q}`)
+      .then((d) => alive && setKnown(d.ready ? Object.fromEntries(d.contacts.map((c) => [c.email, c])) : null))
+      .catch(() => alive && setKnown(null));
     return () => {
       alive = false;
     };
   }, [meeting.id, q, sep]);
 
+  /** The lines written here that differ from Who's who: saved there first, so her brief has them. */
+  async function saveLines() {
+    for (const p of people) {
+      const line = lines[p.email];
+      if (line === undefined || line === (known?.[p.email]?.info ?? "")) continue;
+      const { contact } = await api<{ contact: Contact }>(`/api/portal/contacts${q}`, {
+        method: "PUT",
+        body: JSON.stringify({ email: p.email, name: known?.[p.email]?.name || p.name, info: line }),
+      });
+      setKnown((k) => ({ ...(k ?? {}), [contact.email]: contact }));
+    }
+  }
+
   async function save(rewriteOnly = false) {
     setSaving(true);
     try {
+      if (known && !rewriteOnly) await saveLines();
       const { meeting: m } = rewriteOnly
         ? await api<{ meeting: Meeting }>(`/api/portal/meetings/${meeting.id}${q}`, { method: "POST" })
         : await api<{ meeting: Meeting }>(`/api/portal/meetings/${meeting.id}${q}`, { method: "PUT", body: JSON.stringify({ prep }) });
@@ -1123,6 +1150,41 @@ function PrepPanel({
           <summary className="cursor-pointer text-slate-500 hover:text-slate-600">The invite&apos;s description</summary>
           <p className="mt-2 whitespace-pre-wrap">{meeting.description}</p>
         </details>
+      )}
+
+      {known && people.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="text-xs font-medium text-slate-600">Who is coming — what she should know about each</h4>
+            <span className="text-xs text-slate-400">Kept for every meeting with them (Who&apos;s who)</span>
+          </div>
+          <ul className="space-y-2">
+            {people.map((p) => {
+              const kept = known[p.email];
+              return (
+                <li key={p.email} className="grid gap-2 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+                  <div className="min-w-0 pt-2">
+                    <p className="truncate text-sm font-medium text-slate-800">{kept?.name || p.name || p.email.split("@")[0]}</p>
+                    <p className="truncate text-xs text-slate-500" title={p.email}>
+                      {p.email}
+                    </p>
+                  </div>
+                  <textarea
+                    rows={2}
+                    className={field}
+                    placeholder="Their role, what they care about, how to deal with them."
+                    value={lines[p.email] ?? kept?.info ?? ""}
+                    onChange={(e) => {
+                      setLines((l) => ({ ...l, [p.email]: e.target.value }));
+                      setChanged(true);
+                    }}
+                    aria-label={`What to know about ${p.email}`}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       <div className="grid gap-4">
@@ -1435,5 +1497,236 @@ function Instructions({ initial, name, q, onError }: { initial: string; name: st
         {text === saved && saved && !saving && <span className="text-xs font-medium text-emerald-600">Saved — she has it</span>}
       </div>
     </Section>
+  );
+}
+
+/* ------------------------------------------------------------ who's who */
+
+type Contact = { email: string; name: string | null; info: string; updated_at: string | null; updated_by: string | null };
+
+/** The people of a meeting worth a line: the organiser and the guests — not her, not rooms. */
+const peopleOf = (m: Pick<Meeting, "organizer" | "organizer_name" | "guests">) => {
+  const seen = new Map<string, string | undefined>();
+  for (const p of [{ email: m.organizer ?? "", name: m.organizer_name ?? undefined }, ...(m.guests ?? [])]) {
+    const email = p.email.trim().toLowerCase();
+    if (!email.includes("@") || email.startsWith("ava@") || email.includes("resource.calendar.google.com")) continue;
+    if (!seen.has(email) || (!seen.get(email) && p.name)) seen.set(email, p.name);
+  }
+  return [...seen].map(([email, name]) => ({ email, name }));
+};
+
+/**
+ * Who's who: everybody in their meetings, by address, and what she should know about each.
+ * The same line shows in every meeting's preparation they are in — edited here or there.
+ * People come by themselves from the invites and Fireflies; what to know about them only
+ * from the client.
+ */
+function WhosWho({ q, ava, onError }: { q: string; ava: string; onError: (message: string) => void }) {
+  const [list, setList] = useState<Contact[] | null>(null);
+  const [ready, setReady] = useState(true);
+  const [filter, setFilter] = useState("");
+  const [draft, setDraft] = useState({ email: "", name: "", info: "" });
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api<{ ready: boolean; contacts: Contact[] }>(`/api/portal/contacts${q}`)
+      .then((d) => {
+        if (!alive) return;
+        setReady(d.ready);
+        setList(d.contacts);
+      })
+      .catch((e) => alive && onError(e instanceof Error ? e.message : "Could not load Who's who."));
+    return () => {
+      alive = false;
+    };
+  }, [q, onError]);
+
+  const put = (c: Contact) => setList((l) => [c, ...(l ?? []).filter((x) => x.email !== c.email)].sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email)));
+
+  async function add() {
+    setAdding(true);
+    try {
+      const { contact } = await api<{ contact: Contact }>(`/api/portal/contacts${q}`, { method: "PUT", body: JSON.stringify(draft) });
+      put(contact);
+      setDraft({ email: "", name: "", info: "" });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not add them.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  const needle = filter.trim().toLowerCase();
+  const shown = (list ?? []).filter((c) => !needle || `${c.name ?? ""} ${c.email} ${c.info}`.toLowerCase().includes(needle));
+  const written = (list ?? []).filter((c) => c.info.trim()).length;
+
+  return (
+    <Section
+      title="Who's who"
+      icon={<UsersIcon />}
+      tone="sky"
+      description={`Everybody in your meetings, by email, and what ${ava} should know about each. The same line shows in the preparation of every meeting they are in — edit it here or there. She reads it before each one.`}
+      aside={
+        list && list.length > 0 ? (
+          <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+            {written} of {list.length} written
+          </span>
+        ) : undefined
+      }
+    >
+      {!ready && (
+        <Notice tone="error">Not set up yet: NDI has to add its table to the database first (db/schema.sql, “contacts”). Nothing can be kept until then.</Notice>
+      )}
+      {list === null ? (
+        <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
+      ) : (
+        <div className="space-y-4">
+          {list.length > 6 && (
+            <input className={field} placeholder="Find somebody — a name, an address, a word" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          )}
+          {list.length === 0 && ready && (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-500">
+              Nobody yet. The people invited to your meetings appear here by themselves; or add somebody below.
+            </p>
+          )}
+          <ul className="space-y-2">
+            {shown.map((c) => (
+              <ContactRow
+                key={c.email}
+                contact={c}
+                q={q}
+                onSaved={put}
+                onRemoved={(email) => setList((l) => (l ?? []).filter((x) => x.email !== email))}
+                onError={onError}
+              />
+            ))}
+          </ul>
+          {ready && (
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Add somebody</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input className={field} type="email" placeholder="Their email" value={draft.email} onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))} />
+                <input className={field} placeholder="Their name" value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
+              </div>
+              <textarea
+                rows={2}
+                className={field}
+                placeholder="What she should know — e.g. CFO; decides on budget; prefers short answers."
+                value={draft.info}
+                onChange={(e) => setDraft((d) => ({ ...d, info: e.target.value }))}
+              />
+              <button className={primary} onClick={() => void add()} disabled={adding || !draft.email.includes("@")}>
+                {adding ? "Adding…" : "Add"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/** One person's line in Who's who: their name, and what she should know about them. */
+function ContactRow({
+  contact,
+  q,
+  onSaved,
+  onRemoved,
+  onError,
+}: {
+  contact: Contact;
+  q: string;
+  onSaved: (c: Contact) => void;
+  onRemoved: (email: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [name, setName] = useState(contact.name ?? "");
+  const [info, setInfo] = useState(contact.info);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const changed = name !== (contact.name ?? "") || info !== contact.info;
+  const sep = q ? "&" : "?";
+
+  async function save() {
+    setBusy(true);
+    try {
+      const { contact: c } = await api<{ contact: Contact }>(`/api/portal/contacts${q}`, { method: "PUT", body: JSON.stringify({ email: contact.email, name, info }) });
+      onSaved(c);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await api(`/api/portal/contacts${q}${sep}email=${encodeURIComponent(contact.email)}`, { method: "DELETE" });
+      onRemoved(contact.email);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not remove them.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+      <div className="min-w-0 space-y-1">
+        <input className={`${field} py-1.5`} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} aria-label={`Name of ${contact.email}`} />
+        <p className="truncate px-1 text-xs text-slate-500" title={contact.email}>
+          {contact.email}
+        </p>
+      </div>
+      <div className="min-w-0 space-y-2">
+        <textarea
+          rows={2}
+          className={field}
+          placeholder="What she should know about them — their role, what they care about, how to deal with them."
+          value={info}
+          onChange={(e) => setInfo(e.target.value)}
+          aria-label={`What to know about ${contact.email}`}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          {changed && (
+            <button className={primary} onClick={() => void save()} disabled={busy}>
+              {busy ? "Saving…" : "Save"}
+            </button>
+          )}
+          {changed && !busy && (
+            <button
+              className={quiet}
+              onClick={() => {
+                setName(contact.name ?? "");
+                setInfo(contact.info);
+              }}
+            >
+              Undo
+            </button>
+          )}
+          {!changed &&
+            (confirm ? (
+              <>
+                <button className={danger} onClick={() => void remove()} disabled={busy}>
+                  Take them off
+                </button>
+                <button className={quiet} onClick={() => setConfirm(false)}>
+                  Keep
+                </button>
+              </>
+            ) : (
+              <button className="text-xs font-medium text-slate-400 hover:text-rose-600" onClick={() => setConfirm(true)}>
+                Remove
+              </button>
+            ))}
+          {!changed && contact.updated_at && contact.updated_by && contact.updated_by !== "Ava" && (
+            <span className="text-xs text-slate-400">
+              Written by {contact.updated_by}, {ago(contact.updated_at)}
+            </span>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }

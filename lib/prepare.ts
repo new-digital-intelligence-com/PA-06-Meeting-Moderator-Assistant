@@ -13,6 +13,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { asMeeting, count, db, isoNow, rows, type Client, type MeetingRow, type Prep } from "./db";
 import { getClient } from "./clients";
+import { contactsFor, contactsText, meetingPeople, type Contact } from "./contacts";
 import { earlierFromFireflies, earlierText, hasFireflies, type Earlier } from "./fireflies";
 import { record } from "./history";
 import { FAST, WRITER } from "./moderator";
@@ -178,6 +179,7 @@ export async function writeBrief(meetingId: string, earlier?: Earlier | null): P
     });
   }
   const before = earlierText(earlier);
+  const who = contactsText(await contactsFor(client.id, meetingPeople(m).map((p) => p.email)));
 
   const brief = await write(
     WRITER,
@@ -196,6 +198,8 @@ export async function writeBrief(meetingId: string, earlier?: Earlier | null): P
       "",
       "Their preparation for it:",
       prepText(m.prep) || "(none)",
+      "",
+      who ? `What they told her about the people invited (Who's who, kept across their meetings):\n${who}` : "Nothing written about the people invited.",
       "",
       docs.length ? `Documents for this meeting:\n${docs.map((d) => `### ${d.title}\n${d.summary ?? ""}`).join("\n\n")}` : "No documents for this meeting.",
       "",
@@ -251,12 +255,14 @@ export function briefingNow(client: Client, note: string, documents: number): st
  * The brief when there is one, their preparation otherwise, and always the invite and
  * what she knows about the client.
  */
-export function briefingFor(m: MeetingRow, client: Client, documents: number): string {
+export function briefingFor(m: MeetingRow, client: Client, documents: number, contacts: Contact[] = []): string {
   const sections = [`You are attending this meeting for ${client.name}.`];
   if (client.instructions.trim()) sections.push(`How ${client.name} wants you to work:\n${client.instructions.trim()}`);
   if (m.brief?.trim()) sections.push(`Your brief for this meeting:\n${m.brief.trim()}`);
   else if (prepText(m.prep)) sections.push(`Their preparation for this meeting:\n${prepText(m.prep)}`);
   sections.push(`From the invite:\n${inviteText(m)}`);
+  const who = contactsText(contacts);
+  if (who) sections.push(`Who's who — what you were told about the people invited:\n${who}`);
   if (client.digest.trim()) sections.push(`What you know about ${client.name}:\n${client.digest.trim()}`);
   if (documents) {
     sections.push(
