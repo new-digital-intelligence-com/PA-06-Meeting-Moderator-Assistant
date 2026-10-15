@@ -236,12 +236,32 @@ export async function clientMeetings(clientId: string): Promise<MeetingRow[]> {
       .gt("starts_at", daysAgo(30))
       .order("starts_at"),
   );
-  return found.map(asMeeting);
+  return found.filter((m) => !isHidden(m)).map(asMeeting);
 }
 
 export async function clientMeeting(clientId: string, id: string): Promise<MeetingRow | null> {
   const m = await rows<Raw | null>(db().from("meetings").select("*").eq("id", id).eq("client_id", clientId).maybeSingle());
-  return m ? asMeeting(m) : null;
+  return m && !isHidden(m) ? asMeeting(m) : null;
+}
+
+/**
+ * Taken out of a client's history (hideMeeting): a meeting not worth keeping — in one she
+ * gave wrong answers. Not listed, not opened, not looked back on, its Fireflies recording
+ * never used again (lib/fireflies.ts). Kept in the database, marked in its notes, which her
+ * calendar never rewrites — so a sync cannot bring it back, and it can be undone.
+ */
+export const isHidden = (m: Raw | MeetingRow) => Boolean((m.notes as { hidden?: unknown } | null)?.hidden);
+
+export async function hideMeeting(meetingId: string, by: string, why: string): Promise<void> {
+  const current = await rows<{ notes: Raw | null } | null>(db().from("meetings").select("notes").eq("id", meetingId).maybeSingle());
+  if (!current) throw new Error("No such meeting.");
+  const now = isoNow();
+  await rows(
+    db()
+      .from("meetings")
+      .update({ notes: { ...(current.notes ?? {}), hidden: { at: now, by, why } }, updated_at: now })
+      .eq("id", meetingId),
+  );
 }
 
 /** Why this meeting's preparation can no longer change — or null while it still can. */
@@ -270,7 +290,7 @@ export async function earlierMeetings(clientId: string, exceptId: string, limit 
       .order("starts_at", { ascending: false })
       .limit(limit),
   );
-  return found.map(asMeeting);
+  return found.filter((m) => !isHidden(m)).map(asMeeting);
 }
 
 /**

@@ -16,6 +16,7 @@
  */
 import { asMeeting, db, hasDb, isoNow, rows, type MeetingRow } from "./db";
 import { getClient } from "./clients";
+import { isHidden } from "./schedule";
 import { rememberPeople } from "./contacts";
 import { record } from "./history";
 import { addMeetingRecord, writeMeetingPassages } from "./knowledge";
@@ -105,9 +106,11 @@ export async function earlierFromFireflies(m: MeetingRow): Promise<Earlier> {
     `query ($keyword: String, $fromDate: DateTime, $toDate: DateTime) { transcripts(keyword: $keyword, scope: "title", fromDate: $fromDate, toDate: $toDate, limit: 50) { ${FIELDS} } }`,
     { keyword: m.title.slice(0, 250), fromDate: new Date(m.starts_at.getTime() - 30 * 86_400_000).toISOString(), toDate: before },
   );
-  // Only those Fireflies wrote up: one too short to summarise says nothing.
+  // Only those Fireflies wrote up: one too short to summarise says nothing. Never one taken
+  // out of the client's history (excludeRecording).
+  const excluded = m.client_id ? await excludedRecordings(m.client_id) : new Set<string>();
   const series = titled
-    .filter((f) => sameSeries(m, f) && at(f) < m.starts_at.getTime() - 10 * 60_000 && f.summary?.overview)
+    .filter((f) => sameSeries(m, f) && at(f) < m.starts_at.getTime() - 10 * 60_000 && f.summary?.overview && !excluded.has(f.transcript_url ?? ""))
     .sort((a, b) => at(b) - at(a))
     .slice(0, SERIES);
 
@@ -330,7 +333,7 @@ export async function importFinished(limit = 2): Promise<void> {
     .map(asMeeting)
     .filter((m) => {
       const notes = m.notes as { fireflies?: unknown } | null;
-      if (notes?.fireflies || unrecorded.has(m.id)) return false;
+      if (notes?.fireflies || unrecorded.has(m.id) || isHidden(m)) return false;
       const over = (m.ended_at ?? m.ends_at ?? m.starts_at).getTime();
       if (over > now - 5 * 60_000) return false;
       return now - (lookedAt.get(m.id) ?? 0) >= LOOK_EVERY_MS;
@@ -379,9 +382,11 @@ async function keep(m: MeetingRow, f: FirefliesMeeting): Promise<void> {
   // already be kept as one of another meeting's last times.
   let knowledgeId: string | null = null;
   if (f.transcript_url) {
-    const kept = await rows<{ id: string }[]>(
-      db().from("knowledge").select("id").eq("client_id", client.id).eq("kind", "meeting").eq("source", f.transcript_url).limit(1),
+    const kept = await rows<{ id: string; status: string }[]>(
+      db().from("knowledge").select("id, status").eq("client_id", client.id).eq("kind", "meeting").eq("source", f.transcript_url).limit(1),
     );
+    // Taken out of their history: nothing of it is brought in, ever.
+    if (kept[0]?.status === EXCLUDED) return;
     knowledgeId = kept[0]?.id ?? null;
   }
   if (!knowledgeId && text.length > 200) {
@@ -448,4 +453,41 @@ export async function rewriteKeptRecords(): Promise<{ title: string; passages: n
     done.push({ title: k.title, passages: await writeMeetingPassages(k.id, k.client_id, k.title, text) });
   }
   return done;
+}
+
+/** A meeting record's status when its recording is never to be used (excludeRecording). */
+const EXCLUDED = "excluded";
+
+/** The Fireflies recordings taken out of a client's history, by their link. */
+async function excludedRecordings(clientId: string): Promise<Set<string>> {
+  const found = await rows<{ source: string | null }[]>(
+    db().from("knowledge").select("source").eq("client_id", clientId).eq("kind", "meeting").eq("status", EXCLUDED),
+  );
+  return new Set(found.map((k) => k.source ?? "").filter(Boolean));
+}
+
+/**
+ * A Fireflies recording never to be used for this client again — a meeting not worth
+ * keeping: not in any "Last time" or brief, not searchable, not brought in. Its record is
+ * kept, marked "excluded", with its passages removed (they are only a copy: the recording
+ * stays in Fireflies, untouched).
+ */
+export async function excludeRecording(clientId: string, transcriptUrl: string, title: string): Promise<void> {
+  const kept = await rows<{ id: string }[]>(
+    db().from("knowledge").select("id").eq("client_id", clientId).eq("kind", "meeting").eq("source", transcriptUrl).limit(1),
+  );
+  let id = kept[0]?.id;
+  if (id) {
+    await rows(db().from("knowledge").update({ status: EXCLUDED, chars: 0 }).eq("id", id));
+  } else {
+    const row = await rows<{ id: string }>(
+      db()
+        .from("knowledge")
+        .insert({ client_id: clientId, meeting_id: null, kind: "meeting", title: title.slice(0, 300), mime: "text/plain", source: transcriptUrl, status: EXCLUDED, created_by: "Fireflies" })
+        .select("id")
+        .single(),
+    );
+    id = row.id;
+  }
+  await rows(db().from("chunks").delete().eq("knowledge_id", id));
 }
