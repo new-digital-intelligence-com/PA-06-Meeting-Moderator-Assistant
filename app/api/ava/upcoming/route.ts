@@ -69,10 +69,10 @@ export async function GET(request: Request) {
     // The invites' people, by name, on each client's Who's who — there to be written about.
     after(() => rememberInvited(due));
 
-    // Her brief for a meeting about to start, if its preparation changed since — written
-    // after answering, so the runner is never kept waiting; the next poll carries it.
-    const soon = due.filter((m) => m.starts_at.getTime() - Date.now() < BRIEF_AHEAD_MS);
-    if (soon.length) after(() => refreshBriefs(soon, byId));
+    // Her briefs — written after answering, so the runner is never kept waiting; the next
+    // poll carries them. Every coming meeting gets one as soon as it has something to brief
+    // from; in its last 45 minutes it is brought up to date (refreshBriefs).
+    if (due.length) after(() => refreshBriefs(due, byId));
     // What Fireflies made of the meetings that have just finished, as it writes them up.
     after(() => importFinished().catch((e) => console.warn("[fireflies] import:", e instanceof Error ? e.message : e)));
 
@@ -137,20 +137,35 @@ async function documentCounts(meetings: MeetingRow[]): Promise<Map<string, numbe
 }
 
 /**
- * A brief for each meeting about to start whose preparation changed since the last — or,
- * prepared or not, when Fireflies has the same meeting before or recent meetings with its
- * people: she walks in knowing what was said and what is still open.
+ * Her brief for each coming meeting, two at most a minute, soonest first:
+ *   - one with no brief gets it as soon as it has something to brief from — its preparation,
+ *     or Fireflies' earlier meetings (the same one before, recent ones with its people) —
+ *     so the page shows what she will walk in with long before it starts;
+ *   - in its last 45 minutes it is rewritten if its preparation, documents or digest changed,
+ *     if Fireflies has a meeting newer than the brief, or if the brief is over three hours
+ *     old and Fireflies has anything: tomorrow's stand-up knows today's.
  */
 async function refreshBriefs(meetings: MeetingRow[], clients: Map<string, Client>) {
-  for (const m of meetings.slice(0, 2)) {
+  let written = 0;
+  for (const m of [...meetings].sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime())) {
+    if (written >= 2) break;
     try {
       const client = clients.get(m.client_id!)!;
-      if (!(await briefIsStale(m, client))) continue;
+      const soon = m.starts_at.getTime() - Date.now() < BRIEF_AHEAD_MS;
+      if (m.brief_at && !soon) continue;
       const earlier = hasFireflies() ? await earlierFromFireflies(m).catch(() => null) : null;
-      const fromFireflies = Boolean(earlier && (earlier.series.length || earlier.withPeople.length));
-      if (fromFireflies || (await hasPreparation(m))) {
+      const recorded = earlier ? [...earlier.series, ...earlier.withPeople] : [];
+      const briefAt = m.brief_at?.getTime() ?? 0;
+      const due =
+        !m.brief_at ||
+        (await briefIsStale(m, client)) ||
+        recorded.some((f) => Date.parse(f.dateString) > briefAt) ||
+        (recorded.length > 0 && Date.now() - briefAt > 3 * 3_600_000);
+      if (!due) continue;
+      if (recorded.length || (await hasPreparation(m))) {
         await writeBrief(m.id, earlier);
-        console.log(`[upcoming] brief written for ${m.title}${fromFireflies ? " (with Fireflies)" : ""}`);
+        written++;
+        console.log(`[upcoming] brief written for ${m.title}${recorded.length ? ` (with ${recorded.length} from Fireflies)` : ""}`);
       }
     } catch (e) {
       console.warn(`[upcoming] brief for ${m.title} failed:`, e instanceof Error ? e.message : e);

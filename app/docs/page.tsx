@@ -689,6 +689,14 @@ export default function Docs() {
                   who ended it from the site, and the notes written and emailed. A past meeting opens on its notes — the email as
                   it went out — its preparation and its history; called-off meetings are listed apart.
                 </Card>
+                <Card tone="sky" title="Each meeting on its own page">
+                  A meeting in the list opens its own page (<C>/client/meetings/[id]</C>; for NDI, under the client’s
+                  <C>/admin/clients/[id]</C>): a header with its day and time, platform, organiser and everybody invited, and
+                  “Open the meeting”. Coming up: preparing her — each guest’s Who’s who line, what it is for, the agenda, what to
+                  avoid, documents — and her brief, beside “Last time” (what Fireflies has from before: the same meeting, and recent
+                  meetings with the same people, each with its summary, action items and transcript link), earlier meetings and
+                  its history. Over: her notes and Fireflies’, what she had, and its history. “All meetings” goes back to the list.
+                </Card>
                 <Card tone="rose" title="Locked a minute before">
                   From a minute before a meeting starts, its preparation is what she walks in with: the page shows it read-only
                   (“View preparation”), and the server refuses any change to it — the preparation, her brief, the meeting’s
@@ -733,7 +741,10 @@ export default function Docs() {
                 <Card tone="amber" title="Her homework">
                   Each document is summarised as it arrives (Haiku). From the summaries she writes “What Ava knows about
                   &lt;client&gt;” (Sonnet), again whenever documents are added or removed. Her brief for a meeting (Sonnet) is
-                  written when they prepare her, and again in the 45 minutes before it starts if anything changed since.
+                  written when they prepare her — and for every coming meeting of the next hours as soon as it has anything to brief
+                  from (its preparation, or Fireflies’ earlier meetings), so its page shows it long before. In the 45 minutes before
+                  it starts it is rewritten if anything changed since, if Fireflies has a newer meeting, or if it is over three hours
+                  old and Fireflies has anything: tomorrow’s stand-up knows today’s.
                 </Card>
                 <Card tone="amber" title="Fireflies, before and after">
                   Fireflies is in most of NDI’s own meetings, and its API (<C>FIREFLIES_API_KEY</C>, Michael Burian’s account)

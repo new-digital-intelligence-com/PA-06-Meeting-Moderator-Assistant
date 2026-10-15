@@ -6,6 +6,7 @@
  * admin sees any client's (`clientId`), the same page.
  */
 
+import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { prepLocksAt } from "@/lib/prepLock";
 import { pickFromDrive, type PickerConfig } from "./drivePicker";
@@ -15,7 +16,6 @@ import {
   CalendarIcon,
   DriveIcon,
   FileIcon,
-  HistoryIcon,
   LinkIcon,
   LockIcon,
   SettingsIcon,
@@ -46,7 +46,7 @@ type Doc = {
 
 type Prep = { goal?: string; agenda?: string; people?: string; avoid?: string; notes?: string };
 
-type Meeting = {
+export type Meeting = {
   id: string;
   title: string;
   starts_at: string;
@@ -87,15 +87,26 @@ const ACCEPT =
 
 /* ----------------------------------------------------------------- page */
 
-export default function Workspace({ clientId, picker = null }: { clientId?: string; picker?: PickerConfig | null }) {
+export default function Workspace({
+  clientId,
+  picker = null,
+  when: initialWhen = "upcoming",
+}: {
+  clientId?: string;
+  picker?: PickerConfig | null;
+  when?: "upcoming" | "past";
+}) {
   const q = clientId ? `?client=${clientId}` : "";
+  // Where this page is, for each meeting's own page under it.
+  const base = clientId ? `/admin/clients/${clientId}` : "/client";
   const [data, setData] = useState<Data | null>(null);
   const [version, setVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [digesting, setDigesting] = useState(false);
   const [tab, setTab] = useState<Tab>("meetings");
-  // The Meetings tab shows one list at a time: those coming up, or those that are over.
-  const [when_, setWhen] = useState<"upcoming" | "past">("upcoming");
+  // The Meetings tab shows one list at a time: those coming up, or those that are over —
+  // the past ones when back from a past meeting's page (?when=past, read by the page).
+  const [when_, setWhen] = useState<"upcoming" | "past">(initialWhen);
   // Which meetings are past and which are about to start: read with the data, and each minute.
   const [now, setNow] = useState(() => Date.now());
   // Her meeting, if it is theirs, followed live; and "Need Ava now?" open or not.
@@ -320,7 +331,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
         ) : (
           <ul className="space-y-3">
             {upcoming.map((m) => (
-              <UpcomingMeeting key={m.id} meeting={m} now={now} q={q} onChange={reload} onError={setError} />
+              <UpcomingMeeting key={m.id} meeting={m} now={now} href={`${base}/meetings/${m.id}`} />
             ))}
           </ul>
         ))}
@@ -334,7 +345,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
             <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Past 30 days</h3>
             <ul className="space-y-2">
               {past.map((m) => (
-                <PastMeeting key={m.id} meeting={m} q={q} />
+                <PastMeeting key={m.id} meeting={m} href={`${base}/meetings/${m.id}`} />
               ))}
             </ul>
           </div>
@@ -344,7 +355,7 @@ export default function Workspace({ clientId, picker = null }: { clientId?: stri
             <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Called off — deleted or taken off her calendar</h3>
             <ul className="space-y-2">
               {cancelled.map((m) => (
-                <PastMeeting key={m.id} meeting={m} q={q} />
+                <PastMeeting key={m.id} meeting={m} href={`${base}/meetings/${m.id}`} />
               ))}
             </ul>
           </div>
@@ -437,7 +448,7 @@ type Tab = "meetings" | "knowledge" | "instructions" | "people" | "setup";
 /* ------------------------------------------------------------ documents */
 
 /** Google's file picker settings, from the page — null hides "From Google Drive". */
-const PickerContext = createContext<PickerConfig | null>(null);
+export const PickerContext = createContext<PickerConfig | null>(null);
 
 function AddDocuments({
   q,
@@ -968,27 +979,15 @@ function Preview({ doc, q, onClose }: { doc: Doc; q: string; onClose: () => void
 
 /* ------------------------------------------------------------- meetings */
 
-function briefState(m: Meeting): { tone: "good" | "warn" | "neutral"; label: string } {
+export function briefState(m: Meeting): { tone: "good" | "warn" | "neutral"; label: string } {
   const prepared = Object.values(m.prep ?? {}).some((v) => typeof v === "string" && v.trim()) || m.documents > 0;
   if (m.brief && (!m.prep_at || !m.brief_at || m.brief_at >= m.prep_at)) return { tone: "good", label: "Prepared" };
   if (prepared) return { tone: "warn", label: m.brief ? "Brief out of date" : "Preparation saved" };
   return { tone: "neutral", label: "Not prepared" };
 }
 
-function UpcomingMeeting({
-  meeting,
-  now,
-  q,
-  onChange,
-  onError,
-}: {
-  meeting: Meeting;
-  now: number;
-  q: string;
-  onChange: () => void;
-  onError: (message: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
+/** A coming meeting in the list: opens its own page, where she is prepared for it. */
+function UpcomingMeeting({ meeting, now, href }: { meeting: Meeting; now: number; href: string }) {
   const state = briefState(meeting);
   const start = new Date(meeting.starts_at);
   const soon = start.getTime() - now < 15 * 60_000;
@@ -998,12 +997,11 @@ function UpcomingMeeting({
   // She said no to the host: it clashes with a meeting she already has (lib/rsvp.ts).
   const declined = meeting.status === "declined";
   return (
-    <li
-      className={`rounded-2xl border bg-white transition duration-150 ${
-        open ? "border-blue-200 shadow-lg shadow-blue-900/5 ring-4 ring-blue-500/5" : "border-slate-200/80 hover:-translate-y-px hover:border-slate-300 hover:shadow-md"
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-4 p-4">
+    <li>
+      <Link
+        href={href}
+        className="group flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 transition duration-150 hover:-translate-y-px hover:border-blue-200 hover:shadow-md hover:shadow-blue-900/5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
+      >
         {/* The day, as on a calendar page. */}
         <div className="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-center shadow-sm">
           <span className="w-full bg-linear-to-b from-blue-500 to-blue-600 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
@@ -1030,32 +1028,22 @@ function UpcomingMeeting({
         </div>
         {started ? <Chip tone="info">Happening now</Chip> : locked ? <Chip tone="info">Starting now</Chip> : soon && <Chip tone="info">Starting soon</Chip>}
         {declined ? <Chip tone="bad">Declined — booked then</Chip> : <Chip tone={state.tone}>{state.label}</Chip>}
-        <button className={open || locked || declined || state.tone === "good" ? quiet : primary} onClick={() => setOpen((v) => !v)}>
-          {open ? "Close" : locked ? (
+        <span className={`${locked || declined || state.tone === "good" ? quiet : primary} pointer-events-none`}>
+          {locked ? (
             <>
               <LockIcon className="size-4" />
               View preparation
             </>
           ) : state.tone === "good" ? (
-            "Edit preparation"
+            "Open"
           ) : (
             "Prepare her"
           )}
-        </button>
-      </div>
-      {open &&
-        (locked ? (
-          <div className="border-t border-slate-200">
-            <p className="flex items-center gap-2 bg-amber-50/70 px-4 py-2.5 text-xs text-amber-800">
-              <LockIcon className="size-4 shrink-0" />
-              Locked from a minute before the meeting: this is what she walks in with. It stays with the meeting, under Past meetings
-              once it is over.
-            </p>
-            <MeetingRecord meetingId={meeting.id} q={q} views={["prep", "history"]} />
-          </div>
-        ) : (
-          <PrepPanel meeting={meeting} now={now} q={q} onSaved={onChange} onError={onError} />
-        ))}
+          <span aria-hidden="true" className="transition group-hover:translate-x-0.5">
+            →
+          </span>
+        </span>
+      </Link>
     </li>
   );
 }
@@ -1068,18 +1056,25 @@ const PREP_FIELDS: { key: keyof Prep; label: string; hint: string; rows: number 
   { key: "notes", label: "Anything else", hint: "Her role, open questions, what a good outcome is…", rows: 3 },
 ];
 
-function PrepPanel({
+/**
+ * Preparing her for one meeting, on its page: who is coming (their Who's who lines), what
+ * it is for, the agenda, what to avoid, documents for it only — saved, her brief is written
+ * and shown. `docsVersion` changes when a document was added from elsewhere on the page.
+ */
+export function PrepPanel({
   meeting,
   now,
   q,
   onSaved,
   onError,
+  docsVersion = 0,
 }: {
   meeting: Meeting;
   now: number;
   q: string;
   onSaved: () => void;
   onError: (message: string) => void;
+  docsVersion?: number;
 }) {
   const locksIn = prepLocksAt(meeting.starts_at) - now;
   const [prep, setPrep] = useState<Prep>(meeting.prep ?? {});
@@ -1104,7 +1099,7 @@ function PrepPanel({
     return () => {
       alive = false;
     };
-  }, [meeting.id, q, sep]);
+  }, [meeting.id, q, sep, docsVersion]);
 
   /** The lines written here that differ from Who's who: saved there first, so her brief has them. */
   async function saveLines() {
@@ -1137,7 +1132,7 @@ function PrepPanel({
   }
 
   return (
-    <div className="space-y-5 border-t border-slate-200 p-4">
+    <div className="space-y-5">
       {locksIn < 15 * 60_000 && (
         <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/15">
           <LockIcon className="size-4 shrink-0" />
@@ -1254,30 +1249,6 @@ function PrepPanel({
           <Markdown>{brief.text}</Markdown>
         </div>
       )}
-
-      <EarlierMeetings
-        meeting={meeting}
-        q={q}
-        onAdded={(doc) => {
-          setDocs((d) => [doc, ...(d ?? [])]);
-          setChanged(true);
-        }}
-        onError={onError}
-      />
-
-      {/* What happened to it so far: the host's changes, each saved preparation, documents. */}
-      <details className="group rounded-xl border border-slate-200 bg-white">
-        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-700">
-          <span className="flex items-center gap-2">
-            <HistoryIcon className="size-4 text-slate-400" />
-            History of this meeting
-          </span>
-          <span className="text-xs text-slate-400 transition group-open:rotate-180" aria-hidden="true">
-            ▾
-          </span>
-        </summary>
-        <MeetingRecord meetingId={meeting.id} q={q} views={["history"]} />
-      </details>
     </div>
   );
 }
@@ -1299,7 +1270,7 @@ type Earlier = {
  * preparation and its history — kept for good, not only the last 30 days. An earlier
  * meeting's notes can be handed to her for this one, as a document of this meeting's.
  */
-function EarlierMeetings({
+export function EarlierMeetings({
   meeting,
   q,
   onAdded,
@@ -1416,14 +1387,16 @@ function EarlierMeetings({
  * A meeting that is over — or was called off: open it for its notes (the email as it
  * went out), the preparation she had, and its whole history.
  */
-function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
-  const [open, setOpen] = useState(false);
+function PastMeeting({ meeting, href }: { meeting: Meeting; href: string }) {
   const notes = meeting.notes;
   const cancelled = meeting.status === "cancelled";
   const declined = meeting.status === "declined";
   return (
-    <li className={`overflow-hidden rounded-xl border transition ${open ? "border-slate-300 bg-slate-50/40 shadow-sm" : "border-slate-200/70 bg-slate-50/70 hover:border-slate-300 hover:bg-white"}`}>
-      <button className="flex w-full flex-wrap items-center gap-3 p-3 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+    <li>
+      <Link
+        href={href}
+        className="group flex w-full flex-wrap items-center gap-3 rounded-xl border border-slate-200/70 bg-slate-50/70 p-3 text-left transition hover:border-slate-300 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
+      >
         <span className={`min-w-0 flex-1 truncate text-sm font-medium ${cancelled ? "text-slate-400 line-through decoration-slate-300" : "text-slate-700"}`}>{meeting.title}</span>
         <PlatformChip url={meeting.meeting_url} />
         <span className="text-xs text-slate-400">{when(meeting.starts_at)}</span>
@@ -1440,11 +1413,10 @@ function PastMeeting({ meeting, q }: { meeting: Meeting; q: string }) {
         ) : (
           <Chip>No notes</Chip>
         )}
-        <span className={`text-xs text-slate-400 transition ${open ? "rotate-180" : ""}`} aria-hidden="true">
-          ▾
+        <span className="text-xs text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-600" aria-hidden="true">
+          →
         </span>
-      </button>
-      {open && <MeetingRecord meetingId={meeting.id} q={q} views={cancelled || declined ? ["history", "prep"] : ["notes", "prep", "history"]} />}
+      </Link>
     </li>
   );
 }
@@ -1505,7 +1477,7 @@ function Instructions({ initial, name, q, onError }: { initial: string; name: st
 type Contact = { email: string; name: string | null; info: string; updated_at: string | null; updated_by: string | null };
 
 /** The people of a meeting worth a line: the organiser and the guests — not her, not rooms. */
-const peopleOf = (m: Pick<Meeting, "organizer" | "organizer_name" | "guests">) => {
+export const peopleOf = (m: Pick<Meeting, "organizer" | "organizer_name" | "guests">) => {
   const seen = new Map<string, string | undefined>();
   for (const p of [{ email: m.organizer ?? "", name: m.organizer_name ?? undefined }, ...(m.guests ?? [])]) {
     const email = p.email.trim().toLowerCase();

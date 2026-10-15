@@ -14,9 +14,17 @@ export const metadata: Metadata = { title: "Client — Ava" };
  * One client, as NDI sees it: their setup — all of it, where the client's own Setup tab
  * has only their part — then their page as they see it.
  */
-export default async function AdminClientPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminClientPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const user = await requireAdminPage();
   const { id } = await params;
+  // Back from a past meeting's page: its list.
+  const when = (await searchParams).when === "past" ? "past" : "upcoming";
   if (!isUuid(id) || !(await getClient(id))) notFound();
   return (
     <>
@@ -24,7 +32,7 @@ export default async function AdminClientPage({ params }: { params: Promise<{ id
       <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6">
         <Setup clientId={id} />
       </div>
-      <Workspace clientId={id} picker={pickerConfig()} />
+      <Workspace clientId={id} picker={pickerConfig()} when={when} />
     </>
   );
 }

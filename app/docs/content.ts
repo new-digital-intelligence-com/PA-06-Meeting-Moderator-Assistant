@@ -32,6 +32,17 @@ export type Change = {
 export const CHANGELOG: Change[] = [
   {
     date: "2026-10-15",
+    title: "Each meeting on its own page, with Fireflies' “Last time” — and briefs written ahead",
+    points: [
+      "A meeting in a client's list now opens its own page instead of unfolding in the list: a header with its day, time, platform, organiser and everybody invited; coming up, preparing her and her brief beside “Last time”, earlier meetings and its history; over, her notes and Fireflies', what she had, and its history.",
+      "“Last time” shows what Fireflies has from before — the same meeting, and recent meetings with the same people, each with Fireflies' summary, action items and a link to its transcript — on the page itself, the moment it opens.",
+      "Her brief was only written in the 45 minutes before a meeting, so the 15:00 stand-up showed no Fireflies preparation at noon. Now every coming meeting of the next hours gets its brief as soon as it has something to brief from — its preparation or Fireflies — and it is brought up to date in its last 45 minutes.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
+  {
+    date: "2026-10-15",
     title: "Who's who: what she should know about each person, kept across meetings",
     points: [
       "A new tab on a client's page, after How she works for you: everybody in their meetings, by email, each with a name and what she should know about them — editable, searchable, and anybody can be added or taken off.",

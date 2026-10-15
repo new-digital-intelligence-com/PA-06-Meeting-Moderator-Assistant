@@ -10,9 +10,10 @@ import { hasDb } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Ava" };
 
-/** A client's own page. Admins see clients from /admin instead. */
-export default async function ClientPage() {
+/** A client's own page. Admins see clients from /admin instead. `?when=past`: back from a past meeting's page. */
+export default async function ClientPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const user = await requireUserPage();
+  const when = (await searchParams).when === "past" ? "past" : "upcoming";
   if (user.role === "admin") redirect("/admin");
 
   // Checked again, not taken from the session: access can be withdrawn after signing in.
@@ -33,7 +34,7 @@ export default async function ClientPage() {
   return (
     <>
       <TopBar user={user} clientName={client.name} />
-      <Workspace picker={pickerConfig()} />
+      <Workspace picker={pickerConfig()} when={when} />
     </>
   );
 }

@@ -63,7 +63,8 @@ const PREP_LABEL: { [k in keyof Prep]-?: string } = {
 const stamp = (iso: string | number | null | undefined) =>
   iso ? new Date(iso).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
-export default function MeetingRecord({ meetingId, q, views, start }: { meetingId: string; q: string; views: View[]; start?: View }) {
+/** `bare`: on a meeting's own page, inside its section — no frame of its own. */
+export default function MeetingRecord({ meetingId, q, views, start, bare = false }: { meetingId: string; q: string; views: View[]; start?: View; bare?: boolean }) {
   const [data, setData] = useState<Kept | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(start ?? views[0]);
@@ -78,11 +79,11 @@ export default function MeetingRecord({ meetingId, q, views, start }: { meetingI
     };
   }, [meetingId, q]);
 
-  if (error) return <p className="p-4 text-sm text-rose-700">{error}</p>;
-  if (!data) return <div className="m-4 h-24 animate-pulse rounded-xl bg-slate-100" />;
+  if (error) return <p className={`${bare ? "" : "p-4 "}text-sm text-rose-700`}>{error}</p>;
+  if (!data) return <div className={`${bare ? "" : "m-4 "}h-24 animate-pulse rounded-xl bg-slate-100`} />;
 
   return (
-    <div className="space-y-4 border-t border-slate-200/70 p-4">
+    <div className={bare ? "space-y-4" : "space-y-4 border-t border-slate-200/70 p-4"}>
       {views.length > 1 && (
         <div role="tablist" className="inline-flex rounded-xl bg-slate-100 p-1 text-xs font-semibold">
           {views.map((v) => (
