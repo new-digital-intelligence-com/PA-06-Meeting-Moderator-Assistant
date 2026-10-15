@@ -92,8 +92,11 @@ const earlierCache = new Map<string, { at: number; value: Earlier }>();
 export async function earlierFromFireflies(m: MeetingRow): Promise<Earlier> {
   const empty = { series: [] };
   if (!hasFireflies()) return empty;
+  // Asked again every quarter of an hour in its last two hours — when a newer time may
+  // just have been written up — and every two hours before that: what is past changes little.
+  const fresh = m.starts_at.getTime() - Date.now() < 2 * 3_600_000 ? 15 * 60_000 : 2 * 3_600_000;
   const cached = earlierCache.get(m.id);
-  if (cached && Date.now() - cached.at < 15 * 60_000) return cached.value;
+  if (cached && Date.now() - cached.at < fresh) return cached.value;
 
   const before = new Date(m.starts_at.getTime() - 10 * 60_000).toISOString();
   // A title search comes back in no particular order: the past month of it, all of it (a
@@ -121,6 +124,18 @@ export type TranscriptLine = { speaker: string; at: number; text: string };
  * sentences joined — with when it began.
  */
 export async function transcriptOf(id: string): Promise<{ title: string; date: string; lines: TranscriptLine[] }> {
+  // A recording's words never change once written up: each is fetched once, and kept a while.
+  const kept = transcripts.get(id);
+  if (kept && Date.now() - kept.at < 6 * 3_600_000) return kept.value;
+  const value = await readTranscript(id);
+  transcripts.set(id, { at: Date.now(), value });
+  if (transcripts.size > 40) transcripts.delete(transcripts.keys().next().value!);
+  return value;
+}
+
+const transcripts = new Map<string, { at: number; value: { title: string; date: string; lines: TranscriptLine[] } }>();
+
+async function readTranscript(id: string): Promise<{ title: string; date: string; lines: TranscriptLine[] }> {
   const { transcript } = await gql<{
     transcript: { title: string; dateString: string; sentences: { speaker_name: string | null; text: string | null; start_time: number | null }[] | null } | null;
   }>(`query ($id: String!) { transcript(id: $id) { title dateString sentences { speaker_name text start_time } } }`, { id });
@@ -282,13 +297,20 @@ export type FirefliesNotes = {
 /** Meetings already looked for, and when: Fireflies takes a while to write one up. */
 const lookedAt = new Map<string, number>();
 const LOOK_EVERY_MS = 10 * 60_000;
-/** After this long, a meeting Fireflies has no recording of is let go. */
+/** After this long, a meeting Fireflies recorded but has not written up is let go. */
 const GIVE_UP_MS = 8 * 3_600_000;
+/**
+ * A meeting Fireflies has no recording of at all an hour after it ended was not recorded —
+ * Fireflies keeps one from the moment it joins — and is not asked about again.
+ */
+const UNRECORDED_MS = 60 * 60_000;
+const unrecorded = new Set<string>();
 
 /**
  * Brings in what Fireflies made of her clients' meetings that have just finished — a few
  * each time it is called (once a minute, with her runner's calendar read). Each meeting is
- * looked for every ten minutes until Fireflies has written it up, for eight hours at most.
+ * looked for every ten minutes until Fireflies has written it up — usually two or three
+ * looks — for eight hours at most; one it never recorded, for an hour.
  */
 export async function importFinished(limit = 2): Promise<void> {
   if (!hasFireflies() || !hasDb()) return;
@@ -308,7 +330,7 @@ export async function importFinished(limit = 2): Promise<void> {
     .map(asMeeting)
     .filter((m) => {
       const notes = m.notes as { fireflies?: unknown } | null;
-      if (notes?.fireflies) return false;
+      if (notes?.fireflies || unrecorded.has(m.id)) return false;
       const over = (m.ended_at ?? m.ends_at ?? m.starts_at).getTime();
       if (over > now - 5 * 60_000) return false;
       return now - (lookedAt.get(m.id) ?? 0) >= LOOK_EVERY_MS;
@@ -319,8 +341,13 @@ export async function importFinished(limit = 2): Promise<void> {
     lookedAt.set(m.id, now);
     try {
       const recording = await recordingOf(m);
-      // Not recorded, or not written up yet: looked for again in ten minutes.
-      if (!recording?.summary?.overview) continue;
+      if (!recording) {
+        // Never recorded: let go an hour after it ended.
+        if (now - (m.ended_at ?? m.ends_at ?? m.starts_at).getTime() > UNRECORDED_MS) unrecorded.add(m.id);
+        continue;
+      }
+      // Recorded, not written up yet: looked for again in ten minutes.
+      if (!recording.summary?.overview) continue;
       await keep(m, await fullRecording(recording.id));
     } catch (e) {
       console.warn(`[fireflies] ${m.title}:`, e instanceof Error ? e.message : e);
