@@ -288,7 +288,7 @@ function Brief({ meeting }: { meeting: Meeting }) {
       description={
         meeting.brief
           ? `Her brief, written ${ago(meeting.brief_at)}${withFireflies ? " — with Last time from Fireflies" : ""}. It is in her head when she joins.`
-          : "Her brief, once there is something to brief from."
+          : "Her brief: written in the 24 hours before it starts, or when you save a preparation."
       }
     >
       {meeting.brief ? (
@@ -297,8 +297,8 @@ function Brief({ meeting }: { meeting: Meeting }) {
         </div>
       ) : (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-sm leading-relaxed text-slate-500">
-          No brief yet. She writes one by herself within a minute or two as soon as there is something to brief from — Fireflies&apos;
-          earlier meetings, or your preparation (“Save and brief her”).
+          No brief yet. She writes one by herself in the 24 hours before it starts, from Last time and anything you prepare — or at
+          once when you save a preparation (“Save and brief her”).
         </p>
       )}
     </Section>
@@ -325,7 +325,12 @@ function LastTime({ meetingId, q }: { meetingId: string; q: string }) {
 
   if (data && !data.configured) return null;
   return (
-    <Section title="Last time" icon={<HistoryIcon />} tone="amber" description="From Fireflies: the same meeting's latest times, newest first.">
+    <Section
+      title="Last time"
+      icon={<HistoryIcon />}
+      tone="amber"
+      description="From Fireflies: the same meeting's latest times, newest first. All of it is hers, nothing to pick: in her head when she joins, in her brief, and searchable in the meeting."
+    >
       {!data ? (
         <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
       ) : data.error ? (
