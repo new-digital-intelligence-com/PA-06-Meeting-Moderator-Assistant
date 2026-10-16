@@ -43,12 +43,15 @@ export type FirefliesMeeting = {
   participants: string[] | null;
   meeting_attendees: { displayName: string | null; email: string | null }[] | null;
   summary: { overview: string | null; action_items: string | null; keywords: string[] | null; short_summary: string | null } | null;
+  /** silent_meeting: nobody spoke while Fireflies was there. summary_status: "processed", "skipped", "failed", or still being written. */
+  meeting_info: { silent_meeting: boolean | null; summary_status: string | null } | null;
   sentences?: { speaker_name: string | null; text: string | null }[] | null;
 };
 
 const FIELDS = `id title dateString duration organizer_email calendar_id cal_id meeting_link transcript_url participants
   meeting_attendees { displayName email }
-  summary { overview action_items keywords short_summary }`;
+  summary { overview action_items keywords short_summary }
+  meeting_info { silent_meeting summary_status }`;
 
 async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const res = await fetch(URL, {
@@ -67,8 +70,21 @@ async function gql<T>(query: string, variables: Record<string, unknown>): Promis
 const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 /** A Google event's id without its instance ("abc_20261015T090000Z" → "abc"): the series. */
 const seriesOf = (id: string | null | undefined) => (id ?? "").split("_")[0].trim().toLowerCase();
-const linkOf = (url: string | null | undefined) => (url ?? "").toLowerCase().replace(/^https?:\/\//, "").replace(/[?#].*$/, "").replace(/\/$/, "");
+/** A meeting link, compared: Teams' "19%3ameeting_…" in the invite is "19:meeting_…" in Fireflies. */
+const linkOf = (url: string | null | undefined) => {
+  let link = url ?? "";
+  try {
+    link = decodeURIComponent(link);
+  } catch {}
+  return link.toLowerCase().replace(/^https?:\/\//, "").replace(/[?#].*$/, "").replace(/\/$/, "");
+};
 const at = (m: FirefliesMeeting) => Date.parse(m.dateString);
+/** Fireflies was in the call and heard nobody speak — usually a meeting that did not take place: nothing to bring in, ever. */
+const silent = (f: FirefliesMeeting) => f.meeting_info?.silent_meeting === true;
+/** Fireflies has written its summary. */
+const writtenUp = (f: FirefliesMeeting) => Boolean(f.summary?.overview?.trim());
+/** Fireflies will not write one ("skipped", "failed"): what was said is still worth keeping. */
+const noWriteUp = (f: FirefliesMeeting) => ["skipped", "failed"].includes((f.meeting_info?.summary_status ?? "").toLowerCase());
 
 /** The same meeting: its calendar series, or failing that its exact title. */
 function sameSeries(m: MeetingRow, f: FirefliesMeeting): boolean {
@@ -247,12 +263,18 @@ export async function recordingOf(m: MeetingRow): Promise<FirefliesMeeting | nul
   const near = (f: FirefliesMeeting, ms: number) => Math.abs(at(f) - start) <= ms;
   const ours = seriesOf(m.event_id);
   const link = linkOf(m.meeting_url);
-  return (
-    transcripts.find((f) => ours && (seriesOf(f.cal_id) === ours || seriesOf(f.calendar_id) === ours) && near(f, 3 * 3_600_000)) ??
-    transcripts.find((f) => link && linkOf(f.meeting_link) === link && near(f, 3 * 3_600_000)) ??
-    transcripts.find((f) => norm(f.title) === norm(m.title) && near(f, 90 * 60_000)) ??
-    null
-  );
+  const ways = [
+    (f: FirefliesMeeting) => Boolean(ours) && (seriesOf(f.cal_id) === ours || seriesOf(f.calendar_id) === ours) && near(f, 3 * 3_600_000),
+    (f: FirefliesMeeting) => Boolean(link) && linkOf(f.meeting_link) === link && near(f, 3 * 3_600_000),
+    (f: FirefliesMeeting) => norm(f.title) === norm(m.title) && near(f, 90 * 60_000),
+  ];
+  for (const same of ways) {
+    const found = transcripts.filter(same);
+    // Fireflies waiting alone in a call that started late is a recording too: the one where
+    // somebody spoke, if there is one.
+    if (found.length) return found.find((f) => !silent(f)) ?? found[0];
+  }
+  return null;
 }
 
 async function fullRecording(id: string): Promise<FirefliesMeeting> {
@@ -304,16 +326,18 @@ const LOOK_EVERY_MS = 10 * 60_000;
 const GIVE_UP_MS = 8 * 3_600_000;
 /**
  * A meeting Fireflies has no recording of at all an hour after it ended was not recorded —
- * Fireflies keeps one from the moment it joins — and is not asked about again.
+ * Fireflies keeps one from the moment it joins — and is not asked about again. Nor is one
+ * where it heard nobody speak: nothing will come of it.
  */
 const UNRECORDED_MS = 60 * 60_000;
-const unrecorded = new Set<string>();
+const letGo = new Set<string>();
 
 /**
  * Brings in what Fireflies made of her clients' meetings that have just finished — a few
  * each time it is called (once a minute, with her runner's calendar read). Each meeting is
  * looked for every ten minutes until Fireflies has written it up — usually two or three
- * looks — for eight hours at most; one it never recorded, for an hour.
+ * looks — for eight hours at most; one it never recorded, for an hour; one where nobody
+ * spoke, once.
  */
 export async function importFinished(limit = 2): Promise<void> {
   if (!hasFireflies() || !hasDb()) return;
@@ -333,7 +357,7 @@ export async function importFinished(limit = 2): Promise<void> {
     .map(asMeeting)
     .filter((m) => {
       const notes = m.notes as { fireflies?: unknown } | null;
-      if (notes?.fireflies || unrecorded.has(m.id) || isHidden(m)) return false;
+      if (notes?.fireflies || letGo.has(m.id) || isHidden(m)) return false;
       const over = (m.ended_at ?? m.ends_at ?? m.starts_at).getTime();
       if (over > now - 5 * 60_000) return false;
       return now - (lookedAt.get(m.id) ?? 0) >= LOOK_EVERY_MS;
@@ -346,12 +370,12 @@ export async function importFinished(limit = 2): Promise<void> {
       const recording = await recordingOf(m);
       if (!recording) {
         // Never recorded: let go an hour after it ended.
-        if (now - (m.ended_at ?? m.ends_at ?? m.starts_at).getTime() > UNRECORDED_MS) unrecorded.add(m.id);
+        if (now - (m.ended_at ?? m.ends_at ?? m.starts_at).getTime() > UNRECORDED_MS) letGo.add(m.id);
         continue;
       }
-      // Recorded, not written up yet: looked for again in ten minutes.
-      if (!recording.summary?.overview) continue;
-      await keep(m, await fullRecording(recording.id));
+      const outcome = await bringIn(m, recording);
+      if (outcome === "silent") letGo.add(m.id);
+      // "pending": not written up yet — looked for again in ten minutes.
     } catch (e) {
       console.warn(`[fireflies] ${m.title}:`, e instanceof Error ? e.message : e);
     }
@@ -361,13 +385,26 @@ export async function importFinished(limit = 2): Promise<void> {
 /**
  * Import from Fireflies, when somebody asks for it on a meeting that is over: its summary,
  * action items, attendees and transcript, brought in as for a meeting that has just
- * finished. "none": Fireflies has no recording of it; "pending": not written up yet.
+ * finished. "none": Fireflies has no recording of it; "silent": it has one, but heard nobody
+ * speak (Fireflies skips its summary then: nothing will come); "pending": not written up
+ * yet. With its length in minutes, to say so.
  */
-export async function importOne(m: MeetingRow): Promise<"kept" | "none" | "pending"> {
+export async function importOne(m: MeetingRow): Promise<{ outcome: "kept" | "none" | "pending" | "silent"; minutes: number | null }> {
   const recording = await recordingOf(m);
-  if (!recording) return "none";
-  if (!recording.summary?.overview) return "pending";
-  await keep(m, await fullRecording(recording.id));
+  if (!recording) return { outcome: "none", minutes: null };
+  return { outcome: await bringIn(m, recording), minutes: recording.duration ? Math.round(recording.duration) : null };
+}
+
+/**
+ * One recording brought in, if there is anything in it: written up — or never to be (too
+ * short, or Fireflies' summary failed) but with words in it, kept without a summary.
+ */
+async function bringIn(m: MeetingRow, recording: FirefliesMeeting): Promise<"kept" | "pending" | "silent"> {
+  if (silent(recording)) return "silent";
+  if (!writtenUp(recording) && !noWriteUp(recording)) return "pending";
+  const full = await fullRecording(recording.id);
+  if (!writtenUp(full) && !transcriptText(full).trim()) return "silent";
+  await keep(m, full);
   return "kept";
 }
 

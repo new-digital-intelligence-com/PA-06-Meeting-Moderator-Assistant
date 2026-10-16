@@ -69,8 +69,12 @@ export async function POST(request: Request, { params }: Params) {
     if (!meeting) throw new HttpError(404, "That meeting is not one of yours.");
     if (!hasFireflies()) throw new HttpError(503, "Fireflies is not connected.");
     if (meeting.starts_at.getTime() > Date.now()) throw new HttpError(400, "It has not happened yet.");
-    const outcome = await importOne(meeting);
+    const { outcome, minutes } = await importOne(meeting);
     if (outcome === "none") throw new HttpError(404, "Fireflies has no recording of this meeting — it was not in it.");
+    if (outcome === "silent") {
+      const stayed = minutes ? ` for ${minutes} minute${minutes === 1 ? "" : "s"}` : "";
+      throw new HttpError(404, `Fireflies was in the call${stayed}, but heard nobody speak — it has no transcript or summary of it, so there is nothing to bring in.`);
+    }
     if (outcome === "pending") throw new HttpError(409, "Fireflies recorded it but has not written it up yet — try again in a few minutes.");
     return NextResponse.json({ ok: true });
   });

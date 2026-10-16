@@ -216,7 +216,8 @@ function NotesView({ record, meetingId, q, onImported }: { record: Kept; meeting
 
 /**
  * Import from Fireflies, on request: its summary, action items and transcript for this
- * meeting, if it recorded it. Says so when it did not, or has not written it up yet.
+ * meeting, if it recorded it. Says so when it did not, when nobody spoke, or when it has not
+ * written it up yet.
  */
 function ImportFireflies({ meetingId, q, onDone }: { meetingId: string; q: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
