@@ -126,7 +126,7 @@ export async function POST(request: Request) {
           status: "joining",
           dispatch: { at: now },
           attendedFrom: "dispatch",
-          client: { id: client.id, name: client.name, meetingId: row.id },
+          client: { id: client.id, name: client.name, meetingId: row.id, avatar: client.avatar === true },
           language: detectLang(`${title}\n${note}`),
         },
         list,

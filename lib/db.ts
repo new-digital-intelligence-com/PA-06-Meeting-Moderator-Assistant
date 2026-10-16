@@ -68,6 +68,12 @@ export type Client = {
   drive_folder_id: string | null;
   /** Their logo on Cloudinary (lib/cloudinary.ts). Absent until db/schema.sql's logo line has run. */
   logo_url?: string | null;
+  /**
+   * Her Anam face in their meetings — NDI's choice on their setup; voice only when off. Her
+   * runner's AVA_AVATAR=false turns it off for everyone. Absent until db/schema.sql's avatar
+   * line has run.
+   */
+  avatar?: boolean;
   status: string;
   created_at: Date;
   created_by: string | null;

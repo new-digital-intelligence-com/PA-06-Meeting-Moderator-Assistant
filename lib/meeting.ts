@@ -144,7 +144,7 @@ export type Meeting = {
    * The client she is attending for — from her calendar, or sent from the client's page:
    * whose documents she searches, and the meeting (in Postgres) her notes are filed under.
    */
-  client?: { id: string; name: string; meetingId: string };
+  client?: { id: string; name: string; meetingId: string; avatar?: boolean };
   /** When her runner said she was walking in — a sign of life before anything is heard. */
   attendedAt?: number;
   startedAt?: number;
@@ -312,7 +312,8 @@ function normalise(raw: unknown): Meeting {
 export function clientOf(v: unknown): Meeting["client"] {
   const c = (v ?? {}) as Record<string, unknown>;
   return typeof c.id === "string" && typeof c.name === "string" && typeof c.meetingId === "string"
-    ? { id: c.id, name: c.name, meetingId: c.meetingId }
+    ? // avatar: her face there, as their setup said when she was sent — for her runner.
+      { id: c.id, name: c.name, meetingId: c.meetingId, ...(typeof c.avatar === "boolean" ? { avatar: c.avatar } : {}) }
     : undefined;
 }
 

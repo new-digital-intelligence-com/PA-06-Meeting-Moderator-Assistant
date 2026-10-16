@@ -232,7 +232,7 @@ export async function createClient(input: {
 /** `domains`: already checked (domainsFor). */
 export async function updateClient(
   id: string,
-  patch: { name?: string; instructions?: string; status?: string; domains?: string[] },
+  patch: { name?: string; instructions?: string; status?: string; domains?: string[]; avatar?: boolean },
 ): Promise<Client> {
   const current = await getClient(id);
   if (!current) throw new Error("No such client.");
@@ -240,8 +240,17 @@ export async function updateClient(
   const instructions = patch.instructions !== undefined ? patch.instructions.slice(0, 20_000) : current.instructions;
   const status = patch.status === "paused" || patch.status === "active" ? patch.status : current.status;
   const domains = patch.domains ?? current.domains;
+  // Her face: only when asked — a schema without its column still saves everything else.
+  const avatar = typeof patch.avatar === "boolean" ? { avatar: patch.avatar } : {};
   return asClient(
-    await rows<Record<string, unknown>>(db().from("clients").update({ name, instructions, status, domains }).eq("id", id).select("*").single()),
+    await rows<Record<string, unknown>>(
+      db()
+        .from("clients")
+        .update({ name, instructions, status, domains, ...avatar })
+        .eq("id", id)
+        .select("*")
+        .single(),
+    ),
   );
 }
 

@@ -25,16 +25,25 @@ type Client = {
   created_by: string | null;
   /** Their company domains: anybody at one signs in here, and the meetings they organise are theirs. */
   domains: string[];
+  /** NDI only: her Anam face in their meetings (voice only when off), and whether the database has the setting yet. */
+  avatar?: boolean;
+  avatarReady?: boolean;
 };
 type Person = { id: string; email: string; name: string | null; last_login_at: string | null; owner: boolean };
-type Data = { client: Client; people: Person[]; me: string; admin: boolean };
+/** runnerAvatar, NDI only: her runner's AVA_AVATAR as it last said — "off" is voice only for everyone. */
+type Data = { client: Client; people: Person[]; me: string; admin: boolean; runnerAvatar?: "on" | "off" | null };
 
 export default function Setup({ clientId, onChanged }: { clientId?: string; onChanged?: () => void }) {
   const router = useRouter();
   const q = clientId ? `?client=${clientId}` : "";
   const amp = q ? "&" : "?";
   const [data, setData] = useState<Data | null>(null);
-  const [form, setForm] = useState<{ name: string; status: string; domains: string[] }>({ name: "", status: "active", domains: [] });
+  const [form, setForm] = useState<{ name: string; status: string; domains: string[]; avatar: boolean }>({
+    name: "",
+    status: "active",
+    domains: [],
+    avatar: false,
+  });
   const [newPerson, setNewPerson] = useState({ email: "", invite: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +60,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
       .then((d) => {
         if (!alive) return;
         setData(d);
-        setForm({ name: d.client.name, status: d.client.status, domains: d.client.domains });
+        setForm({ name: d.client.name, status: d.client.status, domains: d.client.domains, avatar: d.client.avatar === true });
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load."));
     return () => {
@@ -77,7 +86,7 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
   if (!data) {
     return error ? <Notice tone="error">{error}</Notice> : <p className="text-sm text-slate-500">Loading…</p>;
   }
-  const { client, people, me, admin } = data;
+  const { client, people, me, admin, runnerAvatar } = data;
   const owner = people.find((p) => p.owner);
   // Their super admin changes addresses, sends an invitation again and removes people; NDI does
   // all of it, to the super admin too. Everybody on the list adds people.
@@ -87,13 +96,14 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    // Only NDI sends the company domains and whether she is paused.
-    const body = { name: form.name, ...(admin ? { domains: form.domains.filter((d) => d.trim()), status: form.status } : {}) };
+    // Only NDI sends the company domains, whether she is paused and her face — that only when changed.
+    const face = admin && client.avatarReady && form.avatar !== client.avatar ? { avatar: form.avatar } : {};
+    const body = { name: form.name, ...(admin ? { domains: form.domains.filter((d) => d.trim()), status: form.status, ...face } : {}) };
     const r = await step("save", () =>
-      api<{ client: { name: string; domains: string[] } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }),
+      api<{ client: { name: string; domains: string[]; avatar: boolean } }>(`/api/portal/setup${q}`, { method: "PATCH", body: JSON.stringify(body) }),
     );
     if (!r) return;
-    setData((d) => (d ? { ...d, client: { ...d.client, name: r.client.name, domains: r.client.domains } } : d));
+    setData((d) => (d ? { ...d, client: { ...d.client, name: r.client.name, domains: r.client.domains, avatar: r.client.avatar } } : d));
     setForm((f) => ({ ...f, domains: r.client.domains }));
     setNotice("Saved.");
     changed();
@@ -337,6 +347,28 @@ export default function Setup({ clientId, onChanged }: { clientId?: string; onCh
                   <option value="active">Active: she attends their meetings</option>
                   <option value="paused">Paused: she skips them, and nobody signs in</option>
                 </select>
+              </label>
+            )}
+
+            {admin && (
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-600">Her face in their meetings</span>
+                <select
+                  className={field}
+                  value={form.avatar ? "avatar" : "voice"}
+                  onChange={(e) => setForm((f) => ({ ...f, avatar: e.target.value === "avatar" }))}
+                  disabled={!client.avatarReady}
+                >
+                  <option value="voice">Voice only: camera off, her profile photo</option>
+                  <option value="avatar">Avatar: her Anam face, lip-synced to her voice</option>
+                </select>
+                <span className="block text-xs text-slate-500">
+                  {!client.avatarReady
+                    ? "Needs one line in Supabase first: the avatar line in db/schema.sql."
+                    : runnerAvatar === "off"
+                      ? "Off on her runner for everyone (AVA_AVATAR=false): she joins with her voice only, whatever is set here."
+                      : "Her face uses Anam minutes while she is in their meetings."}
+                </span>
               </label>
             )}
 

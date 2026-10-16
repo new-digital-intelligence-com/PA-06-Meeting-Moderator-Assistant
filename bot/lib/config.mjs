@@ -48,10 +48,22 @@ export const CHROME =
   ].find((p) => p && fs.existsSync(p));
 
 /**
- * voice (default): she joins camera-off with her profile photo and an ElevenLabs voice.
- * avatar: the same voice, plus the Anam face as her camera, lip-synced to it.
+ * Her face, allowed or not — AVA_AVATAR=true or false:
+ *   false: voice only, everywhere — she joins camera-off, the meeting showing her profile
+ *          photo (her initials in Teams), and never asks Anam for anything.
+ *   true:  each client's setup decides (NDI turns it on there; off at first): where it is
+ *          on, the same voice plus the Anam face as her camera, lip-synced to it.
+ * Unset, the older AVA_MODE decides ("avatar" allows it; "voice", the default, does not).
+ * "avatar" here means allowed; whether a meeting has it is decided per meeting (lib/meet.mjs).
  */
-export const MODE = process.env.AVA_MODE === "avatar" ? "avatar" : "voice";
+const avatar = (process.env.AVA_AVATAR ?? "").trim().toLowerCase();
+export const MODE = ["true", "1", "yes", "on"].includes(avatar)
+  ? "avatar"
+  : ["false", "0", "no", "off"].includes(avatar)
+    ? "voice"
+    : process.env.AVA_MODE === "avatar"
+      ? "avatar"
+      : "voice";
 
 /**
  * Her face's limits. Anam cuts each session off after a set time that depends on the

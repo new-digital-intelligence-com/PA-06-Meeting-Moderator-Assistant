@@ -258,7 +258,7 @@ function readIdleClip(avatarId) {
 /**
  * Attends one meeting from start to finish, then writes and sends the notes.
  *
- * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[], startsAt?: number, client?: { id: string, name: string, meetingId: string } | null }} meeting
+ * @param {{ meetingUrl: string, title?: string, context?: string, recipients?: string[], startsAt?: number, client?: { id: string, name: string, meetingId: string, avatar?: boolean } | null }} meeting
  *   `startsAt`: when the meeting is due to start — she may be early, and waits for people from then.
  *   `client`: the client she attends for — their documents become searchable to her.
  * @param {{ log?: (m: string) => void, briefed?: boolean, seat?: number }} options `briefed`: sent from the
@@ -302,13 +302,16 @@ export async function attend(meeting, { log = console.log, briefed = false, seat
   await api.attend(briefed ? "dispatch" : "calendar");
   log(`  ${briefed ? "sent from a client's page" : "briefed"}: ${meeting.title || meeting.meetingUrl} (${platform.name}, ${lang})`);
 
-  // Her face for this meeting, asked for before her browser opens: with every Anam account
-  // out of minutes she joins as in voice mode — camera off, the meeting showing her profile
-  // photo — and her voice works as always. Anam failing for another reason: she joins with
-  // her camera, and the face keeps trying (her page gives up after three tries in a row).
-  let mode = MODE;
+  // Her face for this meeting: only where her runner allows it (AVA_AVATAR) and the client's
+  // setup turns it on — NDI's choice, voice only until then. Asked for before her browser
+  // opens: with every Anam account out of minutes she joins as in voice mode — camera off,
+  // the meeting showing her profile photo — and her voice works as always. Anam failing for
+  // another reason: she joins with her camera, and the face keeps trying (her page gives up
+  // after three tries in a row).
+  let mode = MODE === "avatar" && (meeting.client ? meeting.client.avatar === true : true) ? "avatar" : "voice";
+  if (MODE === "avatar" && mode === "voice") log(`  voice only — her face is off in ${meeting.client?.name ?? "this client"}'s setup`);
   let firstFace = null;
-  if (MODE === "avatar") {
+  if (mode === "avatar") {
     try {
       firstFace = await app.anamSession();
     } catch (e) {

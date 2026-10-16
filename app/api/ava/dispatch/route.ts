@@ -51,8 +51,8 @@ export async function POST(request: Request) {
       platform: string | null;
       startsAt: number;
       language: string;
-      /** Whose meeting: their documents become searchable to her, and her log is theirs too. */
-      client: { id: string; name: string; meetingId: string } | null;
+      /** Whose meeting: their documents become searchable to her, and her log is theirs too; with her face or not (their setup). */
+      client: { id: string; name: string; meetingId: string; avatar?: boolean } | null;
     } = null;
     await updateMeeting(
       (m) => {

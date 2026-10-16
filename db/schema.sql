@@ -33,12 +33,17 @@ create table if not exists "pa-06".clients (
   drive_folder_id text,
   -- Their company's logo, on Cloudinary.
   logo_url text,
+  -- Her Anam face in their meetings, as NDI sets it on their setup: voice only until turned
+  -- on (and never while her runner has AVA_AVATAR=false).
+  avatar boolean not null default false,
   status text not null default 'active',
   created_at timestamptz not null default now(),
   created_by text
 );
 -- For a schema made before logos: the only line it needs.
 alter table "pa-06".clients add column if not exists logo_url text;
+-- For a schema made before her face could be set per client: the only line it needs.
+alter table "pa-06".clients add column if not exists avatar boolean not null default false;
 
 -- People who can sign in to a client's portal — and whose invites are the client's. One
 -- client per address. role: 'owner', the client's super admin (the address NDI set it up

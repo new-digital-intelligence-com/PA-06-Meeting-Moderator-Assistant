@@ -3,7 +3,7 @@
 // was the body. Swapping one body for another did not require a second brain.
 import fs from "node:fs";
 import path from "node:path";
-import { SEATS, STATE_DIR, requireApp } from "./config.mjs";
+import { MODE, SEATS, STATE_DIR, requireApp } from "./config.mjs";
 
 /** Her screen's address when it is online: the app links each client's log there (logs.mjs). */
 const SCREEN = process.env.AVA_SCREEN_HOST?.trim();
@@ -23,6 +23,8 @@ async function call(method, path, body, extra = {}) {
       "Content-Type": "application/json",
       "x-ava-key": process.env.AVA_RUNNER_KEY || "",
       "x-ava-seats": String(seatsReady),
+      // Whether her face is allowed at all here (AVA_AVATAR): a client's setup says so when not.
+      "x-ava-avatar": MODE === "avatar" ? "on" : "off",
       ...(SCREEN ? { "x-ava-screen": `https://${SCREEN}` } : {}),
       ...extra,
     },

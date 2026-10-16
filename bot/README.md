@@ -20,8 +20,9 @@ you invite ava@ to a meeting
   → she is on the invite and in your organisation, so Meet lets her straight in —
     her own name, her own photo, no knocking
   → Meet asks the browser for a camera and a microphone and gets HER: her ElevenLabs
-    voice is the microphone; in avatar mode (AVA_MODE=avatar) the camera is her Anam
-    face, lip-synced to that voice, resting on a clip of her when nobody is talking to her
+    voice is the microphone; with her face on (AVA_AVATAR=true, and on in the client's
+    setup) the camera is her Anam face, lip-synced to that voice, resting on a clip of her
+    when nobody is talking to her
   → Meet's live captions are her ears; what people say goes to the brain
   → the brain decides when to answer or join in, and she says it out loud
   → the meeting ends; she leaves; the notes go to the guests from her own account

@@ -107,6 +107,25 @@ export async function noteSeats(request: Request): Promise<void> {
   seatsSeen = given;
 }
 
+/* Whether her runner lets her use her face at all (AVA_AVATAR), as it says with each call
+   (`x-ava-avatar`: "on" or "off") — for a client's setup, where her face is turned on.
+   Written only when it changes. */
+const FACE = "ava:avatar";
+let faceSeen: string | null = null;
+
+export async function noteFace(request: Request): Promise<void> {
+  const given = request.headers.get("x-ava-avatar")?.trim() ?? "";
+  if ((given !== "on" && given !== "off") || given === faceSeen) return;
+  if ((await redisOrMongoKey(FACE).read()) !== given) await redisOrMongoKey(FACE).write(given);
+  faceSeen = given;
+}
+
+/** "on" or "off" as her runner last said — null before a runner that says it has called. */
+export async function runnerFace(): Promise<"on" | "off" | null> {
+  const v = await redisOrMongoKey(FACE).read().catch(() => null);
+  return v === "on" || v === "off" ? v : null;
+}
+
 /** Her seats: one until her server says otherwise. */
 export async function seatCount(): Promise<number> {
   const n = Number(await redisOrMongoKey(SEATS).read().catch(() => null));
