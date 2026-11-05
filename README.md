@@ -129,9 +129,10 @@ Open <http://localhost:3000>, connect Google, and check every pill is green.
 
 ## Deploying to Railway
 
-A permanent URL, always on, and no tunnel. Ours runs in Railway's POCs project, in the
-**[PA-06]** group: the site, built from this repo's `main`, and its own **Redis** beside
-it. One thing has to be set up or it will be subtly broken.
+A permanent URL, always on, and no tunnel. Ours runs in its own Railway project,
+**AVA Meeting Assistant - PA-06** (NDI workspace): the site, built from this repo's
+`main`, and its own **Redis** beside it (until 5 November 2026 they were the **[PA-06]**
+group of the shared POCs project). One thing has to be set up or it will be subtly broken.
 
 **The meeting needs an external store.** Each deploy starts the site afresh, disk and
 all, and the stage, the control room and her runner must all see the same meeting.
@@ -173,9 +174,9 @@ Then:
 
 The control room shows the backend it is using for exactly this reason.
 
-Railway deploys every push to `main` once its GitHub App can see the repo. Until then,
-deploy a pushed commit yourself:
-`railway redeploy --service "[PA-06] meeting-moderator-assistant" --from-source --yes`
+Railway deploys every push to `main` from GitHub by itself. Don't deploy with the CLI
+(`railway up` or `railway redeploy`); to follow a push, watch its deployment:
+`railway deployment list --service "[PA-06] meeting-moderator-assistant" --json`
 
 ## Using it
 

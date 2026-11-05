@@ -6,14 +6,14 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-10-15";
+export const UPDATED = "2026-11-05";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
   { label: "Mode", value: "Avatar — Anam face on her GPT-Live voice", tone: "emerald" },
   { label: "Anam", value: "One account: NDI's subscription (250 minutes a month), its NDI Elena, 10-minute face sessions; out of minutes she is voice only, camera off", tone: "emerald" },
   { label: "Teams", value: "First real call on 7 October: invited from Teams, she joined as a guest and was admitted from the lobby", tone: "emerald" },
-  { label: "Site", value: "Railway — POCs project, [PA-06] group: the site and its Redis; her server talks to it", tone: "emerald" },
+  { label: "Site", value: "Railway — its own project, AVA Meeting Assistant - PA-06: the site and its Redis; each push to main deploys itself; her server talks to it", tone: "emerald" },
   { label: "Runner", value: "Google Cloud VM (Compute Engine e2-standard-4: 4 vCPU, 16 GB, Frankfurt), always on since 13 October — one call uses about two of its cores; two seats", tone: "emerald" },
   { label: "Brain", value: "GPT-Live (gleam) with gpt-6-luna behind it — one-on-one tested: answers almost at once", tone: "emerald" },
   { label: "Email & Chat", value: "Live: she answers her email and Google Chat (first answers 9 October) — chats and spaces from NDI's people accepted automatically, for her account alone", tone: "emerald" },
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-11-05",
+    title: "The site moves to its own Railway project, and deploys itself from GitHub",
+    points: [
+      "The site and its Redis moved out of the shared POCs project into their own Railway project, “AVA Meeting Assistant - PA-06” (NDI workspace): the same settings, the same address (https://pa-06-meeting-moderator-assistant-production.up.railway.app) and the live meeting state copied over, so her server needs no change.",
+      "Railway now deploys every push to main from GitHub by itself: nobody deploys by hand any more.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   {
     date: "2026-10-15",
     title: "Each meeting on its own page, with Fireflies' “Last time” — and briefs written ahead",
