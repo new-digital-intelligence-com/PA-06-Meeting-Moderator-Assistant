@@ -60,14 +60,13 @@ export async function GET(request: Request) {
 
   /**
    * Signing in to the portal: an NDI admin, or an address an admin invited for a client.
-   * Anybody else is turned away here — nobody signs up on their own.
+   * Other verified Google identities receive a visitor session, with no client or staff access.
    */
   if (as === "login") {
     try {
-      const { email, name } = await exchangeLoginCode(code);
-      const user = await roleFor(email, name);
-      if (!user) return fail(`${email} has no access to Ava yet. Ask NDI to invite it.`);
-      const target = new URL(safeNext(cookieOf(request, "pa_login_next")), origin);
+      const { email, name, authoritative } = await exchangeLoginCode(code);
+      const user = (authoritative ? await roleFor(email, name) : null) ?? { email, name, role: "visitor" as const };
+      const target = new URL(user.role === "visitor" ? "/preview" : safeNext(cookieOf(request, "pa_login_next")), origin);
       const session = await readSession();
       const response = NextResponse.redirect(target);
       response.cookies.set(sessionCookie({ ...session, user }));

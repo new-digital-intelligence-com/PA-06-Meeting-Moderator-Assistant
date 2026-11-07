@@ -22,7 +22,7 @@ export type GoogleTokens = {
 export type PortalUser = {
   email: string;
   name?: string;
-  role: "admin" | "client";
+  role: "admin" | "client" | "visitor";
   clientId?: string;
 };
 

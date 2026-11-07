@@ -13,7 +13,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<Re
   if (next.startsWith("/login")) next = "/";
 
   const user = await currentUser();
-  if (user) redirect(user.role === "admin" ? next : "/client");
+  if (user) redirect(user.role === "visitor" ? "/preview" : user.role === "admin" ? next : "/client");
 
   return <LoginForm next={next} email={one("email") ?? ""} error={one("error") ?? null} />;
 }

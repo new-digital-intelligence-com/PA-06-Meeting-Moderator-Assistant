@@ -82,6 +82,7 @@ export async function currentUser(): Promise<PortalUser | null> {
 export async function requireUserPage(): Promise<PortalUser> {
   const user = await currentUser();
   if (!user) redirect("/login");
+  if (user.role === "visitor") redirect("/preview");
   return user;
 }
 
@@ -129,6 +130,7 @@ export async function requireAdmin(): Promise<PortalUser> {
 export async function portalClient(request: Request): Promise<{ user: PortalUser; clientId: string }> {
   const user = await currentUser();
   if (!user) throw new HttpError(401, "Sign in first.");
+  if (user.role === "visitor") throw new HttpError(403, "Client permissions are required.");
   if (!hasDb()) throw new HttpError(503, "Clients are not set up yet (SUPABASE_URL).");
   if (user.role === "admin") {
     const id = new URL(request.url).searchParams.get("client");

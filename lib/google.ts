@@ -130,7 +130,7 @@ type TokenResponse = {
   id_token?: string;
 };
 
-function idClaims(idToken?: string): { email?: string; email_verified?: boolean; name?: string } {
+function idClaims(idToken?: string): { email?: string; email_verified?: boolean; name?: string; sub?: string; hd?: string } {
   if (!idToken) return {};
   try {
     return JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString("utf8"));
@@ -148,14 +148,14 @@ function emailFromIdToken(idToken?: string): string | undefined {
  * Who signed in, from the ID token Google returned straight to us over TLS (not a token
  * a browser handed over, so it needs no signature check). Unverified addresses are refused.
  */
-export async function exchangeLoginCode(code: string): Promise<{ email: string; name?: string }> {
+export async function exchangeLoginCode(code: string): Promise<{ email: string; name?: string; authoritative: boolean }> {
   const { client_id, client_secret } = creds();
   const t = await tokenRequest({ code, client_id, client_secret, redirect_uri: redirectUri(), grant_type: "authorization_code" });
   const claims = idClaims(t.id_token);
-  if (typeof claims.email !== "string" || claims.email_verified === false) {
+  if (typeof claims.email !== "string" || claims.email_verified !== true || typeof claims.sub !== "string" || !claims.sub) {
     throw new Error("Google did not confirm that email address.");
   }
-  return { email: claims.email.toLowerCase(), name: typeof claims.name === "string" ? claims.name : undefined };
+  return { email: claims.email.toLowerCase(), name: typeof claims.name === "string" ? claims.name : undefined, authoritative: claims.email.toLowerCase().endsWith("@gmail.com") || Boolean(claims.hd) };
 }
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {

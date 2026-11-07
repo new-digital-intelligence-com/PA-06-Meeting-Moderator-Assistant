@@ -1,6 +1,7 @@
 import ControlRoom, { type Now } from "@/components/ControlRoom";
 import TopBar from "@/components/TopBar";
-import { requireAdminPage } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { currentUser, requireAdminPage } from "@/lib/auth";
 import { inMeeting, minutesIn, seatList, seatMeetings } from "@/lib/meeting";
 import { avaEmail, avaGoogle, seatCount } from "@/lib/ava";
 import { betweenStatus } from "@/lib/answers";
@@ -19,6 +20,8 @@ export default async function Home({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const visitor = await currentUser();
+  if (!visitor || visitor.role === "visitor") redirect("/preview");
   // NDI only: clients have their own page.
   const user = await requireAdminPage();
   const [count, params, avaAccount, her, between] = await Promise.all([seatCount(), searchParams, avaEmail(), avaGoogle(), betweenStatus()]);

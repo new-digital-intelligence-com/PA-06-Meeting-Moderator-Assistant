@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-11-05";
+export const UPDATED = "2026-11-07";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -30,6 +30,7 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  { date: "2026-11-07", title: "Public walkthrough and optional Google sign-in", points: ["Visitors can explore a fictional meeting walkthrough without signing in. Any verified Google account can sign in as a visitor; existing company and client permissions still protect live meetings and private data."], commits: [], tone: "sky" },
   {
     date: "2026-11-05",
     title: "The site moves to its own Railway project, and deploys itself from GitHub",

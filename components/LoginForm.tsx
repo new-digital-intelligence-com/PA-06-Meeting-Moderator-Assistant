@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import Logo from "./Logo";
 import { field, primary, quiet } from "./portal/ui";
@@ -47,6 +48,7 @@ export default function LoginForm({ next, email: initialEmail, error }: { next: 
           </p>
         )}
 
+        <Link href="/preview" className="mb-4 block text-center text-sm font-medium text-blue-600">Explore without signing in</Link>
         <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <a href={`/api/auth/login?next=${encodeURIComponent(next)}`} className={`${quiet} w-full py-2.5`}>
             <svg aria-hidden width="18" height="18" viewBox="0 0 48 48">
@@ -88,7 +90,7 @@ export default function LoginForm({ next, email: initialEmail, error }: { next: 
         </div>
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-500">
-          No account? NDI sets Ava up for your company and invites you.{" "}
+          Any verified Google account can sign in. Client workspaces and meeting operations require an invitation.{" "}
           <a href="/docs" className="font-medium text-blue-600 hover:text-blue-700">
             How she works
           </a>

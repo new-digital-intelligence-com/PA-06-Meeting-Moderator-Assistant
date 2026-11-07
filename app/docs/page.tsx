@@ -230,7 +230,7 @@ export default function Docs() {
                 </Callout>
                 <Callout tone="emerald" title="Only the runner may act as her">
                   Reading her calendar, marking her as attending and mailing as her need the shared <C>AVA_RUNNER_KEY</C>.
-                  Everything else needs signing in — NDI, or a client’s invited people, each to their own page — except
+                  The public walkthrough at /preview needs no login. Live operations need signing in — NDI, or a client’s invited people, each to their own page — except
                   signing in itself and these docs. A stranger who finds the URL gets none of it.
                 </Callout>
               </div>
@@ -811,7 +811,7 @@ export default function Docs() {
                   what she is doing now in each seat, with each client’s page to follow it on), the meeting storage.
                 </FileRow>
                 <FileRow path="proxy.ts · lib/auth.ts · lib/seal.ts" tag={<Chip tone="emerald">the door</Chip>}>
-                  Nothing opens without signing in — or the runner’s key — except signing in and these docs. Who is an admin, who
+                  The public walkthrough, docs and privacy page need no login. Any verified Google account can sign in as a visitor. Live operations require the existing client/admin permissions or runner key. Who is an admin, who
                   signs in for which client (checked again on every request), and the encryption of the session cookie. A
                   sign-in lasts 30 days: the date is kept inside the session too, so a copied cookie stops working then as well.
                 </FileRow>

@@ -12,9 +12,9 @@ import { decrypt } from "@/lib/seal";
 import { stillValid } from "@/lib/sessionLife";
 
 // Signing in and out. Not /api/auth/google itself: connecting Ava's account is for admins.
-const OPEN = [/^\/login(\/|$)/, /^\/docs(\/|$)/, /^\/privacy(\/|$)/, /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/];
+const OPEN = [/^\/$/, /^\/preview(\/|$)/, /^\/login(\/|$)/, /^\/docs(\/|$)/, /^\/privacy(\/|$)/, /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/];
 
-type User = { role?: "admin" | "client" };
+type User = { role?: "admin" | "client" | "visitor" };
 
 function userFrom(raw: string | undefined): User | null {
   if (!raw) return null;
@@ -45,6 +45,11 @@ export function proxy(request: NextRequest) {
     const login = new URL("/login", appOrigin(request));
     if (pathname !== "/") login.searchParams.set("next", pathname + search);
     return NextResponse.redirect(login);
+  }
+
+  if (user.role === "visitor") {
+    if (api) return NextResponse.json({ error: "Client or staff permissions are required." }, { status: 403 });
+    return NextResponse.redirect(new URL("/preview", appOrigin(request)));
   }
 
   if (user.role !== "admin") {
