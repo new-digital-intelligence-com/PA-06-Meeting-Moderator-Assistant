@@ -6,7 +6,7 @@
 
 import type { Tone } from "./ui";
 
-export const UPDATED = "2026-11-07";
+export const UPDATED = "2026-11-18";
 
 /** Where things stand right now. */
 export const STATUS: { label: string; value: string; tone: Tone }[] = [
@@ -30,6 +30,16 @@ export type Change = {
 };
 
 export const CHANGELOG: Change[] = [
+  {
+    date: "2026-11-18",
+    title: "An assistant sidebar on every page",
+    points: [
+      "An “Assistant” button in the top bar (a round button on phones) opens a sidebar where you can ask about your meetings, their preparation and briefs, notes and action items, documents and people, or how to use the app. It answers only from what you can already see: a client their own workspace, an NDI admin the client or page on screen, and the public walkthrough its fictional example. You can attach up to three files.",
+      "It is read-only: it cannot prepare Ava, send her to a meeting or change anything, and says where in the app to do it instead.",
+    ],
+    commits: [],
+    tone: "sky",
+  },
   { date: "2026-11-07", title: "Public walkthrough and optional Google sign-in", points: ["Visitors can explore a fictional meeting walkthrough without signing in. Any verified Google account can sign in as a visitor; existing company and client permissions still protect live meetings and private data."], commits: [], tone: "sky" },
   {
     date: "2026-11-05",

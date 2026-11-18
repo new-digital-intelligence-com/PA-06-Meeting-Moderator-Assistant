@@ -954,6 +954,7 @@ export default function Docs() {
                   [<C key="r">GET /api/portal/meetings/[id]/earlier</C>, "Clients, admins", "The client’s earlier meetings, the same meeting first — for a preparation to look back on"],
                   [<C key="r">POST /api/portal/digest · PATCH /api/portal/profile</C>, "Clients, admins", "Rewrite what she knows; how she works for them"],
                   [<C key="r">GET · PUT · DELETE /api/portal/contacts</C>, "Clients, admins", "Who’s who: their people by email, and one person’s line — read, written, taken off"],
+                  [<C key="r">GET · POST /api/assistant</C>, "Everyone (the sidebar)", "The read-only assistant sidebar: answers questions from what the asker may already see — a client their own workspace, an NDI admin the client or page on screen, the public walkthrough its fictional example only; up to 3 attached files (8 MB); 20 questions a minute; changes nothing"],
                   [<C key="r">POST /api/meeting/start</C>, "Admins", "Send the Recall bot (older path, nothing calls it)"],
                 ]}
               />
@@ -969,6 +970,7 @@ export default function Docs() {
                     rows={[
                       [<C key="v">ANTHROPIC_API_KEY</C>, "Claude"],
                       [<C key="v">ANTHROPIC_MODEL_FAST · _WRITER</C>, "Override the notes models (and the Claude brain's)"],
+                      [<C key="v">ASSISTANT_MODEL</C>, "The assistant sidebar's model (else ANTHROPIC_MODEL, else the writer model)"],
                       [<C key="v">REDIS_URL</C>, "Redis for the meeting state — Railway's, beside the site, on its private network"],
                       [<C key="v">KV_REST_API_TOKEN · KV_REST_API_URL</C>, "Or Redis over Upstash's web API: if set, used instead of REDIS_URL (not set on Railway); the URL is worked out from KV_URL if missing"],
                       [<C key="v">GOOGLE_CLIENT_ID · _SECRET · _REDIRECT_URI</C>, "One Google OAuth client (project ava-avatar) for Ava's own account, the site's sign-in and the Drive button"],

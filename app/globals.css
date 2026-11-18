@@ -26,3 +26,10 @@ body {
   background: #bfdbfe;
   color: #0f172a;
 }
+
+/* The assistant sidebar, docked from 900px wide (components/assistant/AssistantPanel.tsx): the page makes room for it. */
+@media (min-width: 900px) {
+  html[data-assistant="open"] body {
+    padding-right: 24rem;
+  }
+}

@@ -1,11 +1,7 @@
 "use client";
 import { useState } from "react";
+import { PREVIEW_STEPS as steps } from "@/lib/preview";
 
-const steps = [
-  {title:"Before the meeting", detail:"Example: Cedar project review", items:["Review the project goal and the previous action list.","Agenda: progress, open questions and next steps.","Ava receives the approved brief from the meeting owner."]},
-  {title:"During the meeting", detail:"Example notes", items:["The team reviewed the draft plan.","One dependency needs clarification before the next review.","Ava captures decisions and the action owners agreed in the meeting."]},
-  {title:"After the meeting", detail:"Example action list", items:["Project owner: clarify the open dependency.","Review lead: prepare the next draft.","Meeting owner: review the notes and follow-up actions."]},
-];
 export default function PublicWalkthrough() {
   const [step,setStep]=useState(0);
   return <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -12,7 +12,16 @@ import { decrypt } from "@/lib/seal";
 import { stillValid } from "@/lib/sessionLife";
 
 // Signing in and out. Not /api/auth/google itself: connecting Ava's account is for admins.
-const OPEN = [/^\/$/, /^\/preview(\/|$)/, /^\/login(\/|$)/, /^\/docs(\/|$)/, /^\/privacy(\/|$)/, /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/];
+// The assistant sidebar decides itself who may see what (the walkthrough's example is public).
+const OPEN = [
+  /^\/$/,
+  /^\/preview(\/|$)/,
+  /^\/login(\/|$)/,
+  /^\/docs(\/|$)/,
+  /^\/privacy(\/|$)/,
+  /^\/api\/auth\/(login|email|logout|google\/callback)(\/|$)/,
+  /^\/api\/assistant$/,
+];
 
 type User = { role?: "admin" | "client" | "visitor" };
 

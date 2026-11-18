@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Assistant from "./assistant/AssistantPanel";
 import Logo from "./Logo";
 import NdiLogo from "./NdiLogo";
 import type { PortalUser } from "@/lib/session";
@@ -6,7 +7,7 @@ import type { PortalUser } from "@/lib/session";
 /**
  * The bar across every signed-in page: Ava, by NDI (NDI's own red logo), where you are,
  * who you are, and signing out. Admins get the control room and their clients; a client
- * sees whose Ava this is.
+ * sees whose Ava this is. The assistant sidebar opens from here, on every one of them.
  */
 export default function TopBar({ user, active, clientName }: { user: PortalUser; active?: "room" | "clients"; clientName?: string }) {
   const link = (href: string, label: string, on: boolean) => (
@@ -44,6 +45,7 @@ export default function TopBar({ user, active, clientName }: { user: PortalUser;
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Assistant role={user.role} email={user.email} />
           <span className="hidden max-w-[14rem] truncate text-xs text-slate-500 md:inline" title={user.email}>
             {user.email}
           </span>
